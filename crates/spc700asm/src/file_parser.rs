@@ -89,6 +89,8 @@ pub enum GlobalAsm<'s> {
     Vars(VarsSection<'s>),
     FunctionTableDef(FunctionTableDef<'s>),
     FunctionTable(LineNo, &'s str),
+    LoFunctionTable(LineNo, &'s str),
+    HiFunctionTable(LineNo, &'s str),
     Procedure(Procedure<'s>),
     AsmLine(LineNo, AsmLine<'s>),
 }
@@ -407,6 +409,8 @@ fn parse_proc_or_inline<'s>(
             },
             ".proc" | ".inline" => errors.push(line_no, FileParserError::CannotNestInlinesOrProcs),
             ".functiontable" => errors.push(line_no, FileParserError::FunctionTableInProc),
+            ".lofunctiontable" => errors.push(line_no, FileParserError::FunctionTableInProc),
+            ".hifunctiontable" => errors.push(line_no, FileParserError::FunctionTableInProc),
             _ => parse_asm_line(line_no, first_word, arguments, errors, &mut |ln, l| {
                 out.lines.push((ln, l))
             }),
@@ -467,6 +471,8 @@ pub fn parse_file<'s>(lines: SplitLines<'s>, errors: &mut FileErrors<'s>) -> Asm
                 errors,
             )),
             ".functiontable" => out.assembly.push(GlobalAsm::FunctionTable(line_no, args)),
+            ".lofunctiontable" => out.assembly.push(GlobalAsm::LoFunctionTable(line_no, args)),
+            ".hifunctiontable" => out.assembly.push(GlobalAsm::HiFunctionTable(line_no, args)),
             _ => parse_asm_line(line_no, command, args, errors, &mut |n, l| {
                 out.assembly.push(GlobalAsm::AsmLine(n, l))
             }),

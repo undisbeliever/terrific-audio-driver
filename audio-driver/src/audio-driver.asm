@@ -696,9 +696,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     mov sfxMutedChannels, A
 
     ; Reset global volume if RESET_GLOBAL_VOLUMES_BIT flag is set
-    ; ::TODO replace with `bbc`::
-    mov1 C, loaderDataType, LoaderDataType__RESET_GLOBAL_VOLUMES_BIT
-    bcc NoResetGlobalVolume
+    bbc loaderDataType, LoaderDataType__RESET_GLOBAL_VOLUMES_BIT, NoResetGlobalVolume
         ; A = 0
         mov globalVolume_music, A
         mov globalVolume_sfx, A
@@ -779,10 +777,8 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
 
     ; If not in surround mode, set all `echo.invertFlags` bits to the mono-flag
-    ; (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
-    mov1 C, loaderDataType, LoaderDataType__SURROUND_FLAG_BIT
-    bcs IsSurround
-        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Confirm masking is more efficient than bpl or shifts
+    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, IsSurround
+        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Assert masking is more efficient than bpl or shifts
         mov A, echo.invertFlags
         and A, #INVERT_FLAGS__MONO
         beq NoMonoInvert
@@ -814,9 +810,6 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ; In the GUI, spc-export and unit-tests this block of code is patched out
     ; and will be replaced with a `JMP ClearEchoBufferEnd : NOP ...`.
 ClearEchoBufferStart:
-        ; ::TODO remove (required in the `wiz` version to compile compiler crate)::
-        nop
-
         ; Clear the echo buffer
         ; X = S-DSP ESA
         __clear_echo_buffer
@@ -857,9 +850,7 @@ ClearEchoBufferEnd:
     ; Timers and counters reset when the timer control bits transition from 0 to 1
     mov CONTROL, #0
 
-    ; ::TODO replace with `bbs`::
-    mov1 C, loaderDataType, LoaderDataType__PLAY_SONG_BIT
-    bcc NoStartSong
+    bbc loaderDataType, LoaderDataType__PLAY_SONG_BIT, NoStartSong
         mov CONTROL, #CONTROL__ENABLE_TIMER_0 | CONTROL__ENABLE_TIMER_1
     NoStartSong:
 
@@ -887,9 +878,7 @@ ClearEchoBufferEnd:
             call process_music_channels
 
             ; Set lag bit if `counter_0` was not 0 in the last loop.
-            ; ::TODO switch to `bbc`::
-            mov1 C, lagDetector, LD_MUSIC_TEST_BIT
-            bcc NoMusicLag
+            bbc lagDetector, LD_MUSIC_TEST_BIT, NoMusicLag
                 set1 lagDetector, LD_MUSIC_LAG_BIT
             NoMusicLag:
             set1 lagDetector, LD_MUSIC_TEST_BIT
@@ -905,10 +894,7 @@ ClearEchoBufferEnd:
             process_sfx_channels
 
             ; Set lag bit if `counter_1` was not 0 in the last loop.
-            ;
-            ; ::TODO switch to `bbc`
-            mov1 C, lagDetector, LD_SFX_TEST_BIT
-            bcc NoSfxLag
+            bbc lagDetector, LD_SFX_TEST_BIT, NoSfxLag
                 set1 lagDetector, LD_SFX_LAG_BIT
             NoSfxLag:
             set1 lagDetector, LD_SFX_TEST_BIT
@@ -932,7 +918,7 @@ ClearEchoBufferEnd:
     ; X = page address of the start of the echo buffer
     ; Echo buffer ends at the end of memory.
 
-    ; Confirm the two `mov addr+Y, A` instructions are 3 bytes
+    ; Assert the two `mov addr+Y, A` instructions are 3 bytes
     .assert STA_2 - STA_1 == 3
     .assert After_STA_2 - STA_2 == 3
 
@@ -963,6 +949,531 @@ ClearEchoBufferEnd:
         bne OuterLoop
 .endinline
 
+
+
+; IO Ports
+; ========
+
+.inline io__init
+    ; ::TODO review these assumptions when implementing the sample swapping loader::
+    ; Assumes audio driver starts paused.
+    ; Assumes `DriverIO__COMMAND_ACK_PORT` is non-zero from the loader.
+    .assert IoCommands__PAUSE == 0
+
+    mov A, #IoCommands__PAUSE
+    mov DriverIO__COMMAND_ACK_PORT, A
+    mov previousCommand, A
+.endinline
+
+
+.inline io__process_io_ports
+    ; If the S-CPU writes to an IO port at the same time S-SMP reads from the
+    ; same IO port, the S-SMP will read invalid data.
+    ;
+    ; To detect this bug the IO-Port is read twice and the command is only
+    ; processed if both reads are the same.
+    ;
+    ; Once the command byte has been read successfully, the two parameter bytes
+    ; do not need to be double-read because:
+    ;  * The S-CPU will wait until the command has been acknowledged before
+    ;    writing a new command
+    ;  * The parameter bytes are written before the command byte is written.
+
+    ; Test if `DriverIO__COMMAND_PORT` has changed.
+    mov A, DriverIO__COMMAND_PORT
+    cmp A, previousCommand
+    beq NoCommand
+        ; Test if the second COMMAND_PORT read is equal to the first COMMAND_PORT read
+        cbne DriverIO__COMMAND_PORT, NoCommand
+            push A
+            mov previousCommand, A
+
+            mov Y, DriverIO__PARAMETER_0_PORT
+            call _io__call_command
+
+            ; Acknowledge command
+            pop A
+            mov DriverIO__COMMAND_ACK_PORT, A
+    NoCommand:
+
+
+    ; Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
+    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
+        ; Read the IO port a second time just in case it was a glitch
+        bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
+            jmp LOADER_ADDR
+    NoStl:
+.endinline
+
+
+; NOTE: Does not acknowledge command
+;
+; IN: A = unpacked DriverIO__COMMAND_PORT
+; IN: Y = DriverIO__PARAMETER_0_PORT
+.proc _io__call_command
+    .assert CommandFunctionTable_SIZE % 2 == 0
+    .assert DriverIO__COMMAND_MASK >= CommandFunctionTable_SIZE - 2
+
+    and A, #DriverIO__COMMAND_MASK
+    cmp A, #CommandFunctionTable_SIZE
+    bcs Return
+        mov X, A
+        jmp [CommandFunctionTable+X]
+
+Return:
+    ret
+.endproc
+
+
+CommandFunctionTable:
+    .functiontable IoCommands
+CommandFunctionTableEnd:
+CommandFunctionTable_SIZE = CommandFunctionTableEnd - CommandFunctionTable
+
+
+
+; Pause music and sound effects
+.proc cmd__pause
+    ; Disable timers
+    mov CONTROL, #0
+
+    ; Reset counters to fix a music/sfx channel playing a single tick after a `pause` IO command.
+    ; (clears counter_0 and counter_1)
+    .assert T0OUT + 1 == T1OUT
+    movw YA, T0OUT
+
+    ; key-off all channels
+    mov Y, #$ff
+    bra __cmd__keyoff
+.endproc
+
+
+.proc cmd__pause_music_play_sfx
+    ; Disable music timer, enable sfx timer
+    mov CONTROL, #CONTROL__ENABLE_TIMER_1
+
+    ; Reset counter to fix music channel playing a single tick after a `pause_music_play_sfx` IO command.
+    mov A, T0OUT
+
+    mov Y, musicSfxChannelMask  ; key-off music channels
+
+    ; fallthrough
+    .assert PC == __cmd__keyoff
+.endproc
+
+
+; IN: Y = channels
+.proc __cmd__keyoff
+    mov A, #DSP_KOFF
+    movw DSPADDR, YA
+
+    ret
+.endproc
+
+
+.proc cmd__unpause
+    ; Enable music and sfx timers
+    mov CONTROL, #CONTROL__ENABLE_TIMER_0 | CONTROL__ENABLE_TIMER_1
+
+    ret
+.endproc
+
+
+; IN: Y = volume
+.proc cmd__set_main_volume
+    ; Write Y to MVOL_L and MVOL_R DSP registers
+    mov A, #DSP_MVOL_L
+    movw DSPADDR, YA
+
+    mov A, #DSP_MVOL_R
+    movw DSPADDR, YA
+
+    ret
+.endproc
+
+
+; IN: Y = channel mask
+.proc cmd__set_music_channels
+    mov io_musicChannelsMask, Y
+
+    ; key-off muted channels
+    mov A, Y
+    eor A, #$ff
+    tset1 keyOffShadow_music
+
+    ret
+.endproc
+
+
+; IN: Y = timer
+.proc cmd__set_song_timer
+    ; if (y > 0 && y < MIN_TICK_CLOCK) y = MIN_TICK_CLOCK
+    dec Y
+    cmp Y, #MIN_TICK_CLOCK - 1
+    bcs Valid
+        mov Y, #MIN_TICK_CLOCK - 1
+Valid:
+    inc Y
+
+    mov T0TARGET, Y
+
+    ret
+.endproc
+
+
+; IN: music volume
+.proc cmd__set_global_music_volume
+    ; Increment volume so maximum volume is 0
+    inc Y
+    mov globalVolume_music, Y
+
+    mov volShadowDirty_music, #$ff
+
+    ret
+.endproc
+
+
+; IN Y: global music volume
+.proc cmd__set_global_volumes
+    call cmd__set_global_music_volume
+
+    mov Y, DriverIO__PARAMETER_1_PORT
+
+    ; fallthrough
+    .assert PC == cmd__set_sfx_volume
+.endproc
+
+
+; IN: global SFX volume
+.proc cmd__set_sfx_volume
+    ; Increment volume so maximum volume is 0
+    inc Y
+    mov globalVolume_sfx, Y
+
+    .assert N_SFX_CHANNELS == 2
+    mov volShadowDirty_sfx, #%11000000
+
+    ret
+.endproc
+
+
+
+.proc cmd__stop_sound_effects
+    .assert N_SFX_CHANNELS == 2
+
+    ; `bc__disable_channel` does not write to `channelSoA_instructionPtr`.
+    ; (it changes `instructionPtr`)
+    mov channelSoA_instructionPtr_h + FIRST_SFX_CHANNEL, #0
+    mov channelSoA_instructionPtr_h + LAST_SFX_CHANNEL, #0
+
+    mov X, #FIRST_SFX_CHANNEL
+    call bc__disable_channel
+
+    .assert FIRST_SFX_CHANNEL + 1 == LAST_SFX_CHANNEL
+    inc X
+    jmp bc__disable_channel
+.endproc
+
+
+; IN: Y = sound effect ID
+.proc cmd__play_sound_effect
+    .assert N_SFX_CHANNELS == 2
+    BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6)
+
+    cmp Y, commonDataHeader.nSoundEffects
+    bcs _PlaySfx_Return
+        cmp Y, sfx_oneChannelSfxId+0
+        beq sfx__maybe_restart_sfx_0
+
+        cmp Y, sfx_oneChannelSfxId+1
+        beq sfx__maybe_restart_sfx_1
+
+        mov A, activeSoundEffects
+        cmp A, #BOTH_SFX_ACTIVE
+        bcs sfx__both_channels_active
+
+        ; At most 1 sound effect channel is active
+        asl A
+        bcc sfx__play_1
+        bra sfx__play_sfx_0
+.endproc
+
+
+; IN: Y = sound effect ID
+.proc sfx__both_channels_active
+    .assert N_SFX_CHANNELS == 2
+    BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6)
+
+    ; Both sound effect channels are active,
+
+    ; Drop sfx_id if it is a low-priority sound effect
+    cmp Y, commonDataHeader.firstLowPrioritySfx
+    bcs Return
+
+        ; if (zero && y < commonDataHeader.nHighPrioritySfx) || a >= BOTH_SFX_ACTIVE {
+        mov A, sfx_interruptibleFlags
+        bne OtherTest
+            cmp Y, commonDataHeader.nHighPrioritySfx
+            bcc BothChannels
+        OtherTest:
+            cmp A, #BOTH_SFX_ACTIVE
+            bcc NotBothChannels
+
+        BothChannels:
+            ; Both sound effect channels active and either:
+            ;   * both uninterruptible and sfx_id is high-priority
+            ;   * both interruptible and sfx_id is normal priority
+            ;
+            ; check remaining ticks and drop the sound effect that will finish first.
+
+            .assert N_SFX_CHANNELS == 2
+            .assert sfx_remainingTicks__ELEMENT_SIZE == 2
+            movw YA, sfx_remainingTicks+0
+            cmpw YA, sfx_remainingTicks+2
+
+            mov Y, DriverIO__PARAMETER_0_PORT
+
+            bcc sfx__play_sfx_0
+            bra sfx__play_1
+
+
+        NotBothChannels:
+            ; Play sound effect if a channel is interruptible
+            ; A = sfx_interruptibleFlags
+            asl A
+            bcs sfx__play_1
+            bmi sfx__play_sfx_0
+
+Return:
+    ret
+.endproc
+
+_PlaySfx_Return = sfx__both_channels_active.Return
+
+
+
+; Restart sfx channel 0 if it is interruptible
+; ASSUMES: sfx_id == sfx_oneChannelSfxId[0]
+;
+; IN: Y = sound effect ID
+.proc sfx__maybe_restart_sfx_0
+    bbc sfx_interruptibleFlags, 6, _PlaySfx_Return
+
+    ; fallthrough
+    .assert PC == sfx__play_sfx_0
+.endproc
+
+
+; IN: Y = sound effect ID
+.proc sfx__play_sfx_0
+    ; If this procedure is modified, `_PlaySFX_1` MUST ALSO be modified
+    _I = 0
+    _BIT = 8 - N_SFX_CHANNELS + _I
+
+    .assert sfx_remainingTicks__ELEMENT_SIZE == 2
+    .assert sfx_oneChannelSfxId__ELEMENT_SIZE == 1
+
+    mov A, [commonData.soundEffects_durationAndInterruptFlag_l] + Y
+    mov sfx_remainingTicks + _I*2, A
+
+    mov A, [commonData.soundEffects_durationAndInterruptFlag_h] + Y
+    mov sfx_remainingTicks + _I*2 + 1, A
+
+    asl A
+    mov1 sfx_interruptibleFlags, _BIT, C
+
+    mov sfx_oneChannelSfxId + _I, Y
+
+    mov A, [commonData.soundEffects_addrAndOneChannelFlag_h] + Y
+    bmi NotOneChannel
+        mov sfx_oneChannelSfxId + _I, #$ff
+    NotOneChannel:
+
+    mov X, #FIRST_SFX_CHANNEL
+    bra sfx__play_sfx_on_channel
+.endproc
+
+
+; Restart sfx channel 1 if it is interruptible
+; ASSUMES: sfx_id == sfx_oneChannelSfxId[1]
+;
+; IN: Y = sound effect ID
+.proc sfx__maybe_restart_sfx_1
+    bbc sfx_interruptibleFlags, 7, _PlaySfx_Return
+
+    ; fallthrough
+    .assert PC == sfx__play_1
+.endproc
+
+
+; IN: Y = sound effect ID
+.proc sfx__play_1
+    ; If this procedure is modified, `_PlaySFX_0` MUST ALSO be modified
+    _I = 1
+    _BIT = 8 - N_SFX_CHANNELS + _I
+
+    .assert sfx_remainingTicks__ELEMENT_SIZE == 2
+    .assert sfx_oneChannelSfxId__ELEMENT_SIZE == 1
+
+    mov A, [commonData.soundEffects_durationAndInterruptFlag_l] + Y
+    mov sfx_remainingTicks + _I*2, A
+
+    mov A, [commonData.soundEffects_durationAndInterruptFlag_h] + Y
+    mov sfx_remainingTicks + _I*2 + 1, A
+
+    asl A
+    mov1 sfx_interruptibleFlags, _BIT, C
+
+    mov sfx_oneChannelSfxId + _I, Y
+
+    mov A, [commonData.soundEffects_addrAndOneChannelFlag_h] + Y
+    bmi NotOneChannel
+        mov sfx_oneChannelSfxId + _I, #$ff
+    NotOneChannel:
+
+    mov X, #LAST_SFX_CHANNEL
+    ; fallthrough
+    .assert PC == sfx__play_sfx_on_channel
+.endproc
+
+
+; ASSUMES: sfx_id < commonData.nSoundEffects
+; KEEP: X
+;
+; IN: A = addrAndOneChannelFlag_h
+; IN: X = channelIndex
+; IN: Y = sound effect ID
+.proc sfx__play_sfx_on_channel
+    and A, #$7f
+    mov channelSoA_instructionPtr_h + X, A
+
+    mov A, [commonData.soundEffects_addrAndOneChannelFlag_l] + Y
+    mov channelSoA_instructionPtr_l + X, A
+
+    mov A, ChannelVoiceBit + X
+    ; Send a key-off event, the S-DSP voice channel might be active.
+    tset1 keyOffShadow_sfx
+    ; Set keyOnMask.  The next play-note instruction will queue a KON event.
+    tset1 keyOnMask_sfx
+    ; Disable echo
+    tclr1 eonShadow_sfx
+
+    ; Not disabling noise.
+    ; Clearing pendingNon_sfx would disable noise in the middle of the release envelope.
+    ; Noise will be disabled after the key-off release envelope.
+
+    ; Enable sfx channel.
+    tset1 activeSoundEffects
+
+    ; Mark sfx channel volume dirty
+    ; eor used to swap bits 6 & 7 (since only 1 bit is set)
+    eor A, #%11_000000
+    tset1 volShadowDirty_sfx
+
+
+    ; Read pan parameter
+    mov A, DriverIO__PARAMETER_1_PORT
+
+    ; fallthrough
+    .assert PC == __reset_channel
+.endproc
+
+
+; NOTE: Does not set:
+;  * channelSoA_instructionPtr
+;  * instrument/envelope
+;  * virtual channels
+;  * keyOnMask
+;  * eonShadow
+;  * nonShadow
+;
+; IN: X = channelIndex
+; IN: A = pan
+; KEEP: X
+.proc __reset_channel
+    ; MUST NOT use `commonData`.
+    ; (It contains song header data, not common-audio data)
+
+    setp
+.p1
+    ; MUST NOT access zeropage variables until direct_page is false.
+    .assert inFirstpage(channelSoA_pan)
+    mov channelSoA_pan + X, A
+
+    .assert inFirstpage(channelSoA_volume)
+    mov A, #STARTING_VOLUME
+    mov channelSoA_volume + X, A
+
+
+    mov A, #0
+
+    ; Disable pan effects
+    .assert inFirstpage(channelSoA_panEffect_direction)
+    mov channelSoA_panEffect_direction + X, A
+
+    ; Disable volume effects
+    .assert inFirstpage(channelSoA_volEffect_direction)
+    mov channelSoA_volEffect_direction + X, A
+
+    ; Disable channel invert
+    .assert inFirstpage(channelSoA_invertFlags)
+    mov channelSoA_invertFlags + X, A
+
+    ; Disable early-release
+    .assert inFirstpage(channelSoA_earlyRelease_cmp)
+    mov channelSoA_earlyRelease_cmp + X, A
+        ; No need to reset `earlyRelease_minTicks`,
+        ; (Early release is not active if `earlyRelease_cmp == 0`)
+
+    ; Reset detune
+    .assert inFirstpage(channelSoA_detune_l)
+    .assert inFirstpage(channelSoA_detune_h)
+    mov channelSoA_detune_l + X, A
+    mov channelSoA_detune_h + X, A
+
+
+    .assert page(channelSoA_transpose) != 0
+    mov channelSoA_transpose + X, A
+
+    clrp
+.p0
+
+    ; Disable temp-gain
+    .assert inZeropage(channelSoA_virtualChannels_tempGain)
+    mov channelSoA_virtualChannels_tempGain + X, A
+
+    ; Disable portamento
+    .assert inZeropage(channelSoA_portamento_direction)
+    mov channelSoA_portamento_direction + X, A
+
+    ; Disable vibrato
+    .assert inZeropage(channelSoA_vibrato_pitchOffsetPerTick)
+    mov channelSoA_vibrato_pitchOffsetPerTick + X, A
+
+
+    ; Immediately process bytecode on the next tick
+    ; A = 0
+    mov channelSoA_countdownTimer_h + X, A
+    inc A
+    ; A = 1
+    mov channelSoA_countdownTimer_l + X, A
+
+
+    mov A, BcStackIndexesStart + X
+    mov channelSoA_stackPointer + X, A
+
+    ; Ensures loopStackPointer is in-bounds if the first instruction is `end_loop`.
+    setc
+    sbc A, #3
+    mov channelSoA_loopStackPointer + X, A
+
+    ret
+.endproc
+
+
+
+; Music and SFX Channel Processing
+; ================================
 
 ; Process music channels.
 ;
@@ -1504,20 +2015,12 @@ _mutedChannels = zpTmp
         beq NoVolEffect
             process_volume_effects
 
-            ; ::TODO optimise::
-            ; Set S-DSP voice registers dirty bit
-            set1 voiceChannelsDirty_tmp, 7
-
             set1 volShadowDirty_tmp, 7
         NoVolEffect:
 
         mov A, channelSoA_panEffect_direction + X
         beq NoPanEffect
             process_pan_effects
-
-            ; ::TODO optimise::
-            ; Set S-DSP voice registers dirty bit
-            set1 voiceChannelsDirty_tmp, 7
 
             set1 volShadowDirty_tmp, 7
         NoPanEffect:
@@ -1529,6 +2032,8 @@ _mutedChannels = zpTmp
         asl volShadowDirty_tmp
         bcc VolumeUnchanged
             update_vol_shadow
+
+            set1 voiceChannelsDirty_tmp, 7
         VolumeUnchanged:
 
         ; Portamento is processed after bytecode to ensure pitch slide occurs
@@ -1555,7 +2060,9 @@ Return:
     beq End
         .assert ECHO_DIRTY__FIR_FILTER_BIT == 7
         bpl FirUnchanged
-            mov Y, #0
+            .assert DSP_C1 - DSP_C0 == $10
+            .assert DSP_C7 < $80
+            .assert DSP_C7 + $10 >= $80
 
             .assert ECHO_DIRTY__CLEAR_FIR_BIT == 0
             lsr A
@@ -1563,30 +2070,25 @@ Return:
                 ; Clear FIR filter
                 clrc
                 mov A, #DSP_C0
+                mov Y, #0
 
                 ClearFirLoop:
                     ; Y = 0
                     movw DSPADDR, YA
 
-                    .assert DSP_C1 - DSP_C0 == $10
-                    .assert DSP_C7 + $10 >= $80
                     adc A, #$10
                     bpl ClearFirLoop
             NoClear:
 
-            mov DSPADDR, #DSP_C0
+            mov X, #0
+            mov A, #DSP_C0
             ; carry clear
-            ; Y = 0
             FirLoop:
-                ; EchoBufferSettings.firFilter
-                mov A, echo.firFilter + Y
-                mov DSPDATA, A
-                inc Y
+                mov Y, echo.firFilter + X
+                movw DSPADDR, YA
+                inc X
 
-                .assert DSP_C1 - DSP_C0 == $10
-                .assert DSP_C7 + $10 >= $80
-                clrc
-                adc DSPADDR, #$10
+                adc A, #$10
                 bpl FirLoop
 
             mov A, echoDirty
@@ -1610,9 +2112,7 @@ Return:
                 adc A, echo.echoVolume_r
                 lsr A
 
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__MONO_BIT
-                bcc NoMonoInvert
+                bbc echo.invertFlags, INVERT_FLAGS__MONO_BIT, NoMonoInvert
                     eor A, #$ff
                     inc A
                 NoMonoInvert:
@@ -1622,18 +2122,14 @@ Return:
 
 
             Stereo:
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__LEFT_BIT
-                bcc NoLeftInvert
+                bbc echo.invertFlags, INVERT_FLAGS__LEFT_BIT, NoLeftInvert
                     eor A, #$ff
                     inc A
                 NoLeftInvert:
                 mov DSPDATA, A
 
                 mov A, echo.echoVolume_r
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__RIGHT_BIT
-                bcc NoRightInvert
+                bbc echo.invertFlags, INVERT_FLAGS__RIGHT_BIT, NoRightInvert
                     eor A, #$ff
                     inc A
                 NoRightInvert:
@@ -1660,537 +2156,8 @@ Return:
 
 
 
-; IO Ports
-; ========
-
-.inline io__init
-    ; ::TODO review these assumptions when implementing the sample swapping loader::
-    ; Assumes audio driver starts paused.
-    ; Assumes `DriverIO__COMMAND_ACK_PORT` is non-zero from the loader.
-    .assert IoCommands__PAUSE == 0
-
-    mov A, #IoCommands__PAUSE
-    mov DriverIO__COMMAND_ACK_PORT, A
-    mov previousCommand, A
-.endinline
-
-
-.inline io__process_io_ports
-    ; If the S-CPU writes to an IO port at the same time S-SMP reads from the
-    ; same IO port, the S-SMP will read invalid data.
-    ;
-    ; To detect this bug the IO-Port is read twice and the command is only
-    ; processed if both reads are the same.
-    ;
-    ; Once the command byte has been read successfully, the two parameter bytes
-    ; do not need to be double-read because:
-    ;  * The S-CPU will wait until the command has been acknowledged before
-    ;    writing a new command
-    ;  * The parameter bytes are written before the command byte is written.
-
-    ; Test if `DriverIO__COMMAND_PORT` has changed.
-    mov A, DriverIO__COMMAND_PORT
-    cmp A, previousCommand
-    beq NoCommand
-        ; Test if the second COMMAND_PORT read is equal to the first COMMAND_PORT read
-        cbne DriverIO__COMMAND_PORT, NoCommand
-            push A
-            mov previousCommand, A
-
-            mov Y, DriverIO__PARAMETER_0_PORT
-            call _io__call_command
-
-            ; Acknowledge command
-            pop A
-            mov DriverIO__COMMAND_ACK_PORT, A
-    NoCommand:
-
-
-    ; Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
-    ;
-    ; ::TODO change to `bbc`::
-    mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-    bcc NoStl
-        ; Read the IO port a second time just in case it was a glitch
-        ;
-        ; ::TODO change to `bbc`::
-        mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-        bcc NoStl
-            jmp LOADER_ADDR
-    NoStl:
-.endinline
-
-
-; NOTE: Does not acknowledge command
-;
-; IN: A = unpacked DriverIO__COMMAND_PORT
-; IN: Y = DriverIO__PARAMETER_0_PORT
-.proc _io__call_command
-    .assert CommandFunctionTable_SIZE % 2 == 0
-    .assert DriverIO__COMMAND_MASK >= CommandFunctionTable_SIZE - 2
-
-    and A, #DriverIO__COMMAND_MASK
-    cmp A, #CommandFunctionTable_SIZE
-    bcs Return
-        mov X, A
-        jmp [CommandFunctionTable+X]
-
-Return:
-    ret
-.endproc
-
-
-CommandFunctionTable:
-    .functiontable IoCommands
-CommandFunctionTableEnd:
-CommandFunctionTable_SIZE = CommandFunctionTableEnd - CommandFunctionTable
-
-
-
-; Pause music and sound effects
-.proc cmd__pause
-    ; Disable timers
-    mov CONTROL, #0
-
-    ; Reset counters to fix a music/sfx channel playing a single tick after a `pause` IO command.
-    ; (clears counter_0 and counter_1)
-    .assert T0OUT + 1 == T1OUT
-    movw YA, T0OUT
-
-    ; key-off all channels
-    mov Y, #$ff
-    bra __cmd__keyoff
-.endproc
-
-
-.proc cmd__pause_music_play_sfx
-    ; Disable music timer, enable sfx timer
-    mov CONTROL, #CONTROL__ENABLE_TIMER_1
-
-    ; Reset counter to fix music channel playing a single tick after a `pause_music_play_sfx` IO command.
-    mov A, T0OUT
-
-    mov Y, musicSfxChannelMask  ; key-off music channels
-
-    ; fallthrough
-    .assert PC == __cmd__keyoff
-.endproc
-
-
-; IN: Y = channels
-.proc __cmd__keyoff
-    mov A, #DSP_KOFF
-    movw DSPADDR, YA
-
-    ret
-.endproc
-
-
-.proc cmd__unpause
-    ; Enable music and sfx timers
-    mov CONTROL, #CONTROL__ENABLE_TIMER_0 | CONTROL__ENABLE_TIMER_1
-
-    ret
-.endproc
-
-
-; IN: Y = volume
-.proc cmd__set_main_volume
-    ; Write Y to MVOL_L and MVOL_R DSP registers
-    mov A, #DSP_MVOL_L
-    movw DSPADDR, YA
-
-    mov A, #DSP_MVOL_R
-    movw DSPADDR, YA
-
-    ret
-.endproc
-
-
-; IN: Y = channel mask
-.proc cmd__set_music_channels
-    mov io_musicChannelsMask, Y
-
-    ; key-off muted channels
-    mov A, Y
-    eor A, #$ff
-    tset1 keyOffShadow_music
-
-    ret
-.endproc
-
-
-; IN: Y = timer
-.proc cmd__set_song_timer
-    ; if (y > 0 && y < MIN_TICK_CLOCK) y = MIN_TICK_CLOCK
-    dec Y
-    cmp Y, #MIN_TICK_CLOCK - 1
-    bcs Valid
-        mov Y, #MIN_TICK_CLOCK - 1
-Valid:
-    inc Y
-
-    mov T0TARGET, Y
-
-    ret
-.endproc
-
-
-; IN: music volume
-.proc cmd__set_global_music_volume
-    ; Increment volume so maximum volume is 0
-    inc Y
-    mov globalVolume_music, Y
-
-    mov volShadowDirty_music, #$ff
-
-    ret
-.endproc
-
-
-; IN Y: global music volume
-.proc cmd__set_global_volumes
-    call cmd__set_global_music_volume
-
-    mov Y, DriverIO__PARAMETER_1_PORT
-
-    ; fallthrough
-    .assert PC == cmd__set_sfx_volume
-.endproc
-
-
-; IN: global SFX volume
-.proc cmd__set_sfx_volume
-    ; Increment volume so maximum volume is 0
-    inc Y
-    mov globalVolume_sfx, Y
-
-    .assert N_SFX_CHANNELS == 2
-    mov volShadowDirty_sfx, #%11000000
-
-    ret
-.endproc
-
-
-
-.proc cmd__stop_sound_effects
-    .assert N_SFX_CHANNELS == 2
-
-    ; `bc__disable_channel` does not write to `channelSoA_instructionPtr`.
-    ; (it changes `instructionPtr`)
-    mov channelSoA_instructionPtr_h + FIRST_SFX_CHANNEL, #0
-    mov channelSoA_instructionPtr_h + LAST_SFX_CHANNEL, #0
-
-    mov X, #FIRST_SFX_CHANNEL
-    call bc__disable_channel
-
-    mov X, #LAST_SFX_CHANNEL
-    jmp bc__disable_channel
-.endproc
-
-
-; IN: Y = sound effect ID
-.proc cmd__play_sound_effect
-    .assert N_SFX_CHANNELS == 2
-    BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6)
-
-    cmp Y, commonDataHeader.nSoundEffects
-    bcs Return
-        cmp Y, sfx_oneChannelSfxId+0
-        beq sfx__maybe_restart_sfx_0
-
-        cmp Y, sfx_oneChannelSfxId+1
-        beq sfx__maybe_restart_sfx_1
-
-        mov A, activeSoundEffects
-        cmp A, #BOTH_SFX_ACTIVE
-        bcs sfx__both_channels_active
-
-        ; At most 1 sound effect channel is active
-        asl A
-        bcc sfx__play_1
-        bra sfx__play_sfx_0
-
-Return:
-    ret
-.endproc
-
-
-; IN: Y = sound effect ID
-.proc sfx__both_channels_active
-    .assert N_SFX_CHANNELS == 2
-    BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6)
-
-    ; Both sound effect channels are active,
-
-    ; Drop sfx_id if it is a low-priority sound effect
-    cmp Y, commonDataHeader.firstLowPrioritySfx
-    bcs Return
-
-        ; if (zero && y < commonDataHeader.nHighPrioritySfx) || a >= BOTH_SFX_ACTIVE {
-        mov A, sfx_interruptibleFlags
-        bne OtherTest
-            cmp Y, commonDataHeader.nHighPrioritySfx
-            bcc BothChannels
-        OtherTest:
-            cmp A, #BOTH_SFX_ACTIVE
-            bcc NotBothChannels
-
-        BothChannels:
-            ; Both sound effect channels active and either:
-            ;   * both uninterruptible and sfx_id is high-priority
-            ;   * both interruptible and sfx_id is normal priority
-            ;
-            ; check remaining ticks and drop the sound effect that will finish first.
-
-            .assert N_SFX_CHANNELS == 2
-            .assert sfx_remainingTicks__ELEMENT_SIZE == 2
-            movw YA, sfx_remainingTicks+0
-            cmpw YA, sfx_remainingTicks+2
-
-            mov Y, DriverIO__PARAMETER_0_PORT
-
-            bcc sfx__play_sfx_0
-            bra sfx__play_1
-
-
-        NotBothChannels:
-            ; Play sound effect if a channel is interruptible
-            ; A = sfx_interruptibleFlags
-            asl A
-            bcs sfx__play_1
-            bmi sfx__play_sfx_0
-
-Return:
-    ret
-.endproc
-
-_PlaySfx_Return = sfx__both_channels_active.Return
-
-
-
-; Restart sfx channel 0 if it is interruptible
-; ASSUMES: sfx_id == sfx_oneChannelSfxId[0]
-;
-; IN: Y = sound effect ID
-.proc sfx__maybe_restart_sfx_0
-    bbc sfx_interruptibleFlags, 6, _PlaySfx_Return
-
-    ; fallthrough
-    .assert PC == sfx__play_sfx_0
-.endproc
-
-
-; IN: Y = sound effect ID
-.proc sfx__play_sfx_0
-    ; If this procedure is modified, `_PlaySFX_1` MUST ALSO be modified
-    _I = 0
-    _BIT = 8 - N_SFX_CHANNELS + _I
-
-    .assert sfx_remainingTicks__ELEMENT_SIZE == 2
-    .assert sfx_oneChannelSfxId__ELEMENT_SIZE == 1
-
-    mov A, [commonData.soundEffects_durationAndInterruptFlag_l] + Y
-    mov sfx_remainingTicks + _I*2, A
-
-    mov A, [commonData.soundEffects_durationAndInterruptFlag_h] + Y
-    mov sfx_remainingTicks + _I*2 + 1, A
-
-    asl A
-    mov1 sfx_interruptibleFlags, _BIT, C
-
-    mov sfx_oneChannelSfxId + _I, Y
-
-    mov A, [commonData.soundEffects_addrAndOneChannelFlag_h] + Y
-    bmi NotOneChannel
-        mov sfx_oneChannelSfxId + _I, #$ff
-    NotOneChannel:
-
-    mov X, #FIRST_SFX_CHANNEL
-    bra sfx__play_sfx_on_channel
-.endproc
-
-
-; Restart sfx channel 1 if it is interruptible
-; ASSUMES: sfx_id == sfx_oneChannelSfxId[1]
-;
-; IN: Y = sound effect ID
-.proc sfx__maybe_restart_sfx_1
-    bbc sfx_interruptibleFlags, 7, _PlaySfx_Return
-
-    ; fallthrough
-    .assert PC == sfx__play_1
-.endproc
-
-
-; IN: Y = sound effect ID
-.proc sfx__play_1
-    ; If this procedure is modified, `_PlaySFX_0` MUST ALSO be modified
-    _I = 1
-    _BIT = 8 - N_SFX_CHANNELS + _I
-
-    .assert sfx_remainingTicks__ELEMENT_SIZE == 2
-    .assert sfx_oneChannelSfxId__ELEMENT_SIZE == 1
-
-    mov A, [commonData.soundEffects_durationAndInterruptFlag_l] + Y
-    mov sfx_remainingTicks + _I*2, A
-
-    mov A, [commonData.soundEffects_durationAndInterruptFlag_h] + Y
-    mov sfx_remainingTicks + _I*2 + 1, A
-
-    asl A
-    mov1 sfx_interruptibleFlags, _BIT, C
-
-    mov sfx_oneChannelSfxId + _I, Y
-
-    mov A, [commonData.soundEffects_addrAndOneChannelFlag_h] + Y
-    bmi NotOneChannel
-        mov sfx_oneChannelSfxId + _I, #$ff
-    NotOneChannel:
-
-    mov X, #LAST_SFX_CHANNEL
-    ; fallthrough
-    .assert PC == sfx__play_sfx_on_channel
-.endproc
-
-
-; ASSUMES: sfx_id < commonData.nSoundEffects
-; KEEP: X
-;
-; IN: A = addrAndOneChannelFlag_h
-; IN: X = channelIndex
-; IN: Y = sound effect ID
-.proc sfx__play_sfx_on_channel
-    and A, #$7f
-    mov channelSoA_instructionPtr_h + X, A
-
-    mov A, [commonData.soundEffects_addrAndOneChannelFlag_l] + Y
-    mov channelSoA_instructionPtr_l + X, A
-
-    mov A, ChannelVoiceBit + X
-    ; Send a key-off event, the S-DSP voice channel might be active.
-    tset1 keyOffShadow_sfx
-    ; Set keyOnMask.  The next play-note instruction will queue a KON event.
-    tset1 keyOnMask_sfx
-    ; Disable echo
-    tclr1 eonShadow_sfx
-
-    ; Not disabling noise.
-    ; Clearing pendingNon_sfx would disable noise in the middle of the release envelope.
-    ; Noise will be disabled after the key-off release envelope.
-
-    ; Enable sfx channel.
-    tset1 activeSoundEffects
-
-    ; Mark sfx channel volume dirty
-    ; eor used to swap bits 6 & 7 (since only 1 bit is set)
-    eor A, #%11_000000
-    tset1 volShadowDirty_sfx
-
-
-    ; Read pan parameter
-    mov A, DriverIO__PARAMETER_1_PORT
-
-    ; fallthrough
-    .assert PC == __reset_channel
-.endproc
-
-
-; NOTE: Does not set:
-;  * channelSoA_instructionPtr
-;  * instrument/envelope
-;  * virtual channels
-;  * keyOnMask
-;  * eonShadow
-;  * nonShadow
-;
-; IN: X = channelIndex
-; IN: A = pan
-; KEEP: X
-.proc __reset_channel
-    ; MUST NOT use `commonData`.
-    ; (It contains song header data, not common-audio data)
-
-    setp
-.p1
-    ; MUST NOT access zeropage variables until direct_page is false.
-    .assert inFirstpage(channelSoA_pan)
-    mov channelSoA_pan + X, A
-
-    .assert inFirstpage(channelSoA_volume)
-    mov A, #STARTING_VOLUME
-    mov channelSoA_volume + X, A
-
-
-    mov A, #0
-
-    ; Disable pan effects
-    .assert inFirstpage(channelSoA_panEffect_direction)
-    mov channelSoA_panEffect_direction + X, A
-
-    ; Disable volume effects
-    .assert inFirstpage(channelSoA_volEffect_direction)
-    mov channelSoA_volEffect_direction + X, A
-
-    ; Disable channel invert
-    .assert inFirstpage(channelSoA_invertFlags)
-    mov channelSoA_invertFlags + X, A
-
-    ; Disable early-release
-    .assert inFirstpage(channelSoA_earlyRelease_cmp)
-    mov channelSoA_earlyRelease_cmp + X, A
-        ; No need to reset `earlyRelease_minTicks`,
-        ; (Early release is not active if `earlyRelease_cmp == 0`)
-
-    ; Reset detune
-    .assert inFirstpage(channelSoA_detune_l)
-    .assert inFirstpage(channelSoA_detune_h)
-    mov channelSoA_detune_l + X, A
-    mov channelSoA_detune_h + X, A
-
-
-    .assert page(channelSoA_transpose) != 0
-    mov channelSoA_transpose + X, A
-
-    clrp
-.p0
-
-    ; Disable temp-gain
-    .assert inZeropage(channelSoA_virtualChannels_tempGain)
-    mov channelSoA_virtualChannels_tempGain + X, A
-
-    ; Disable portamento
-    .assert inZeropage(channelSoA_portamento_direction)
-    mov channelSoA_portamento_direction + X, A
-
-    ; Disable vibrato
-    .assert inZeropage(channelSoA_vibrato_pitchOffsetPerTick)
-    mov channelSoA_vibrato_pitchOffsetPerTick + X, A
-
-
-    ; Immediately process bytecode on the next tick
-    ; A = 0
-    mov channelSoA_countdownTimer_h + X, A
-    inc A
-    ; A = 1
-    mov channelSoA_countdownTimer_l + X, A
-
-
-    mov A, BcStackIndexesStart + X
-    mov channelSoA_stackPointer + X, A
-
-    ; Ensures loopStackPointer is in-bounds if the first instruction is `end_loop`.
-    setc
-    sbc A, #3
-    mov channelSoA_loopStackPointer + X, A
-
-    ret
-.endproc
-
-
-
 ; Volume and Pan
-; ==============
+; --------------
 
 ; Process volume effect
 ;
@@ -2203,13 +2170,12 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 .inline process_volume_effects
     ; Warning spaghetti code: Optimised for code-size.
 
-    lsr A
-
     setp
 .p1
 
+    lsr A
+
     mov A, channelSoA_subVolume + X
-    mov Y, channelSoA_volume + X
 
     bcc Up
         ; down
@@ -2217,17 +2183,18 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         sbc A, channelSoA_volEffect_offset_l + X
         mov channelSoA_subVolume + X, A
 
-        mov A, Y
+        mov A, channelSoA_volume + X
         sbc A, channelSoA_volEffect_offset_h + X
 
         bcs EndIf
-            mov Y, #0
+            mov A, #0
             bra DisableEffect
 
         UpOverflow:
-            mov Y, #$ff
+            mov A, #$ff
 
         DisableEffect:
+            mov channelSoA_volume + X, A
             mov A, #0
             bra WriteDirection
 
@@ -2237,14 +2204,14 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         adc A, channelSoA_volEffect_offset_l + X
         mov channelSoA_subVolume + X, A
 
-        mov A, Y
+        mov A, channelSoA_volume + X
         adc A, channelSoA_volEffect_offset_h + X
 
         bcs UpOverflow
     EndIf:
 
+    mov channelSoA_volume + X, A
 
-    mov Y, A
 
     dec channelSoA_volEffect_counter + X
     bne EndCounterIf
@@ -2260,7 +2227,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov channelSoA_volEffect_direction + X, A
     EndCounterIf:
 
-    mov channelSoA_volume + X, Y
 
     clrp
 .p0
@@ -2284,7 +2250,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 
     lsr A
 
-    mov Y, channelSoA_pan + X
     mov A, channelSoA_subPan + X
 
     bcc Up
@@ -2293,17 +2258,18 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         sbc A, channelSoA_panEffect_offset_l + X
         mov channelSoA_subPan + X, A
 
-        mov A, Y
+        mov A, channelSoA_pan + X
         sbc A, channelSoA_panEffect_offset_h + X
 
         bcs EndIf
-            mov Y, #0
+            mov A, #0
             bra DisableEffect
 
         UpOverflow:
-            mov Y, #MAX_PAN
+            mov A, #MAX_PAN
 
         DisableEffect:
+            mov channelSoA_pan + X, A
             mov A, #0
             bra WriteDirection
 
@@ -2313,7 +2279,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         adc A, channelSoA_panEffect_offset_l + X
         mov channelSoA_subPan + X, A
 
-        mov A, Y
+        mov A, channelSoA_pan + X
         adc A, channelSoA_panEffect_offset_h + X
 
         bcs UpOverflow
@@ -2321,8 +2287,8 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         bcs UpOverflow
     EndIf:
 
+    mov channelSoA_pan + X, A
 
-    mov Y, A
 
     dec channelSoA_panEffect_counter + X
     bne EndCounterIf
@@ -2337,7 +2303,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov channelSoA_panEffect_direction + X, A
     EndCounterIf:
 
-    mov channelSoA_pan + X, Y
 
     clrp
 .p0
@@ -2373,7 +2338,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov Y, A
 
         ; Test mono flag
-        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Confirm masking is more efficient than bpl or shifts
+        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Assert masking is more efficient than bpl or shifts
         mov A, channelSoA_invertFlags + X
         and A, #INVERT_FLAGS__MONO
         beq NoMonoInvert
@@ -2439,9 +2404,9 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 .endinline
 
 
-; Pitch Effects
-; =============
 
+; Pitch Effects
+; -------------
 
 ; IN: X = channelIndex
 ; KEEP: X
@@ -2466,11 +2431,9 @@ _PlaySfx_Return = sfx__both_channels_active.Return
             mov A, Y
             ; carry clear
             adc A, channelSoA_virtualChannels_pitch_l + X
-            bcc NoCarry
+            bcc WritePitchL
                 inc channelSoA_virtualChannels_pitch_h + X
-            NoCarry:
-            bra WritePitchL
-
+                bra WritePitchL
 
         Subtract:
             ; Subtract pitchOffsetPerTick from pitch_l
@@ -2517,18 +2480,20 @@ _target_h = zpTmp
 
     mov A, channelSoA_portamento_direction + X
     beq NoPortamento
-        bpl Up
+        asl A
+
+        ; Save target_h for later (no `cmp Y, dp+X` instruction)
+        mov A, channelSoA_portamento_target_h + X
+        mov _target_h, A
+
+        mov A, channelSoA_virtualChannels_pitch_l + X
+        mov Y, channelSoA_virtualChannels_pitch_h + X
+
+        bcc Up
             ; portamento down
 
-            ; Save target_h for later (no `cpy dp,x` instruction)
-            mov A, channelSoA_portamento_target_h + X
-            mov _target_h, A
-
-            mov A, channelSoA_virtualChannels_pitch_l + X
-            mov Y, channelSoA_virtualChannels_pitch_h + X
-
             ; Subtract speed from pitch
-            setc
+            ; carry set
             sbc A, channelSoA_portamento_speed + X
             bcs Down_CarryClear
                 dec Y
@@ -2548,15 +2513,8 @@ _target_h = zpTmp
         Up:
             ; portamento up
 
-            ; Save target_h for later (no `cpy dp,x` instruction)
-            mov A, channelSoA_portamento_target_h + X
-            mov _target_h, A
-
-            mov A, channelSoA_virtualChannels_pitch_l + X
-            mov Y, channelSoA_virtualChannels_pitch_h + X
-
             ; Add speed to pitch
-            clrc
+            ; carry clear
             adc A, channelSoA_portamento_speed + X
             bcc Up_NoCarry
                 inc Y
@@ -2609,13 +2567,9 @@ _target_h = zpTmp
 
 
 ; See `process_bytecode_with_loader_test`
-.proc process_bytecode_with_loader_test__SecondBitTest
+.proc _process_bytecode_with_loader_test__SecondBitTest
     ; Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
-
-    ; ::TODO change to a bbc instruction::
-    mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-    bcc process_bytecode
-
+    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode
     jmp LOADER_ADDR
 .endproc
 
@@ -2631,7 +2585,7 @@ _target_h = zpTmp
 ; IN: X = channelIndex
 ; KEEP: X
 .proc process_bytecode_with_loader_test
-    bbs DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode_with_loader_test__SecondBitTest
+    bbs DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, _process_bytecode_with_loader_test__SecondBitTest
 
     ; fallthrough
     .assert PC == process_bytecode
@@ -2664,22 +2618,21 @@ _target_h = zpTmp
     cmp A, #FIRST_PLAY_NOTE_INSTRUCTION
     bcs _bc__play_note
 
-    ; A is a non play-note bytecode
-    asl A
+    ; Push bytecode subroutine address to the stack and (later) jump to it with `ret`.
+    ;
+    ; This is the best method of jumping to the bytecode subroutine:
+    ;   * `JMP [!abs+X]` uses a lot of code-space as channelIndex needs to be on X
+    ;      (no `dp+Y` addressing mode on instructions that use A).
+    ;   * Self modifying code (writing to a `JMP !abs` instruction) uses the same
+    ;     number of cycles and uses more code-space.
+    ;
     mov Y, A
-
-    ; Push return address to the stack.
-    ;
-    ; This method uses the same number of CPU cycles (and the least amount of code space) compared to:
-    ;   * `JMP[!abs+X]` plus saving/restoring X via a zeropage register (as there is no `TXY` or `TXY` instruction
-    ;   * self modifying code (writing the return address of a JMP instruction)
-    ;
-    mov A, BytecodeInstructionTable + 1 + Y
+    mov A, BytecodeInstructionTable_h + Y
     push A
-    mov A, BytecodeInstructionTable + 0 + Y
+    mov A, BytecodeInstructionTable_l + Y
     push A
 
-    cmp Y, #FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE * 2
+    cmp Y, #FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
     bcs NoParameters
         ; Instruction has a parameter
         mov Y, #0
@@ -2775,9 +2728,9 @@ _target_h = zpTmp
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     ; Calculate voice pitch
@@ -2919,8 +2872,6 @@ _target_h = zpTmp
     bcc MusicChannel
         ; X is SFX channel
 
-        mov A, ChannelVoiceBit + X
-
         ; Set noise frequency
         mov noiseFreq_sfx - FIRST_SFX_CHANNEL + X, Y
 
@@ -2996,9 +2947,9 @@ _target_h = zpTmp
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     ; Calculate target pitch
@@ -3121,9 +3072,9 @@ _tmp_l = zpTmpWord.l
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     mov A, [commonData.pitchTable_l] + Y
@@ -3853,15 +3804,13 @@ _subroutineId = zpTmp
     bpl Positive
         ; carry clear, A is negative
         adc A, channelSoA_pan + X
-        bcs InRange
+        bcs EndIf
             mov A, #0
-        InRange:
-        bra EndIf
+            bra EndIf
 
 
     Positive:
         ; carry clear, A is positive
-        clrc
         adc A, channelSoA_pan + X
 
         bcs SetMax
@@ -3927,10 +3876,9 @@ _subroutineId = zpTmp
     bpl Positive
         ; carry clear, A is negative
         adc A, channelSoA_volume + X
-        bcs InRange
+        bcs EndIf
             mov A, #0
-        InRange:
-        bra EndIf
+            bra EndIf
 
 
     Positive:
@@ -3938,7 +3886,7 @@ _subroutineId = zpTmp
         adc A, channelSoA_volume + X
         bcc EndIf
             mov A, #$ff
-        EndIf:
+    EndIf:
 
     ; fallthrough
     .assert PC == bc__set_volume
@@ -3968,24 +3916,21 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__set_channel_or_echo_invert
-    ; If not in surround mode, set all flags to the mono-flag
-    ; ::TODO use `bbs`::
-    mov1 C, loaderDataType, LoaderDataType__SURROUND_FLAG_BIT
-    bcs Surround
-        ; Have to push and pop MSB using carry, the spc700 has no `bit` instruction.
-        asl A
-
-        and A, #INVERT_FLAGS__MONO
-        beq NoMonoInvert
-            mov A, #$ff
-        NoMonoInvert:
-
-        ror A
-    Surround:
-
+    .assert INVERT_FLAGS__MONO_BIT != 0
 
     ; Have to bit-shift parameter, the spc700 has no `bit` instruction.
     asl A
+
+    ; If not in surround mode, set all flags to the mono-flag
+    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, Surround
+        ; MUST NOT modify carry
+
+        and A, #INVERT_FLAGS__MONO
+        beq NoMonoInvert
+            mov A, #$7f << 1
+        NoMonoInvert:
+    Surround:
+
     bcc SetEchoInvert
         ; set channel invert
         mov channelSoA_invertFlags + X, A
@@ -4551,17 +4496,16 @@ SetI8:
 
 
     cmp X, #ECHO_I8_EFB_INDEX
+
+    pop X
+
     bcs FeedbackDirty
         set1 echoDirty, ECHO_DIRTY__FIR_FILTER_BIT
-
-        pop X
         jmp process_next_bytecode
 
 
     FeedbackDirty:
         set1 echoDirty, ECHO_DIRTY__FEEDBACK_BIT
-
-        pop X
         jmp process_next_bytecode
 .endproc
 
@@ -4691,8 +4635,7 @@ SetI8:
     Bit0Clear:
         .assert DISABLE_NOISE_OPCODE == 0
         bne PMod
-            mbc__disable_noise__inline
-            jmp process_next_bytecode
+            mbc__disable_noise__jmp_process_next_bytecode
 
         PMod:
             .assert DISABLE_PMOD_OPCODE & 1 == 0
@@ -4759,7 +4702,8 @@ SetI8:
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.inline mbc__disable_noise__inline
+; CAUTION: JUMPS TO process_next_bytecode
+.inline mbc__disable_noise__jmp_process_next_bytecode
     mov A, ChannelVoiceBit + X
     cmp X, #FIRST_SFX_CHANNEL
     bcc MusicChannel
@@ -4775,14 +4719,23 @@ SetI8:
 bc_ReservedForCustomUse = bc__disable_channel
 
 
-BytecodeInstructionTable:
-    .functiontable INSTRUCTIONS_WITH_ARGUMENTS
-BytecodeInstructionTable__NoArguments:
-    .functiontable NO_ARGUMENT_INSTRUCTIONS
-BytecodeInstructionTable_End:
+BytecodeInstructionTable_l:
+    .lofunctiontable INSTRUCTIONS_WITH_ARGUMENTS
+BytecodeInstructionTable_l__NoArguments:
+    .lofunctiontable NO_ARGUMENT_INSTRUCTIONS
+BytecodeInstructionTable_l_End:
 
-.assert BytecodeInstructionTable__NoArguments - BytecodeInstructionTable == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE * 2
-.assert BytecodeInstructionTable_End - BytecodeInstructionTable == FIRST_PLAY_NOTE_INSTRUCTION * 2
+BytecodeInstructionTable_h:
+    .hifunctiontable INSTRUCTIONS_WITH_ARGUMENTS
+BytecodeInstructionTable_h__NoArguments:
+    .hifunctiontable NO_ARGUMENT_INSTRUCTIONS
+BytecodeInstructionTable_h_End:
+
+.assert BytecodeInstructionTable_l__NoArguments - BytecodeInstructionTable_l == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
+.assert BytecodeInstructionTable_l_End - BytecodeInstructionTable_l == FIRST_PLAY_NOTE_INSTRUCTION
+
+.assert BytecodeInstructionTable_h__NoArguments - BytecodeInstructionTable_h == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
+.assert BytecodeInstructionTable_h_End - BytecodeInstructionTable_h == FIRST_PLAY_NOTE_INSTRUCTION
 
 
 

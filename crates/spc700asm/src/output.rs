@@ -91,6 +91,8 @@ impl BitArgument {
 enum PendingOutput {
     U8,
     U16,
+    U16LoByte,
+    U16HiByte,
     AbsBit(BitArgument),
     RelativeBranch,
     Pcall,
@@ -215,6 +217,30 @@ impl<'s> Output<'s> {
         }
     }
 
+    pub fn write_lo_u16v(&mut self, value: U16Value<'s>) {
+        match value {
+            U16Value::Known(v) => {
+                self.output.push(v.to_le_bytes()[0]);
+            }
+            U16Value::Unknown(expression, scope) => {
+                self.push_pending_output(expression, scope, PendingOutput::U16LoByte);
+                self.output.push(0);
+            }
+        }
+    }
+
+    pub fn write_hi_u16v(&mut self, value: U16Value<'s>) {
+        match value {
+            U16Value::Known(v) => {
+                self.output.push(v.to_le_bytes()[1]);
+            }
+            U16Value::Unknown(expression, scope) => {
+                self.push_pending_output(expression, scope, PendingOutput::U16HiByte);
+                self.output.push(0);
+            }
+        }
+    }
+
     pub fn write_op_u8(&mut self, opcode: u8, value: u8) {
         self.output.push(opcode);
         self.output.push(value);
@@ -308,9 +334,29 @@ pub fn process_pending_output_expressions<'s>(
                     ),
                 },
                 PendingOutput::U16 => match u16::try_from(value) {
-                    Ok(v) => {
-                        o.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
-                    }
+                    Ok(v) => o.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes()),
+                    Err(_) => errors.push(
+                        p.line_no,
+                        OutputError::OutOfRange {
+                            value,
+                            min: u16::MIN.into(),
+                            max: u16::MAX.into(),
+                        },
+                    ),
+                },
+                PendingOutput::U16LoByte => match u16::try_from(value) {
+                    Ok(v) => o.output[pos] = v.to_le_bytes()[0],
+                    Err(_) => errors.push(
+                        p.line_no,
+                        OutputError::OutOfRange {
+                            value,
+                            min: u16::MIN.into(),
+                            max: u16::MAX.into(),
+                        },
+                    ),
+                },
+                PendingOutput::U16HiByte => match u16::try_from(value) {
+                    Ok(v) => o.output[pos] = v.to_le_bytes()[1],
                     Err(_) => errors.push(
                         p.line_no,
                         OutputError::OutOfRange {
