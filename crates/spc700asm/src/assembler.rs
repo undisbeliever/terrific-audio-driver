@@ -16,7 +16,7 @@ use crate::{
         StructSection, Var, VarBankStatement, VarLine, VarsSection,
     },
     instructions::process_instruction,
-    output::{process_asserts, process_pending_output_expressions, Output},
+    output::{process_asserts, process_pending_output_expressions, Output, U16Value},
     string::comma_iter,
     symbol_file::SymbolFile,
     symbols::{is_symbol_name_valid, SymbolError, Symbols},
@@ -568,6 +568,7 @@ fn process_function_table_def<'s>(
 }
 
 fn process_function_table<'s>(
+    writer: impl Fn(&mut Output<'s>, U16Value<'s>),
     line_no: LineNo,
     name: &'s str,
     ft_defs: &HashMap<&'s str, FunctionTableDef<'s>>,
@@ -581,7 +582,7 @@ fn process_function_table<'s>(
         Some(ft) => {
             for (_, f) in &ft.functions {
                 match evaluate_u16v(f, symbols) {
-                    Ok(v) => output.write_u16v(v),
+                    Ok(v) => writer(output, v),
                     Err(e) => errors.push(line_no, AssemblerError::FunctionTableError(e)),
                 }
             }
@@ -953,8 +954,41 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
 
             GlobalAsm::FunctionTable(line_no, name) => {
                 cbst.check_codebank_set(line_no, &mut errors);
-                process_function_table(line_no, name, &ft_defs, &symbols, &mut output, &mut errors)
+                process_function_table(
+                    Output::write_u16v,
+                    line_no,
+                    name,
+                    &ft_defs,
+                    &symbols,
+                    &mut output,
+                    &mut errors,
+                )
             }
+            GlobalAsm::LoFunctionTable(line_no, name) => {
+                cbst.check_codebank_set(line_no, &mut errors);
+                process_function_table(
+                    Output::write_lo_u16v,
+                    line_no,
+                    name,
+                    &ft_defs,
+                    &symbols,
+                    &mut output,
+                    &mut errors,
+                )
+            }
+            GlobalAsm::HiFunctionTable(line_no, name) => {
+                cbst.check_codebank_set(line_no, &mut errors);
+                process_function_table(
+                    Output::write_hi_u16v,
+                    line_no,
+                    name,
+                    &ft_defs,
+                    &symbols,
+                    &mut output,
+                    &mut errors,
+                )
+            }
+
             GlobalAsm::Procedure(proc) => {
                 cbst.check_codebank_set(proc.line_no, &mut errors);
                 process_proc(

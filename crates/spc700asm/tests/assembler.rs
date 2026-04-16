@@ -1216,6 +1216,77 @@ fn function_table_errors() {
 }
 
 #[test]
+fn split_function_tables() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+.ftdef ftname
+    one
+    two
+    three
+.endftdef
+
+FunctionTable_L:
+    .lofunctiontable ftname
+
+FunctionTable_H:
+    .hifunctiontable ftname
+
+one = $1101
+two = $2202
+three = $3303
+"##,
+    )?;
+
+    assert_eq!(c.sym("FunctionTable_L"), 0x200);
+    assert_eq!(c.sym("FunctionTable_H"), 0x203);
+
+    assert_eq!(
+        c.output,
+        &[
+            0x01, 0x02, 0x03, // lo table
+            0x11, 0x22, 0x33, // hi table
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn split_function_table_errors() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.ftdef ftname
+    valid_label
+    unknown
+.endftdef
+
+valid_label:
+    .lofunctiontable unknown_ftdef
+    .lofunctiontable ftname
+
+    .hifunctiontable unknown_ftdef
+    .hifunctiontable ftname
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        [
+            el(10, AssemblerError::FtdefNotFound("unknown_ftdef")),
+            el(13, AssemblerError::FtdefNotFound("unknown_ftdef")),
+            el(11, OutputError::ExpressionHasUnknownValue("unknown")),
+            el(14, OutputError::ExpressionHasUnknownValue("unknown")),
+        ]
+    );
+}
+
+#[test]
 fn function_table_not_allowed_in_proc_or_inline() {
     let e = assemble(
         r##"
@@ -1223,11 +1294,15 @@ fn function_table_not_allowed_in_proc_or_inline() {
 
 .proc name
     .functiontable bytecode
+    .lofunctiontable bytecode
+    .hifunctiontable bytecode
     inline_proc
 .endproc
 
 .inline inline_proc
     .functiontable bytecode
+    .lofunctiontable bytecode
+    .hifunctiontable bytecode
     .db 0
 .endinline
 "##,
@@ -1239,7 +1314,11 @@ fn function_table_not_allowed_in_proc_or_inline() {
         e.errors(),
         [
             el(5, FileParserError::FunctionTableInProc),
-            el(10, FileParserError::FunctionTableInProc),
+            el(6, FileParserError::FunctionTableInProc),
+            el(7, FileParserError::FunctionTableInProc),
+            el(12, FileParserError::FunctionTableInProc),
+            el(13, FileParserError::FunctionTableInProc),
+            el(14, FileParserError::FunctionTableInProc),
         ]
     );
 }

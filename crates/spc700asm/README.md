@@ -62,7 +62,9 @@ Commands:
  * `.repeatdb <name> in <start>..<end>, <expr>` - Repeat `.db` with an incrementing counter symbol
     * `.repeatdb i in 0..5, i * 3` is the equivalent of `.db 0, 3, 6, 9, 12`
 
- * `.functiontable <ftdef>` - Builds a function table from a `.ftdef`
+ * `.functiontable <ftdef_name>` - Builds a function table from a `.ftdef`
+ * `.lofunctiontable <ftdef_name>` - Builds the low-byte data of a split function table from a `.ftdef`
+ * `.hifunctiontable <ftdef_name>` - Builds the high-byte data of a split function table from a `.ftdef`
 
  * `.assert <expr>` - Adds an assertion
     * The `PC` symbol will point to the current address of the assert statement.
@@ -153,14 +155,29 @@ Function tables are defined with a `.ftdef` section.
 
 And are generated using the `.functionatable` command.
 
+
 The following two sections are equivalent.
 
 ```
+FunctionTable:
     .functiontable ftdef_name
+
+FunctionTable_l:
+    .lofunctiontable ftdef_name
+
+FunctionTable_h:
+    .hifunctiontable ftdef_name
 ```
 
 ```
+FunctionTable:
     .dw function_1, function_2, function_3
+
+FunctionTable_l:
+    .db lobyte(function_1), lobyte(function_2), lobyte(function_3)
+
+FunctionTable_h:
+    .db hibyte(function_1), hibyte(function_2), hibyte(function_3)
 ```
 
 
