@@ -2618,22 +2618,21 @@ _target_h = zpTmp
     cmp A, #FIRST_PLAY_NOTE_INSTRUCTION
     bcs _bc__play_note
 
-    ; A is a non play-note bytecode
-    asl A
+    ; Push bytecode subroutine address to the stack and (later) jump to it with `ret`.
+    ;
+    ; This is the best method of jumping to the bytecode subroutine:
+    ;   * `JMP [!abs+X]` uses a lot of code-space as channelIndex needs to be on X
+    ;      (no `dp+Y` addressing mode on instructions that use A).
+    ;   * Self modifying code (writing to a `JMP !abs` instruction) uses the same
+    ;     number of cycles and uses more code-space.
+    ;
     mov Y, A
-
-    ; Push return address to the stack.
-    ;
-    ; This method uses the same number of CPU cycles (and the least amount of code space) compared to:
-    ;   * `JMP[!abs+X]` plus saving/restoring X via a zeropage register (as there is no `TXY` or `TXY` instruction
-    ;   * self modifying code (writing the return address of a JMP instruction)
-    ;
-    mov A, BytecodeInstructionTable + 1 + Y
+    mov A, BytecodeInstructionTable_h + Y
     push A
-    mov A, BytecodeInstructionTable + 0 + Y
+    mov A, BytecodeInstructionTable_l + Y
     push A
 
-    cmp Y, #FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE * 2
+    cmp Y, #FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
     bcs NoParameters
         ; Instruction has a parameter
         mov Y, #0
@@ -4720,14 +4719,23 @@ SetI8:
 bc_ReservedForCustomUse = bc__disable_channel
 
 
-BytecodeInstructionTable:
-    .functiontable INSTRUCTIONS_WITH_ARGUMENTS
-BytecodeInstructionTable__NoArguments:
-    .functiontable NO_ARGUMENT_INSTRUCTIONS
-BytecodeInstructionTable_End:
+BytecodeInstructionTable_l:
+    .lofunctiontable INSTRUCTIONS_WITH_ARGUMENTS
+BytecodeInstructionTable_l__NoArguments:
+    .lofunctiontable NO_ARGUMENT_INSTRUCTIONS
+BytecodeInstructionTable_l_End:
 
-.assert BytecodeInstructionTable__NoArguments - BytecodeInstructionTable == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE * 2
-.assert BytecodeInstructionTable_End - BytecodeInstructionTable == FIRST_PLAY_NOTE_INSTRUCTION * 2
+BytecodeInstructionTable_h:
+    .hifunctiontable INSTRUCTIONS_WITH_ARGUMENTS
+BytecodeInstructionTable_h__NoArguments:
+    .hifunctiontable NO_ARGUMENT_INSTRUCTIONS
+BytecodeInstructionTable_h_End:
+
+.assert BytecodeInstructionTable_l__NoArguments - BytecodeInstructionTable_l == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
+.assert BytecodeInstructionTable_l_End - BytecodeInstructionTable_l == FIRST_PLAY_NOTE_INSTRUCTION
+
+.assert BytecodeInstructionTable_h__NoArguments - BytecodeInstructionTable_h == FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE
+.assert BytecodeInstructionTable_h_End - BytecodeInstructionTable_h == FIRST_PLAY_NOTE_INSTRUCTION
 
 
 
