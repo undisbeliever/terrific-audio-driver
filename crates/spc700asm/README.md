@@ -62,6 +62,8 @@ Commands:
  * `.repeatdb <name> in <start>..<end>, <expr>` - Repeat `.db` with an incrementing counter symbol
     * `.repeatdb i in 0..5, i * 3` is the equivalent of `.db 0, 3, 6, 9, 12`
 
+ * `.functiontable <ftdef>` - Builds a function table from a `.ftdef`
+
  * `.assert <expr>` - Adds an assertion
     * The `PC` symbol will point to the current address of the assert statement.
     * The asserts are checked after the binary has been assembled.
@@ -132,6 +134,33 @@ Procedure and inline example:
         clrc
         adc A, #5
     .endinline
+```
+
+
+----
+
+spc700asm supports function table declarations before they are referenced.
+
+Function tables are defined with a `.ftdef` section.
+
+```
+.ftdef ftdef_name
+    function_1
+    function_2
+    function_3
+.endftdef
+```
+
+And are generated using the `.functionatable` command.
+
+The following two sections are equivalent.
+
+```
+    .functiontable ftdef_name
+```
+
+```
+    .dw function_1, function_2, function_3
 ```
 
 
