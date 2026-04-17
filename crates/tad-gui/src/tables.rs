@@ -480,17 +480,15 @@ where
                 draw::pop_clip();
             }
 
-            TableContext::RcResize => {
-                // Table column/row resized
-                if self.editing_row >= 0 && self.editing_col >= 0 {
-                    if let Some((x, y, w, h)) =
-                        self.table
-                            .find_cell(TableContext::Cell, self.editing_row, self.editing_col)
-                    {
-                        if let Some(widget) = &mut self.edit_widget {
-                            widget.resize(x, y, w, h);
-                            widget.redraw();
-                        }
+            // Table column/row resized
+            TableContext::RcResize if (self.editing_row >= 0 && self.editing_col >= 0) => {
+                if let Some((x, y, w, h)) =
+                    self.table
+                        .find_cell(TableContext::Cell, self.editing_row, self.editing_col)
+                {
+                    if let Some(widget) = &mut self.edit_widget {
+                        widget.resize(x, y, w, h);
+                        widget.redraw();
                     }
                 }
             }
