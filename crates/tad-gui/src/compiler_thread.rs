@@ -1256,8 +1256,8 @@ impl SongCompiler {
     fn output_largest_song_size(&self, sender: &Sender) {
         let max_total_size = self
             .songs
-            .iter()
-            .filter_map(|(_k, v)| v.song_data.as_ref())
+            .values()
+            .filter_map(|v| v.song_data.as_ref())
             .map(|s| s.song_aram_size())
             .max_by_key(|s| s.total_size())
             .unwrap_or(BLANK_SONG_ARAM_SIZE);
