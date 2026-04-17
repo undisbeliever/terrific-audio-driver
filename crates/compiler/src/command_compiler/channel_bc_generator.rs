@@ -1122,9 +1122,56 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
+    fn change_pan_and_or_volume(&mut self, pan: Option<PanCommand>, volume: Option<VolumeCommand>) {
+        match (pan, volume) {
+            (Some(PanCommand::Absolute(p)), Some(VolumeCommand::Absolute(v))) => {
+                self.bc.set_pan_and_volume(p, v);
+            }
+            (pan, volume) => {
+                match volume {
+                    Some(VolumeCommand::Absolute(v)) => self.bc.set_volume(v),
+                    Some(VolumeCommand::Relative(v)) => {
+                        let v = i32::from(v);
+                        match RelativeVolume::try_from(v) {
+                            Ok(v) => self.bc.adjust_volume(v),
+                            Err(_) => {
+                                // Two relative volume commands are required
+                                assert!(
+                                    v >= RelativeVolume::MIN.as_i8() as i32 * 2
+                                        && v <= RelativeVolume::MAX.as_i8() as i32 * 2
+                                );
+
+                                let v1: i32 = if v < 0 {
+                                    RelativeVolume::MIN.as_i8().into()
+                                } else {
+                                    RelativeVolume::MAX.as_i8().into()
+                                };
+                                let v2 = v - v1;
+                                self.bc.adjust_volume(RelativeVolume::try_from(v1).unwrap());
+                                self.bc.adjust_volume(RelativeVolume::try_from(v2).unwrap());
+                            }
+                        }
+                    }
+                    None => (),
+                }
+                match pan {
+                    Some(PanCommand::Absolute(p)) => self.bc.set_pan(p),
+                    Some(PanCommand::Relative(p)) => self.bc.adjust_pan(p),
+                    None => (),
+                }
+            }
+        }
+    }
+
+    fn mergeable_command(&mut self, m: &MergeableCommands) {
+        self.change_pan_and_or_volume(m.pan, m.volume);
+    }
+
     fn _command(&mut self, command: &Command) -> Result<(), ChannelError> {
         match command {
             Command::None => (),
+
+            Command::MergeableCommands(m) => self.mergeable_command(m),
 
             Command::SetLoopPoint(analysis) => match self.bc.get_context() {
                 BytecodeContext::SongChannel { .. } => {
@@ -1352,44 +1399,6 @@ impl<'a> ChannelBcGenerator<'a> {
             Command::EndLoop(loop_count, analysis) => {
                 self.bc.end_loop(*loop_count, analysis)?;
             }
-
-            &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {
-                (Some(PanCommand::Absolute(p)), Some(VolumeCommand::Absolute(v))) => {
-                    self.bc.set_pan_and_volume(p, v);
-                }
-                (pan, volume) => {
-                    match volume {
-                        Some(VolumeCommand::Absolute(v)) => self.bc.set_volume(v),
-                        Some(VolumeCommand::Relative(v)) => {
-                            match RelativeVolume::try_from(v) {
-                                Ok(v) => self.bc.adjust_volume(v),
-                                Err(_) => {
-                                    // Two relative volume commands are required
-                                    assert!(
-                                        v >= RelativeVolume::MIN.as_i8() as i32 * 2
-                                            && v <= RelativeVolume::MAX.as_i8() as i32 * 2
-                                    );
-
-                                    let v1: i32 = if v < 0 {
-                                        RelativeVolume::MIN.as_i8().into()
-                                    } else {
-                                        RelativeVolume::MAX.as_i8().into()
-                                    };
-                                    let v2 = v - v1;
-                                    self.bc.adjust_volume(RelativeVolume::try_from(v1).unwrap());
-                                    self.bc.adjust_volume(RelativeVolume::try_from(v2).unwrap());
-                                }
-                            }
-                        }
-                        None => (),
-                    }
-                    match pan {
-                        Some(PanCommand::Absolute(p)) => self.bc.set_pan(p),
-                        Some(PanCommand::Relative(p)) => self.bc.adjust_pan(p),
-                        None => (),
-                    }
-                }
-            },
 
             &Command::SetChannelInvert(flags) => {
                 self.bc.set_channel_invert(flags);

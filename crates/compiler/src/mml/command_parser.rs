@@ -22,10 +22,9 @@ use crate::bytecode::{
     KEY_OFF_TICK_DELAY,
 };
 use crate::command_compiler::commands::{
-    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
-    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MmlInstrument,
-    MpVibrato, NoteOrPitch, PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType,
-    TicksAfterKeyoff, VolumeCommand,
+    ChannelCommands, Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato,
+    MergeableCommands, MmlInstrument, MpVibrato, NoteOrPitch, Quantize, RestTicksAfterNote,
+    SubroutineCallType, TicksAfterKeyoff,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
@@ -1274,81 +1273,68 @@ fn parse_portamento_pitches(
     }
 }
 
-fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
+fn parse_pan_value(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
     match_next_token!(
         p,
 
         &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
-                Ok(v) => Some(PanCommand::Absolute(v)),
+                Ok(v) => m.set_pan(v),
                 Err(e) => {
                     p.add_error(pos, e.into());
-                    None
                 }
             }
         },
-        &Token::RelativeNumber(n) => {
-            Some(relative_pan(n))
-        },
+        &Token::RelativeNumber(n) => m.adjust_pan(n),
         #_ => {
             p.add_error(pos, ChannelError::NoPanParameter);
-            None
         }
     )
 }
 
-fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
+fn parse_px_pan_value(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
     match_next_token!(
         p,
 
         &Token::Number(0) | &Token::HexNumber(0) => {
-            Some(PanCommand::Absolute(Pan::CENTER))
+            m.set_pan(Pan::CENTER)
         },
         &Token::RelativeNumber(n) => {
             if PX_PAN_RANGE.contains(&n) {
                 let p = n + i32::from(Pan::CENTER.as_u8());
-                Some(PanCommand::Absolute(Pan::try_from(u8::try_from(p).unwrap()).unwrap()))
+                m.set_pan(Pan::try_from(u8::try_from(p).unwrap()).unwrap())
             }
             else {
                 p.add_error(pos, ValueError::PxPanOutOfRange(n).into());
-                None
             }
         },
         &Token::Number(_) | &Token::HexNumber(_) => {
             p.add_error(pos, ValueError::NoPxPanSign.into());
-            None
         },
         #_ => {
             p.add_error(pos, ValueError::NoPxPan.into());
-            None
         }
     )
 }
 
-fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand> {
+fn parse_fine_volume_value(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
     match_next_token!(
         p,
 
         &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
-                Ok(v) => Some(VolumeCommand::Absolute(v)),
-                Err(e) => {
-                    p.add_error(pos, e.into());
-                    None
-                }
+                Ok(v) => m.set_volume(v),
+                Err(e) => p.add_error(pos, e.into()),
             }
         },
-        &Token::RelativeNumber(n) => {
-            Some(relative_volume(n))
-        },
+        &Token::RelativeNumber(n) => m.adjust_volume(n),
         #_ => {
             p.add_error(pos, ChannelError::NoFineVolumeParameter);
-            None
         }
     )
 }
 
-fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand> {
+fn parse_coarse_volume_value(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
     match_next_token!(
         p,
 
@@ -1356,28 +1342,26 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
             if v <= MAX_COARSE_VOLUME {
                 let v = u8::try_from(v).unwrap();
                 let v = v.saturating_mul(COARSE_VOLUME_MULTIPLIER);
-                Some(VolumeCommand::Absolute(Volume::new(v)))
+                m.set_volume(Volume::new(v));
             }
             else {
                 p.add_error(pos, ValueError::CoarseVolumeOutOfRange(v).into());
-                None
             }
         },
         &Token::RelativeNumber(n) => {
             let v = n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into());
-            Some(relative_volume(v))
+            m.adjust_volume(v);
         },
         #_ => {
             p.add_error(pos, ChannelError::NoCoarseVolumeParameter);
-            None
         }
     )
 }
 
-fn parse_dec_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
-    let rv = |v: u32| match i32::try_from(v) {
-        Ok(v) => relative_volume(-v),
-        Err(_) => VolumeCommand::Absolute(Volume::MIN),
+fn parse_dec_volume_paren(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
+    let mut rv = |v: u32| match i32::try_from(v) {
+        Ok(v) => m.adjust_volume(-v),
+        Err(_) => m.set_volume(Volume::MIN),
     };
 
     match_next_token!(
@@ -1391,20 +1375,18 @@ fn parse_dec_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
                 Some(v) => rv(v),
                 None => {
                     p.add_error(pos, ValueError::NoRelativeVolume.into());
-                    relative_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
+                    m.adjust_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
                 }
             }
         },
-        #_ => {
-            relative_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
-        }
+        #_ => m.adjust_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
     )
 }
 
-fn parse_inc_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
-    let rv = |v: u32| match i32::try_from(v) {
-        Ok(v) => relative_volume(v),
-        Err(_) => VolumeCommand::Absolute(Volume::MAX),
+fn parse_inc_volume_paren(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser) {
+    let mut rv = |v: u32| match i32::try_from(v) {
+        Ok(v) => m.adjust_volume(v),
+        Err(_) => m.set_volume(Volume::MAX),
     };
 
     match_next_token!(
@@ -1418,66 +1400,12 @@ fn parse_inc_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
                 Some(v) => rv(v),
                 None => {
                     p.add_error(pos, ValueError::NoRelativeVolume.into());
-                    relative_volume(COARSE_VOLUME_MULTIPLIER.into())
+                    m.adjust_volume(COARSE_VOLUME_MULTIPLIER.into())
                 }
             }
         },
-        #_ => {
-            relative_volume(COARSE_VOLUME_MULTIPLIER.into())
-        }
+        #_ => m.adjust_volume(COARSE_VOLUME_MULTIPLIER.into())
     )
-}
-
-fn merge_pan_or_volume<'a>(
-    pan: Option<PanCommand>,
-    volume: Option<VolumeCommand>,
-    p: &mut Parser<'a, '_>,
-) -> Command<'a> {
-    let mut pan = pan;
-    let mut volume = volume;
-
-    loop {
-        let pos = p.peek_pos();
-
-        match_next_token!(
-            p,
-
-            Token::CoarseVolume => {
-                if let Some(v) = parse_coarse_volume_value(pos, p) {
-                    volume = Some(merge_volumes_commands(volume, v));
-                }
-            },
-            Token::FineVolume => {
-                if let Some(v) = parse_fine_volume_value(pos, p) {
-                    volume = Some(merge_volumes_commands(volume, v));
-                }
-            },
-            Token::DecrementVolumeParentheses => {
-                let v = parse_dec_volume_paren(pos, p);
-                volume = Some(merge_volumes_commands(volume, v));
-            },
-            Token::IncrementVolumeParentheses => {
-                let v = parse_inc_volume_paren(pos, p);
-                volume = Some(merge_volumes_commands(volume, v));
-            },
-            Token::Pan => {
-                if let Some(new_pan) = parse_pan_value(pos, p) {
-                    pan = Some(merge_pan_commands(pan, new_pan));
-                }
-            },
-            Token::PxPan => {
-                if let Some(new_pan) = parse_px_pan_value(pos, p) {
-                    pan = Some(merge_pan_commands(pan, new_pan));
-                }
-            },
-
-            #_ => {
-                if !merge_state_change(p) {
-                    return Command::ChangePanAndOrVolume(pan, volume);
-                }
-            }
-        )
-    }
 }
 
 fn parse_coarse_volume_slide_amount(pos: FilePos, p: &mut Parser) -> Option<VolumeSlideAmount> {
@@ -2606,17 +2534,14 @@ fn invalid_token_error<'a>(p: &mut Parser, pos: FilePos, e: ChannelError) -> Com
     Command::None
 }
 
-fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Command<'a> {
+fn parse_non_mergeable_token<'a>(
+    pos: FilePos,
+    token: Token<'a>,
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
     p.reset_tick_offset();
 
     match token {
-        Token::End => Command::None,
-
-        Token::NewLine(r) => {
-            p.process_new_line(r);
-            Command::None
-        }
-
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayPitch => parse_play_pitch(pos, p),
         Token::PlayPitchSampleRate => parse_play_pitch_sample_rate(pos, p),
@@ -2628,33 +2553,25 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::Wait => parse_wait(p),
         Token::StartPortamento => parse_portamento(pos, p),
         Token::StartBrokenChord => parse_broken_chord(p),
-
         Token::DisableNoise => Command::DisableNoise,
-
         Token::MpVibrato => Command::SetMpVibrato(parse_mp_vibrato(pos, p)),
         Token::ManualVibrato => Command::SetManualVibrato(parse_manual_vibrato(pos, p)),
-
         Token::SetAdsr => parse_set_adsr(pos, p),
         Token::SetGain(mode) => parse_set_gain(pos, mode, p),
         Token::TempGain(mode) => parse_temp_gain(pos, mode, p),
-
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id) => parse_call_subroutine_mml(pos, id, p),
-
         Token::StartLoop => Command::StartLoop(None, Default::default()),
         Token::SkipLastLoop => Command::SkipLastLoop(Default::default()),
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
             Command::EndLoop(Some(lc), Default::default())
         }
-
         Token::SetLoopPoint => Command::SetLoopPoint(Default::default()),
-
         Token::PitchMod => parse_pitch_mod(pos, p),
         Token::Echo => parse_echo(pos, p),
         Token::Keyoff => parse_keyoff(pos, p),
-
         Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {
             Some(t) => Command::SetSongTempo(t),
             None => Command::None,
@@ -2663,86 +2580,19 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
             Some(t) => Command::SetSongTickClock(t),
             None => Command::None,
         },
-
-        Token::CoarseVolume => {
-            let v = parse_coarse_volume_value(pos, p);
-            merge_pan_or_volume(None, v, p)
-        }
-        Token::FineVolume => {
-            let v = parse_fine_volume_value(pos, p);
-            merge_pan_or_volume(None, v, p)
-        }
-        Token::DecrementVolumeParentheses => {
-            let v = parse_dec_volume_paren(pos, p);
-            merge_pan_or_volume(None, Some(v), p)
-        }
-        Token::IncrementVolumeParentheses => {
-            let v = parse_inc_volume_paren(pos, p);
-            merge_pan_or_volume(None, Some(v), p)
-        }
-        Token::Pan => {
-            let pan = parse_pan_value(pos, p);
-            merge_pan_or_volume(pan, None, p)
-        }
-        Token::PxPan => {
-            let pan = parse_px_pan_value(pos, p);
-            merge_pan_or_volume(pan, None, p)
-        }
-
         Token::SetChannelInvert(flags) => Command::SetChannelInvert(flags),
-
         Token::CoarseVolumeSlide => parse_coarse_volume_slide(pos, p),
         Token::FineVolumeSlide => parse_fine_volume_slide(pos, p),
         Token::CoarseTremolo => parse_coarse_tremolo(pos, p),
         Token::FineTremolo => parse_fine_tremolo(pos, p),
-
         Token::PanSlide => parse_pan_slide(pos, p),
         Token::Panbrello => parse_panbrello(pos, p),
-
         Token::Quantize => parse_quantize(pos, p),
         Token::EarlyRelease => parse_set_early_release(pos, p),
-
         Token::Transpose => parse_transpose(pos, p),
         Token::RelativeTranspose => parse_relative_transpose(pos, p),
-
         Token::DetuneOrGainModeD => parse_detune(pos, p),
         Token::DetuneCents => parse_detune_cents(pos, p),
-
-        Token::SetDefaultLength => {
-            parse_set_default_length(pos, p);
-            Command::None
-        }
-        Token::SetOctave => {
-            parse_set_octave(pos, p);
-            Command::None
-        }
-        Token::IncrementOctave => {
-            parse_increment_octave(p);
-            Command::None
-        }
-        Token::DecrementOctave => {
-            parse_decrement_octave(p);
-            Command::None
-        }
-
-        Token::ChannelTranspose => {
-            parse_channel_transpose(pos, p);
-            Command::None
-        }
-        Token::RelativeChannelTranspose => {
-            parse_relative_channel_transpose(pos, p);
-            Command::None
-        }
-        Token::KeySignature(s) => {
-            parse_key_signature(pos, p, s);
-            Command::None
-        }
-
-        Token::ChangeWholeNoteLength => {
-            parse_change_whole_note_length(pos, p);
-            Command::None
-        }
-        Token::Divider => Command::None,
 
         Token::Evol => parse_evol(pos, p),
         Token::Efb => parse_efb(pos, p),
@@ -2754,14 +2604,11 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::FtapMinus => parse_ftap_minus(pos, p),
         Token::SetEchoInvert(flags) => Command::SetEchoInvert(flags),
         Token::SetEchoDelay => parse_set_echo_delay(pos, p),
-
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::BytecodeAsm(asm) => parse_bytecode_asm(pos, asm, p),
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,
-
         Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),
-
         Token::Tie => invalid_token_error(p, pos, ChannelError::MissingNoteBeforeTie),
         Token::Slur => invalid_token_error(p, pos, ChannelError::MissingNoteBeforeSlur),
         Token::Comma => invalid_token_error(p, pos, ChannelError::CannotParseComma),
@@ -2771,12 +2618,25 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
             invalid_token_error(p, pos, ChannelError::UnexpectedNumber)
         }
         Token::RelativeNumber(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
-
         Token::GainModeB | Token::GainModeF | Token::GainModeI => {
             invalid_token_error(p, pos, ChannelError::CannotParseGainMode)
         }
-
         Token::Error(e) => invalid_token_error(p, pos, e),
+
+        _ => {
+            panic!()
+        }
+    }
+}
+
+struct MaybeMergeableCommands(Option<(FilePos, MergeableCommands)>);
+
+impl MaybeMergeableCommands {
+    fn get_or_add(&mut self, pos: FilePos) -> &mut MergeableCommands {
+        &mut self
+            .0
+            .get_or_insert_with(|| (pos, MergeableCommands::default()))
+            .1
     }
 }
 
@@ -2801,18 +2661,73 @@ pub(crate) fn parse_mml_tokens<'a>(
         cursor_tracking,
     );
 
+    let mut m = MaybeMergeableCommands(None);
+
     let end_pos = loop {
         let (pos, token) = p.peek_and_next();
 
+        macro_rules! parse_mc {
+            ($name:ident) => {
+                $name(m.get_or_add(pos), pos, &mut p)
+            };
+        }
+
         match token {
             Token::End => break pos,
-            t => commands.push(CommandWithPos::new(
-                parse_token(pos, t, &mut p),
-                p.file_pos_range_from(pos),
-                p.command_end_char_index(),
-            )),
+
+            Token::NewLine(r) => p.process_new_line(r),
+            Token::Divider => (),
+
+            // State changing commands
+            Token::SetDefaultLength => parse_set_default_length(pos, &mut p),
+            Token::SetOctave => parse_set_octave(pos, &mut p),
+            Token::IncrementOctave => parse_increment_octave(&mut p),
+            Token::DecrementOctave => parse_decrement_octave(&mut p),
+            Token::ChannelTranspose => parse_channel_transpose(pos, &mut p),
+            Token::RelativeChannelTranspose => parse_relative_channel_transpose(pos, &mut p),
+            Token::KeySignature(s) => parse_key_signature(pos, &mut p, s),
+            Token::ChangeWholeNoteLength => parse_change_whole_note_length(pos, &mut p),
+
+            // ::TODO rewrite when adding transpose to ChangeSetting command::
+            Token::Transpose if p.old_transpose() => parse_channel_transpose(pos, &mut p),
+            Token::RelativeTranspose if p.old_transpose() => {
+                parse_relative_channel_transpose(pos, &mut p)
+            }
+
+            // Mergeable commands
+            Token::CoarseVolume => parse_mc!(parse_coarse_volume_value),
+            Token::FineVolume => parse_mc!(parse_fine_volume_value),
+            Token::DecrementVolumeParentheses => parse_mc!(parse_dec_volume_paren),
+            Token::IncrementVolumeParentheses => parse_mc!(parse_inc_volume_paren),
+            Token::Pan => parse_mc!(parse_pan_value),
+            Token::PxPan => parse_mc!(parse_px_pan_value),
+
+            token => {
+                if let Some((pos, m)) = m.0 {
+                    commands.push(CommandWithPos::new(
+                        Command::MergeableCommands(m),
+                        p.file_pos_range_from(pos),
+                        p.command_end_char_index(),
+                    ));
+                }
+                m = MaybeMergeableCommands(None);
+
+                commands.push(CommandWithPos::new(
+                    parse_non_mergeable_token(pos, token, &mut p),
+                    p.file_pos_range_from(pos),
+                    p.command_end_char_index(),
+                ));
+            }
         }
     };
+
+    if let Some((pos, m)) = m.0 {
+        commands.push(CommandWithPos::new(
+            Command::MergeableCommands(m),
+            p.file_pos_range_from(pos),
+            p.command_end_char_index(),
+        ));
+    }
 
     let errors = p.finalize();
 

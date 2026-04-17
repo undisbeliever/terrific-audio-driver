@@ -52,76 +52,15 @@ pub enum NoteOrPitch {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum VolumeCommand {
+pub(super) enum VolumeCommand {
     Absolute(Volume),
-    Relative(i32),
+    Relative(i16),
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum PanCommand {
+pub(super) enum PanCommand {
     Absolute(Pan),
     Relative(RelativePan),
-}
-
-pub fn relative_volume(v: i32) -> VolumeCommand {
-    const _: () = assert!(Volume::MIN.as_u8() == 0);
-
-    if v <= -(Volume::MAX.as_u8() as i32) {
-        VolumeCommand::Absolute(Volume::MIN)
-    } else if v >= Volume::MAX.as_u8().into() {
-        VolumeCommand::Absolute(Volume::MAX)
-    } else {
-        VolumeCommand::Relative(v)
-    }
-}
-
-pub fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
-    match (v1, v2) {
-        (Some(VolumeCommand::Absolute(v1)), VolumeCommand::Relative(v2)) => {
-            let v = u32::from(v1.as_u8()).saturating_add_signed(v2);
-            let v = u8::try_from(v).unwrap_or(u8::MAX);
-            VolumeCommand::Absolute(Volume::new(v))
-        }
-        (Some(VolumeCommand::Relative(v1)), VolumeCommand::Relative(v2)) => {
-            let v = v1.saturating_add(v2);
-            relative_volume(v)
-        }
-        (Some(_), VolumeCommand::Absolute(_)) => v2,
-        (None, v2) => v2,
-    }
-}
-
-pub fn relative_pan(p: i32) -> PanCommand {
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == i8::MAX as i32 + 1);
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == -(i8::MIN as i32));
-    const _: () = assert!(Pan::MIN.as_u8() == 0);
-
-    if p <= -(Pan::MAX.as_u8() as i32) {
-        PanCommand::Absolute(Pan::MIN)
-    } else if p >= Pan::MAX.as_u8().into() {
-        PanCommand::Absolute(Pan::MAX)
-    } else {
-        PanCommand::Relative(p.try_into().unwrap())
-    }
-}
-
-pub fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
-    match (p1, p2) {
-        (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
-            let p = min(
-                p1.as_u8().saturating_add_signed(p2.as_i8()),
-                Pan::MAX.as_u8(),
-            );
-            PanCommand::Absolute(p.try_into().unwrap())
-        }
-        (Some(PanCommand::Relative(p1)), PanCommand::Relative(p2)) => {
-            let p1: i32 = p1.as_i8().into();
-            let p2: i32 = p2.as_i8().into();
-            relative_pan(p1 + p2)
-        }
-        (Some(_), PanCommand::Absolute(_)) => p2,
-        (None, p2) => p2,
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -195,6 +134,68 @@ impl DetuneCents {
     pub const ZERO: Self = Self(0);
 }
 
+#[derive(Default, Debug)]
+pub(crate) struct MergeableCommands {
+    pub(super) volume: Option<VolumeCommand>,
+    pub(super) pan: Option<PanCommand>,
+}
+
+impl MergeableCommands {
+    pub fn set_volume(&mut self, v: Volume) {
+        self.volume = Some(VolumeCommand::Absolute(v));
+    }
+
+    pub fn adjust_volume(&mut self, adjust: i32) {
+        let rel = |rv: i32| {
+            if rv <= -(Volume::MAX.as_u8() as i32) {
+                VolumeCommand::Absolute(Volume::MIN)
+            } else if rv >= Volume::MAX.as_u8().into() {
+                VolumeCommand::Absolute(Volume::MAX)
+            } else {
+                VolumeCommand::Relative(rv.try_into().unwrap())
+            }
+        };
+
+        self.volume = Some(match self.volume {
+            Some(VolumeCommand::Absolute(v)) => {
+                let v = u32::from(v.as_u8()).saturating_add_signed(adjust);
+                let v = u8::try_from(v).unwrap_or(u8::MAX);
+                VolumeCommand::Absolute(Volume::new(v))
+            }
+            Some(VolumeCommand::Relative(rv)) => rel(i32::from(rv) + adjust),
+            None => rel(adjust),
+        });
+    }
+
+    pub fn set_pan(&mut self, v: Pan) {
+        self.pan = Some(PanCommand::Absolute(v));
+    }
+
+    pub fn adjust_pan(&mut self, adjust: i32) {
+        let rel = |rp: i32| {
+            if rp <= -(Pan::MAX.as_u8() as i32) {
+                PanCommand::Absolute(Pan::MIN)
+            } else if rp >= Pan::MAX.as_u8().into() {
+                PanCommand::Absolute(Pan::MAX)
+            } else {
+                PanCommand::Relative(rp.try_into().unwrap())
+            }
+        };
+
+        self.pan = Some(match self.pan {
+            Some(PanCommand::Absolute(p)) => {
+                let p = min(
+                    u32::from(p.as_u8()).saturating_add_signed(adjust),
+                    Pan::MAX.as_u8() as u32,
+                );
+                PanCommand::Absolute(p.try_into().unwrap())
+            }
+            Some(PanCommand::Relative(rp)) => rel(i32::from(rp.value()) + adjust),
+            None => rel(adjust),
+        });
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum InstrumentAnalysis {
     Set(InstrumentId),
@@ -245,6 +246,8 @@ pub(crate) enum Command<'a> {
     None,
 
     SetLoopPoint(LoopAnalysis),
+
+    MergeableCommands(MergeableCommands),
 
     SetManualVibrato(Option<ManualVibrato>),
     SetMpVibrato(Option<MpVibrato>),
@@ -342,7 +345,6 @@ pub(crate) enum Command<'a> {
     SetDetune(DetuneValue),
     SetDetuneCents(DetuneCents),
 
-    ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetChannelInvert(InvertFlags),
 
     VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
