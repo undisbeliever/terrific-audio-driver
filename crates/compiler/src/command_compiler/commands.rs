@@ -18,7 +18,7 @@ use crate::command_compiler::analysis::SubroutineAnalysis;
 use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
 use crate::driver_constants::{FIR_FILTER_SIZE, N_MUSIC_CHANNELS};
 use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
-use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
+use crate::envelope::{Envelope, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::identifier::{IdentifierBuf, IdentifierStr};
 use crate::invert_flags::InvertFlags;
@@ -136,11 +136,24 @@ impl DetuneCents {
 
 #[derive(Default, Debug)]
 pub(crate) struct MergeableCommands {
+    pub(super) instrument: Option<InstrumentId>,
+    pub(super) envelope: Option<Envelope>,
+
     pub(super) volume: Option<VolumeCommand>,
     pub(super) pan: Option<PanCommand>,
 }
 
 impl MergeableCommands {
+    // SAFETY: ChannelBcGenerator will PANIC if instrument_id is invalid
+    pub fn set_instrument(&mut self, instrument_id: InstrumentId, envelope: Option<Envelope>) {
+        self.instrument = Some(instrument_id);
+        self.envelope = envelope;
+    }
+
+    pub fn set_envelope(&mut self, envelope: Envelope) {
+        self.envelope = Some(envelope);
+    }
+
     pub fn set_volume(&mut self, v: Volume) {
         self.volume = Some(VolumeCommand::Absolute(v));
     }
@@ -321,11 +334,6 @@ pub(crate) enum Command<'a> {
     // InstrumentId must be valid
     // Will not be optimised away
     SetInstrumentAsm(InstrumentId, Option<Envelope>),
-
-    // InstrumentId must be valid
-    SetInstrument(InstrumentId, Option<Envelope>),
-    SetAdsr(Adsr),
-    SetGain(Gain),
 
     // None reuses previous temp gain
     TempGain(Option<TempGain>),

@@ -19,7 +19,7 @@ use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
-use crate::envelope::{Adsr, Envelope, Gain, TempGain};
+use crate::envelope::{Envelope, TempGain};
 use crate::errors::{
     ChannelError, ErrorWithPos, MmlChannelError, MmlCompileErrors, MmlPrefixError,
     SoundEffectErrorList, ValueError,
@@ -946,16 +946,15 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    fn set_instrument(
-        &mut self,
-        inst_id: InstrumentId,
-        envelope: Option<Envelope>,
-    ) -> Result<(), ChannelError> {
+    fn set_instrument(&mut self, inst_id: InstrumentId, envelope: Option<Envelope>) {
         // ::TODO optimise when adding sample swapping::
-        let inst_envelope = match self.instruments.get_index(inst_id.value().into()) {
-            Some(data::InstrumentOrSample::Instrument(i)) => i.envelope,
-            Some(data::InstrumentOrSample::Sample(s)) => s.envelope,
-            None => return Err(ChannelError::NoInstrument),
+        let inst_envelope = match self
+            .instruments
+            .get_index(inst_id.value().into())
+            .expect("unknown inst_id")
+        {
+            data::InstrumentOrSample::Instrument(i) => i.envelope,
+            data::InstrumentOrSample::Sample(s) => s.envelope,
         };
 
         let old_inst = &self.bc.get_state().instrument;
@@ -984,29 +983,14 @@ impl<'a> ChannelBcGenerator<'a> {
                 Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
             }
         }
-
-        Ok(())
     }
 
-    fn set_adsr(&mut self, adsr: Adsr) {
-        if !self
-            .bc
-            .get_state()
-            .envelope
-            .is_known_and_eq(&Envelope::Adsr(adsr))
-        {
-            self.bc.set_adsr(adsr);
-        }
-    }
-
-    fn set_gain(&mut self, gain: Gain) {
-        if !self
-            .bc
-            .get_state()
-            .envelope
-            .is_known_and_eq(&Envelope::Gain(gain))
-        {
-            self.bc.set_gain(gain);
+    fn set_envelope(&mut self, envelope: Envelope) {
+        if !self.bc.get_state().envelope.is_known_and_eq(&envelope) {
+            match envelope {
+                Envelope::Adsr(adsr) => self.bc.set_adsr(adsr),
+                Envelope::Gain(gain) => self.bc.set_gain(gain),
+            }
         }
     }
 
@@ -1164,6 +1148,12 @@ impl<'a> ChannelBcGenerator<'a> {
     }
 
     fn mergeable_command(&mut self, m: &MergeableCommands) {
+        if let Some(inst_id) = m.instrument {
+            self.set_instrument(inst_id, m.envelope);
+        } else if let Some(envelope) = m.envelope {
+            self.set_envelope(envelope)
+        }
+
         self.change_pan_and_or_volume(m.pan, m.volume);
     }
 
@@ -1205,12 +1195,6 @@ impl<'a> ChannelBcGenerator<'a> {
             &Command::SetInstrumentAsm(inst_id, envelope) => {
                 self.set_instrument_asm(inst_id, envelope);
             }
-            &Command::SetInstrument(inst_id, envelope) => {
-                self.set_instrument(inst_id, envelope)?;
-            }
-
-            &Command::SetAdsr(adsr) => self.set_adsr(adsr),
-            &Command::SetGain(gain) => self.set_gain(gain),
 
             &Command::CallSubroutine(s_id, d) => {
                 self.call_subroutine(s_id, d)?;

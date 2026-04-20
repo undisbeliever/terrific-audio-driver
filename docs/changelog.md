@@ -2,6 +2,16 @@ Terrific Audio Driver Changelog
 ===============================
 
 
+Next Release
+============
+
+MML Changes:
+ * The MML compiler now merges `@` instrument and `A` ADSR envelope commands
+   into a single `set_instrument_and_adsr` bytecode instruction.
+ * The MML compiler now merges `@` instrument and `G` GAIN envelope commands
+   into a single `set_instrument_and_gain` bytecode instruction.
+
+
 Version 0.3.0
 =============
 

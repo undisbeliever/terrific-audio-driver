@@ -9,7 +9,8 @@ use super::subroutines::SubroutineCommandsWithCompileOrder;
 
 use crate::bytecode::{LoopCount, RelativeTranspose};
 use crate::command_compiler::commands::{
-    CommandWithPos, InstrumentAnalysis, LoopAnalysis, SkipLastLoopAnalysis, SoundEffectCommands,
+    CommandWithPos, InstrumentAnalysis, LoopAnalysis, MergeableCommands, SkipLastLoopAnalysis,
+    SoundEffectCommands,
 };
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
@@ -404,7 +405,12 @@ fn analyse_loop_commands<'a>(
                 }
                 instrument_set = true;
             }
-            Command::SetInstrument(i, _) | Command::SetInstrumentAsm(i, _) => {
+
+            Command::MergeableCommands(MergeableCommands {
+                instrument: Some(i),
+                ..
+            })
+            | Command::SetInstrumentAsm(i, _) => {
                 instrument = Some(InstrumentAnalysis::Set(*i));
                 instrument_set = true;
             }

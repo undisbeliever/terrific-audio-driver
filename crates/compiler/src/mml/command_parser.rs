@@ -28,7 +28,7 @@ use crate::command_compiler::commands::{
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
-use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
+use crate::envelope::{Envelope, Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::mml::GlobalSettings;
@@ -2020,48 +2020,54 @@ fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
     }
 }
 
-fn parse_set_adsr<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
+fn parse_set_adsr<'a>(m: &mut MergeableCommands, pos: FilePos, p: &mut Parser<'a, '_>) {
     let mut values = [0; 4];
 
     values[0] = match next_token_number(p) {
         Some(n) => n,
         None => {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return Command::None;
+            return;
         }
     };
 
     for v in &mut values[1..] {
         if !next_token_matches!(p, Token::Comma) {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return Command::None;
+            return;
         }
 
         *v = match next_token_number(p) {
             Some(n) => n,
             None => {
                 p.add_error(pos, ValueError::AdsrNotFourValues.into());
-                return Command::None;
+                return;
             }
         };
     }
 
     match values.try_into() {
-        Ok(adsr) => Command::SetAdsr(adsr),
-        Err(e) => {
-            p.add_error(pos, e.into());
-            Command::None
-        }
+        Ok(adsr) => m.set_envelope(Envelope::Adsr(adsr)),
+        Err(e) => p.add_error(pos, e.into()),
     }
 }
 
-fn parse_set_gain<'a>(pos: FilePos, mode: GainMode, p: &mut Parser<'a, '_>) -> Command<'a> {
+fn parse_set_gain<'a>(
+    m: &mut MergeableCommands,
+    pos: FilePos,
+    mode: GainMode,
+    p: &mut Parser<'a, '_>,
+) {
     match next_token_number(p) {
         Some(v) => match Gain::from_mode_and_value(mode, v) {
-            Ok(gain) => Command::SetGain(gain),
-            Err(e) => invalid_token_error(p, pos, e.into()),
+            Ok(gain) => m.set_envelope(Envelope::Gain(gain)),
+            Err(e) => {
+                invalid_token_error(p, pos, e.into());
+            }
         },
-        None => invalid_token_error(p, pos, ValueError::NoGain.into()),
+        None => {
+            invalid_token_error(p, pos, ValueError::NoGain.into());
+        }
     }
 }
 
@@ -2148,14 +2154,21 @@ fn parse_keyoff<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     Command::SetKeyOff(keyoff_enabled)
 }
 
-fn parse_set_instrument<'a>(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command<'a> {
+fn parse_set_instrument(
+    m: &mut MergeableCommands,
+    pos: FilePos,
+    id: IdentifierStr,
+    p: &mut Parser,
+) {
     match p.instruments_map().get(&id) {
-        Some(inst) => Command::SetInstrument(inst.instrument_id, inst.envelope),
-        None => invalid_token_error(
-            p,
-            pos,
-            ChannelError::CannotFindInstrument(id.as_str().to_owned()),
-        ),
+        Some(inst) => m.set_instrument(inst.instrument_id, inst.envelope),
+        None => {
+            invalid_token_error(
+                p,
+                pos,
+                ChannelError::CannotFindInstrument(id.as_str().to_owned()),
+            );
+        }
     }
 }
 
@@ -2556,10 +2569,7 @@ fn parse_non_mergeable_token<'a>(
         Token::DisableNoise => Command::DisableNoise,
         Token::MpVibrato => Command::SetMpVibrato(parse_mp_vibrato(pos, p)),
         Token::ManualVibrato => Command::SetManualVibrato(parse_manual_vibrato(pos, p)),
-        Token::SetAdsr => parse_set_adsr(pos, p),
-        Token::SetGain(mode) => parse_set_gain(pos, mode, p),
         Token::TempGain(mode) => parse_temp_gain(pos, mode, p),
-        Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id) => parse_call_subroutine_mml(pos, id, p),
         Token::StartLoop => Command::StartLoop(None, Default::default()),
@@ -2670,6 +2680,9 @@ pub(crate) fn parse_mml_tokens<'a>(
             ($name:ident) => {
                 $name(m.get_or_add(pos), pos, &mut p)
             };
+            ($name:ident, $arg:expr) => {
+                $name(m.get_or_add(pos), pos, $arg, &mut p)
+            };
         }
 
         match token {
@@ -2695,6 +2708,9 @@ pub(crate) fn parse_mml_tokens<'a>(
             }
 
             // Mergeable commands
+            Token::SetInstrument(id) => parse_mc!(parse_set_instrument, id),
+            Token::SetAdsr => parse_mc!(parse_set_adsr),
+            Token::SetGain(mode) => parse_mc!(parse_set_gain, mode),
             Token::CoarseVolume => parse_mc!(parse_coarse_volume_value),
             Token::FineVolume => parse_mc!(parse_fine_volume_value),
             Token::DecrementVolumeParentheses => parse_mc!(parse_dec_volume_paren),

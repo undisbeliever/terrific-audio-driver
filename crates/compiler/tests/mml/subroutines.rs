@@ -857,9 +857,14 @@ A @1 !s
 
 #[test]
 fn set_subroutine_instrument_hint_errors() {
-    assert_one_error_in_mml_line(
-        "?@1",
-        1,
+    assert_one_channel_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+A ?@1
+"#,
+        "A",
+        3,
         ChannelError::InstrumentHintOnlyAllowedInSubroutines,
     );
 

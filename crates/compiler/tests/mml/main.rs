@@ -59,6 +59,7 @@ const _: () = assert!(
 const SAMPLE_FREQ: f64 = 500.0;
 
 const EXAMPLE_ADSR_STR: &str = "12 1 1 16";
+const EXAMPLE_ADSR_MML: &str = "A 12,1,1,16";
 const EXAMPLE_ADSR_COMMENTS_STR: &str = "12,1,1,16";
 const EXAMPLE_ADSR: Adsr = match Adsr::try_new(12, 1, 1, 16) {
     Ok(v) => v,
@@ -66,6 +67,7 @@ const EXAMPLE_ADSR: Adsr = match Adsr::try_new(12, 1, 1, 16) {
 };
 
 const EXAMPLE_GAIN_STR: &str = "127";
+const EXAMPLE_GAIN_MML: &str = "G127";
 const EXAMPLE_GAIN: Gain = Gain::new(127);
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
@@ -165,9 +167,28 @@ fn subroutine_bytecode(mml: &SongData, index: usize) -> &[u8] {
     &song_data[usize::from(s.bytecode_offset)..usize::from(s.bytecode_end_offset)]
 }
 
+fn channel_a_line_to_mml(mml_line: &str) -> String {
+    // Using `\asm { set_instrument ..}` to prevent instrument/envelope merging
+    ["A \\asm {set_instrument dummy_instrument} o4\nA ", mml_line].concat()
+}
+
+fn channel_b_line_to_mml(mml_line: &str) -> String {
+    // Using `\asm { set_instrument ..}` to prevent instrument/envelope merging
+    ["B \\asm {set_instrument dummy_instrument} o4\nB ", mml_line].concat()
+}
+
+fn old_transpose_line_to_mml(mml_line: &str) -> String {
+    // Using `\asm { set_instrument ..}` to prevent instrument/envelope merging
+    [
+        "#OldTranspose\nA \\asm {set_instrument dummy_instrument} o4\nA ",
+        mml_line,
+    ]
+    .concat()
+}
+
 #[track_caller]
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
-    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = channel_a_line_to_mml(mml_line);
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     let dd = dummy_data();
@@ -190,7 +211,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
 
 #[track_caller]
 fn assert_old_transpose_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
-    let mml = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = old_transpose_line_to_mml(mml_line);
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     assert_mml_channel_a_matches_bytecode(&mml, &bc_asm);
@@ -198,7 +219,7 @@ fn assert_old_transpose_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
 
 #[track_caller]
 fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
-    let mml = ["@1 dummy_instrument\nB @1 o4\nB ", mml_line].concat();
+    let mml = channel_b_line_to_mml(mml_line);
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     let dd = dummy_data();
@@ -221,7 +242,7 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
 
 #[track_caller]
 fn assert_line_matches_bytecode_bytes(mml_line: &str, bc: &[u8]) {
-    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = channel_a_line_to_mml(mml_line);
 
     let dd = dummy_data();
     let mml = compile_mml(&mml, &dd);
@@ -238,8 +259,8 @@ fn assert_line_matches_bytecode_bytes(mml_line: &str, bc: &[u8]) {
 
 #[track_caller]
 fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
-    let mml1 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
-    let mml2 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
+    let mml1 = channel_a_line_to_mml(mml_line1);
+    let mml2 = channel_a_line_to_mml(mml_line2);
 
     let dd = dummy_data();
 
@@ -255,8 +276,8 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
 
 #[track_caller]
 fn assert_old_transpose_line_matches_line(mml_line1: &str, mml_line2: &str) {
-    let mml1 = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
-    let mml2 = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
+    let mml1 = old_transpose_line_to_mml(mml_line1);
+    let mml2 = old_transpose_line_to_mml(mml_line2);
 
     let dd = dummy_data();
 
@@ -272,8 +293,8 @@ fn assert_old_transpose_line_matches_line(mml_line1: &str, mml_line2: &str) {
 
 #[track_caller]
 fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_asm: &[&str]) {
-    let mml1 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
-    let mml2 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
+    let mml1 = channel_a_line_to_mml(mml_line1);
+    let mml2 = channel_a_line_to_mml(mml_line2);
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     let dd = dummy_data();
@@ -319,7 +340,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
 #[track_caller]
 fn assert_looping_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
-    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = channel_a_line_to_mml(mml_line);
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     assert_mml_channel_a_matches_looping_bytecode(&mml, &bc_asm);
@@ -385,7 +406,7 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
 
 #[track_caller]
 fn assert_one_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: ChannelError) {
-    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = channel_a_line_to_mml(mml_line);
     assert_one_error_in_channel_a_mml(&mml, line_char + 2, expected_error);
 }
 
@@ -575,7 +596,7 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
 #[track_caller]
 fn compile_mml_line(mml_line: &str) -> Result<SongData, SongError> {
     let dummy_data = dummy_data();
-    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let mml = channel_a_line_to_mml(mml_line);
 
     compiler::songs::compile_mml_song(
         &mml,

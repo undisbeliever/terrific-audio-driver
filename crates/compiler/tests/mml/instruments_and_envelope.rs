@@ -6,12 +6,13 @@ use crate::*;
 
 #[test]
 fn set_instrument() {
+    // Inserting waits between the @ commands to prevent merging
     let mml = r##"
 @0 dummy_instrument
 @1 inst_with_adsr
 @2 inst_with_gain
 
-A @0 @1 @2
+A @0 w @1 w @2 w
 "##
     .to_string();
 
@@ -19,8 +20,11 @@ A @0 @1 @2
         &mml,
         &[
             "set_instrument dummy_instrument",
+            "wait 24",
             "set_instrument inst_with_adsr",
+            "wait 24",
             "set_instrument inst_with_gain",
+            "wait 24",
         ],
     );
 }
@@ -28,15 +32,16 @@ A @0 @1 @2
 /// Test instruments with the same InstrumentId do not emit a set_instrument instruction
 #[test]
 fn deduplicate_set_instrument_instrument_ids() {
+    // Inserting waits between the @ commands to prevent merging
     let mml = r##"
 @0 dummy_instrument
 @1 dummy_instrument
 @2 dummy_instrument
 @o inst_with_adsr
 
-A @0 @0 @0
-A @1 @2
-A @o @0 @1 @2
+A @0 w @0 w @0 w
+A @1 w @2 w
+A @o w @0 w @1 w @2 w
 "##
     .to_string();
 
@@ -44,14 +49,24 @@ A @o @0 @1 @2
         &mml,
         &[
             "set_instrument dummy_instrument",
+            "wait 24",
+            "wait 24",
+            "wait 24",
+            "wait 24",
+            "wait 24",
             "set_instrument inst_with_adsr",
+            "wait 24",
             "set_instrument dummy_instrument",
+            "wait 24",
+            "wait 24",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn set_instrument_and_envelope() {
+    // Inserting waits between the @ commands to prevent merging
     let mml = format!(
         r##"
 @0 dummy_instrument
@@ -65,11 +80,11 @@ fn set_instrument_and_envelope() {
 @g2 inst_with_gain gain {EXAMPLE_GAIN_STR}
 @g3 inst_with_gain adsr 3 4 5 6
 
-A @0 @1
-A @a @aa @ab @ag
-A @0 @ab @a
-A @0 @ag @ab
-A @0 @g1 @g2 @g3 @g1
+A @0 w @1  w
+A @a w @aa w @ab w @ag w
+A @0 w @ab w @a  w
+A @0 w @ag w @ab w
+A @0 w @g1 w @g2 w @g3 w @g1 w
 "##
     );
 
@@ -78,30 +93,48 @@ A @0 @g1 @g2 @g3 @g1
         &[
             // Line 1
             "set_instrument dummy_instrument",
+            "wait 24",
             "set_adsr 1 2 3 4",
+            "wait 24",
             // Line 2
             "set_instrument inst_with_adsr",
+            "wait 24",
+            "wait 24",
             "set_adsr 1 2 3 4",
+            "wait 24",
             "set_gain 24",
+            "wait 24",
             // Line 3
             "set_instrument dummy_instrument",
+            "wait 24",
             "set_instrument_and_adsr inst_with_adsr 1 2 3 4",
+            "wait 24",
             "set_instrument inst_with_adsr",
+            "wait 24",
             // Line 4
             "set_instrument dummy_instrument",
+            "wait 24",
             "set_instrument_and_gain inst_with_adsr 24",
+            "wait 24",
             "set_adsr 1 2 3 4",
+            "wait 24",
             // Line 5
             "set_instrument dummy_instrument",
+            "wait 24",
             "set_instrument inst_with_gain",
+            "wait 24",
+            "wait 24",
             "set_adsr 3 4 5 6",
+            "wait 24",
             "set_instrument inst_with_gain",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn set_adsr_and_set_gain() {
+    // Inserting waits between the @ commands to prevent merging
     assert_mml_channel_a_matches_bytecode(
         &format!(
             r##"
@@ -113,42 +146,68 @@ fn set_adsr_and_set_gain() {
 @ga inst_with_gain adsr 5 6 7 8
 @gg inst_with_gain gain 48
 
-A @a  A{EXAMPLE_ADSR_COMMENTS_STR} A{EXAMPLE_ADSR_COMMENTS_STR}
-A @aa A1,2,3,4
-A @ag G24 G100 A1,2,3,4 A1,2,3,4 A5,6,7,8 A5,6,7,8
+A @a  w A{EXAMPLE_ADSR_COMMENTS_STR} w A{EXAMPLE_ADSR_COMMENTS_STR} w
+A @aa w A1,2,3,4 w
+A @ag w G24 w G100 w A1,2,3,4 w A1,2,3,4 w A5,6,7,8 w A5,6,7,8 w
 
-A @g  G{EXAMPLE_GAIN_STR} G{EXAMPLE_GAIN_STR}
-A @ga G10 G10 A5,6,7,8 G20
-A @gg G48 G48 A5,6,7,8 G30
+A @g  w G{EXAMPLE_GAIN_STR} w G{EXAMPLE_GAIN_STR} w
+A @ga w G10 w G10 w A5,6,7,8 w G20 w
+A @gg w G48 w G48 w A5,6,7,8 w G30 w
 "##
         ),
         &[
             // Line 1
             "set_instrument inst_with_adsr",
+            "wait 24",
+            "wait 24",
+            "wait 24",
             // Line 2
             "set_adsr 1 2 3 4",
+            "wait 24",
+            "wait 24",
             // Line 3
             "set_gain 24",
+            "wait 24",
+            "wait 24",
             "set_gain 100",
+            "wait 24",
             "set_adsr 1 2 3 4",
+            "wait 24",
+            "wait 24",
             "set_adsr 5 6 7 8",
+            "wait 24",
+            "wait 24",
             // Line 4
             "set_instrument inst_with_gain",
+            "wait 24",
+            "wait 24",
+            "wait 24",
             // Line 5
             "set_adsr 5 6 7 8",
+            "wait 24",
             "set_gain 10",
+            "wait 24",
+            "wait 24",
             "set_adsr 5 6 7 8",
+            "wait 24",
             "set_gain 20",
+            "wait 24",
             // Line 6
             "set_gain 48",
+            "wait 24",
+            "wait 24",
+            "wait 24",
             "set_adsr 5 6 7 8",
+            "wait 24",
             "set_gain 30",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn set_gain() {
+    // Inserting waits between the @ commands to prevent merging
     assert_mml_channel_a_matches_bytecode(
         r##"
 @g inst_with_gain
@@ -158,30 +217,43 @@ fn set_gain() {
 @gi inst_with_gain gain I 4
 @gb inst_with_gain gain B 5
 
-A @g   @gf @gd @ge @gi @gb
-A G$20 GF6 GD7 GE8 GI9 GB10
+A @g   w @gf w @gd w @ge w @gi w @gb w
+A G$20 w GF6 w GD7 w GE8 w GI9 w GB10 w
 "##,
         &[
             // Line 1
             "set_instrument inst_with_gain",
+            "wait 24",
             "set_gain $01",
+            "wait 24",
             "set_gain $82",
+            "wait 24",
             "set_gain $a3",
+            "wait 24",
             "set_gain $c4",
+            "wait 24",
             "set_gain $e5",
+            "wait 24",
             // Line 2
             "set_gain $20",
+            "wait 24",
             "set_gain $06",
+            "wait 24",
             "set_gain $87",
+            "wait 24",
             "set_gain $a8",
+            "wait 24",
             "set_gain $c9",
+            "wait 24",
             "set_gain $ea",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn hexadecimal_in_mml_instrument_envelope() {
+    // Inserting waits between the @ commands to prevent merging
     assert_mml_channel_a_matches_bytecode(
         r##"
 @a1 dummy_instrument adsr $f $7 $7 $1f
@@ -192,48 +264,173 @@ fn hexadecimal_in_mml_instrument_envelope() {
 @g2 dummy_instrument gain $e4
 @g3 dummy_instrument gain 42
 
-A @a1 @a2 @a3 @g1 @g2 @g3
+A @a1 w @a2 w @a3 w @g1 w @g2 w @g3 w
 "##,
         &[
             "set_instrument_and_adsr dummy_instrument 15 7 7 31",
+            "wait 24",
             "set_adsr $d 5 2 $b",
+            "wait 24",
             "set_adsr $c $4 $5 $15",
+            "wait 24",
             "set_gain 43",
+            "wait 24",
             "set_gain $e4",
+            "wait 24",
             "set_gain $2a",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn set_instrument_after_set_adsr() {
+    // Inserting waits between the @ commands to prevent merging
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 inst_with_adsr
 
-A @1 A1,2,3,4 @1
+A @1 w A1,2,3,4 w @1 w
 "##,
         &[
             "set_instrument inst_with_adsr",
+            "wait 24",
             "set_adsr 1 2 3 4",
+            "wait 24",
             "set_instrument inst_with_adsr",
+            "wait 24",
         ],
     );
 }
 
 #[test]
 fn set_instrument_after_set_gain() {
+    // Inserting waits between the @ commands to prevent merging
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 inst_with_gain
 
-A @1 GI5 @1
+A @1 w GI5 w @1 w
 "##,
         &[
             "set_instrument inst_with_gain",
+            "wait 24",
             "set_gain I5",
+            "wait 24",
             "set_instrument inst_with_gain",
+            "wait 24",
         ],
+    );
+}
+
+#[test]
+fn instrument_and_adsr_merging() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A @0 A1,2,3,4
+"##,
+        &["set_instrument_and_adsr dummy_instrument, 1, 2, 3, 4"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A A1,2,3,4 @0
+"##,
+        &["set_instrument dummy_instrument"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A A1,2,3,4 @0 A5,6,7,8
+"##,
+        &["set_instrument_and_adsr dummy_instrument, 5, 6, 7, 8"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A GF127 @0 A3,4,5,6
+"##,
+        &["set_instrument_and_adsr dummy_instrument, 3, 4, 5, 6"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A A1,2,3,4 A2,3,4,5 @0 GF127 A3,4,5,6
+"##,
+        &["set_instrument_and_adsr dummy_instrument, 3, 4, 5, 6"],
+    );
+
+    // Envelope matches instrument
+    assert_mml_channel_a_matches_bytecode(
+        &format!(
+            r##"
+@0 inst_with_adsr
+
+A @0 GF127 A12,2,2,20 A0,0,0,0 {EXAMPLE_ADSR_MML}
+"##
+        ),
+        &["set_instrument inst_with_adsr"],
+    );
+}
+
+#[test]
+fn instrument_and_gain_merging() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A @0 GF12
+"##,
+        &["set_instrument_and_gain dummy_instrument, F12"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A GF12 @0
+"##,
+        &["set_instrument dummy_instrument"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A GF127 @0 G$83
+"##,
+        &["set_instrument_and_gain dummy_instrument, $83"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+A G0 GD10 GE20 @0 A12,2,2,20 GI30 GB30
+"##,
+        &["set_instrument_and_gain dummy_instrument, B30"],
+    );
+
+    // Gain matches instrument
+    assert_mml_channel_a_matches_bytecode(
+        &format!(
+            r##"
+@0 inst_with_gain
+
+A @0 G0 GD5 GE10 A12,2,2,20 GI15 GB20 {EXAMPLE_GAIN_MML}
+"##
+        ),
+        &["set_instrument inst_with_gain"],
     );
 }
 
