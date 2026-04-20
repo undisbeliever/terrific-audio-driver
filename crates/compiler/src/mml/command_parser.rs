@@ -2552,8 +2552,6 @@ fn parse_non_mergeable_token<'a>(
     token: Token<'a>,
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
-    p.reset_tick_offset();
-
     match token {
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayPitch => parse_play_pitch(pos, p),
@@ -2684,6 +2682,8 @@ pub(crate) fn parse_mml_tokens<'a>(
                 $name(m.get_or_add(pos), pos, $arg, &mut p)
             };
         }
+
+        p.reset_tick_offset();
 
         match token {
             Token::End => break pos,

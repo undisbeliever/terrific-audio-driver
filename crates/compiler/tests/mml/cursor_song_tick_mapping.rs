@@ -351,3 +351,14 @@ A @1 !s2 !s1
     assert_eq!(line_start(&sd, 29), Some((SUB_1, 24, false)));
     assert_eq!(line_start(&sd, 38), Some((CHANNEL_A, 0, false)));
 }
+
+#[test]
+fn ticks_after_merged_commands_bugfix() {
+    // The bug: cursor_ticks after `o2` was erroneously 96
+    let sd = compile("A r2 v8 o2 r8");
+    assert_eq!(cursor_ticks(&sd, 8), Some((CHANNEL_A, 48, false)));
+    assert_eq!(cursor_ticks(&sd, 9), Some((CHANNEL_A, 48, false)));
+    assert_eq!(cursor_ticks(&sd, 10), Some((CHANNEL_A, 48, false)));
+    assert_eq!(cursor_ticks(&sd, 11), Some((CHANNEL_A, 48, false)));
+    assert_eq!(cursor_ticks(&sd, 13), Some((CHANNEL_A, 60, false)));
+}
