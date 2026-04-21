@@ -573,3 +573,25 @@ fn l_in_panbrello() {
     assert_line_matches_line("C192 p~40,l32", "p~40,6");
     assert_line_matches_line("C192 p~30,l24", "p~30,8");
 }
+
+#[test]
+fn merge_adjust_volume_overflow_panic_bugfix() {
+    // Found using cargo-fuzz
+    assert_line_matches_line(")v+611111028", "v16");
+
+    assert_line_matches_line("v+1 v+2147483647", "v16");
+    assert_line_matches_line("v+1 v-2147483647", "v0");
+    assert_line_matches_line("V+10 V+2147483647", "V255");
+    assert_line_matches_line("V-10 V-2147483647", "V0");
+    assert_line_matches_line(")1 )2147483647", "v16");
+    assert_line_matches_line("(1 (2147483647", "v0");
+}
+
+#[test]
+fn merge_adjust_pan_overflow_panic_bugfix() {
+    assert_line_matches_line("p+10 p+2147483647", "p128");
+    assert_line_matches_line("p-10 p-2147483647", "p0");
+
+    assert_line_matches_line("px+64 p+2147483647", "p128");
+    assert_line_matches_line("px-64 p-2147483647", "p0");
+}

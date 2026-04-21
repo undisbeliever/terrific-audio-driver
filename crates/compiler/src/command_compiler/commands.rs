@@ -175,7 +175,7 @@ impl MergeableCommands {
                 let v = u8::try_from(v).unwrap_or(u8::MAX);
                 VolumeCommand::Absolute(Volume::new(v))
             }
-            Some(VolumeCommand::Relative(rv)) => rel(i32::from(rv) + adjust),
+            Some(VolumeCommand::Relative(rv)) => rel(i32::from(rv).saturating_add(adjust)),
             None => rel(adjust),
         });
     }
@@ -203,7 +203,7 @@ impl MergeableCommands {
                 );
                 PanCommand::Absolute(p.try_into().unwrap())
             }
-            Some(PanCommand::Relative(rp)) => rel(i32::from(rp.value()) + adjust),
+            Some(PanCommand::Relative(rp)) => rel(i32::from(rp.value()).saturating_add(adjust)),
             None => rel(adjust),
         });
     }
