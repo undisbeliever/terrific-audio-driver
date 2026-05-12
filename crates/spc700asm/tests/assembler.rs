@@ -17,7 +17,7 @@ fn el<'s>(line: u32, e: impl Into<FileError<'s>>) -> (LineNo, FileError<'s>) {
 }
 
 #[test]
-fn variables() -> Result<(), Box<dyn std::error::Error>> {
+fn variables() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -47,7 +47,8 @@ N_CHANNELS = 10
     signed_word : i16
 .endvars
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.var_banks[0].name, "zeropage");
     assert_eq!(c.var_banks[0].range, 0x0000..0x0080);
@@ -83,12 +84,10 @@ N_CHANNELS = 10
     assert_eq!(c.sym("word_array2.h"), 0x115);
 
     assert_eq!(c.output, &[]);
-
-    Ok(())
 }
 
 #[test]
-fn constants_in_vars_section() -> Result<(), Box<dyn std::error::Error>> {
+fn constants_in_vars_section() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -108,7 +107,8 @@ fn constants_in_vars_section() -> Result<(), Box<dyn std::error::Error>> {
         ECHO_DIRTY__EDL_BIT = 4
 .endvars
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.var_banks[0].name, "zeropage");
     assert_eq!(c.var_banks[0].range, 0x00..0x100);
@@ -125,12 +125,10 @@ fn constants_in_vars_section() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(c.sym("ECHO_DIRTY__EDL_BIT"), 4);
 
     assert_eq!(c.output, &[]);
-
-    Ok(())
 }
 
 #[test]
-fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_varbank_test() {
     let e = assemble(
         r##"
 .codebank $200..$300
@@ -154,12 +152,10 @@ fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
             el(7, ConstexprError::UnknownValue("unknown+1")),
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_var_lines_test() {
     let e = assemble(
         r##"
 .codebank $200..$300
@@ -202,12 +198,10 @@ fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
             el(16, AssemblerError::CannotNestArrays),
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
+fn overflow_vars_test() {
     let e = assemble(
         r##"
 .codebank $200..$300
@@ -224,12 +218,10 @@ fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
     .unwrap();
 
     assert_eq!(e.errors(), &[el(8, AssemblerError::VarBankOverflows)]);
-
-    Ok(())
 }
 
 #[test]
-fn structs() -> Result<(), Box<dyn std::error::Error>> {
+fn structs() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -257,7 +249,8 @@ N = 8
     end: u8
 .endvars
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("inner"), 0);
     assert_eq!(c.sym("inner.byte"), 0);
@@ -292,8 +285,6 @@ N = 8
     assert_eq!(c.sym("outer_array.end"), 81);
 
     assert_eq!(c.sym("end"), 20 + 62 * 2);
-
-    Ok(())
 }
 
 #[test]
@@ -344,7 +335,7 @@ fn struct_errors() {
 }
 
 #[test]
-fn global_asm_test() -> Result<(), Box<dyn std::error::Error>> {
+fn global_asm_test() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -361,7 +352,8 @@ End:
 
 FORWARD_REFERENCED_CONSTANT = End + 2
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("Label"), 0x200);
     assert_eq!(c.sym("Label2"), 0x202);
@@ -369,8 +361,6 @@ FORWARD_REFERENCED_CONSTANT = End + 2
     assert_eq!(c.sym("FORWARD_REFERENCED_CONSTANT"), 0x209);
 
     assert_eq!(&c.output, &[0x2f, -2i8 as u8, 0xbc, 0xe8, 9, 0x2f, 0]);
-
-    Ok(())
 }
 
 #[test]
@@ -394,7 +384,7 @@ End:
 }
 
 #[test]
-fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_symbol_asm_test() {
     let e = assemble(
         r##"
 .codebank $200..$300
@@ -413,12 +403,10 @@ fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
             el(5, OutputError::ExpressionHasUnknownValue("missing_var")),
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
+fn code_too_large_error() {
     let c = assemble(
         r##"
 .codebank $1000..$1003
@@ -427,7 +415,8 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
     inc A
     inc A
 "##,
-    )?;
+    )
+    .unwrap();
     assert_eq!(c.output, vec![0xbc; 3]);
 
     let e = assemble(
@@ -453,12 +442,10 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
             }
         )]
     );
-
-    Ok(())
 }
 
 #[test]
-fn proc() -> Result<(), Box<dyn std::error::Error>> {
+fn proc() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -482,7 +469,8 @@ _tmp2 = zpTmp2
     ret
 .endproc
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("subroutine"), 0x200);
     assert_eq!(c.sym("subroutine2"), 0x208);
@@ -497,12 +485,10 @@ _tmp2 = zpTmp2
             0x6f, // subroutine2
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn proc_const_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+fn proc_const_scoping_test() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -526,7 +512,8 @@ name = 1
     mov A, #name
     stop
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(
         c.output,
@@ -536,12 +523,10 @@ name = 1
             0xe8, 1, 0xff, // global
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn proc_label_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+fn proc_label_scoping_test() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -569,7 +554,8 @@ Global:
     .dw Label * 2
     ret
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("Label"), 0x0200);
     assert_eq!(c.sym("proc1.Label"), 0x0202);
@@ -584,8 +570,6 @@ Global:
             0x00, 0x04, 0x6f, // global
         ]
     );
-
-    Ok(())
 }
 
 #[test]
@@ -632,7 +616,7 @@ fn empty_proc_is_error() {
 }
 
 #[test]
-fn inline() -> Result<(), Box<dyn std::error::Error>> {
+fn inline() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -666,7 +650,8 @@ Global:
 .endinline
 
 "##,
-    )?;
+    )
+    .unwrap();
 
     // Confirm there is no symbol with the name of the `.inline`
     assert_eq!(c.symbols.get("first_inline"), None);
@@ -694,12 +679,10 @@ Global:
             0x3d, 0x6f // InProc
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_inline_calls() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -729,7 +712,8 @@ fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
     outer_outer
     stop
 "##,
-    )?;
+    )
+    .unwrap();
 
     // Confirm there is no symbol with the name of the `.inline`
     assert_eq!(c.symbols.get("outer_outer"), None);
@@ -759,12 +743,10 @@ fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
             0xff
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn inline_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+fn inline_scoping_test() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -789,7 +771,8 @@ name = 1
     name = 3
 .endinline
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(
         c.output,
@@ -800,8 +783,6 @@ name = 1
             0xff, // stop
         ]
     );
-
-    Ok(())
 }
 
 #[test]
@@ -1062,7 +1043,7 @@ inline
 }
 
 #[test]
-fn db_statements() -> Result<(), Box<dyn std::error::Error>> {
+fn db_statements() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -1077,7 +1058,8 @@ fn db_statements() -> Result<(), Box<dyn std::error::Error>> {
         .db Label & $ff
     Label:
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("Inner.Label"), 0x0208);
     assert_eq!(c.sym("Label"), 0x0209);
@@ -1090,12 +1072,10 @@ fn db_statements() -> Result<(), Box<dyn std::error::Error>> {
             9, // global Label
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn dw_statements() -> Result<(), Box<dyn std::error::Error>> {
+fn dw_statements() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -1110,7 +1090,8 @@ fn dw_statements() -> Result<(), Box<dyn std::error::Error>> {
         .dw Label
     Label:
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("Inner.Label"), 0x0208);
     assert_eq!(c.sym("Label"), 0x020a);
@@ -1123,12 +1104,10 @@ fn dw_statements() -> Result<(), Box<dyn std::error::Error>> {
             0x0a, 0x02, // global Label
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn function_tables() -> Result<(), Box<dyn std::error::Error>> {
+fn function_tables() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -1153,7 +1132,8 @@ FunctionTable:
 bc_three:
     .db 3, 4
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("bc_one"), 0x200);
     assert_eq!(c.sym("FunctionTable"), 0x202);
@@ -1171,8 +1151,6 @@ bc_three:
             3, 4, // bc_three
         ]
     );
-
-    Ok(())
 }
 
 #[test]
@@ -1216,7 +1194,7 @@ fn function_table_errors() {
 }
 
 #[test]
-fn split_function_tables() -> Result<(), Box<dyn std::error::Error>> {
+fn split_function_tables() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -1237,7 +1215,8 @@ one = $1101
 two = $2202
 three = $3303
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("FunctionTable_L"), 0x200);
     assert_eq!(c.sym("FunctionTable_H"), 0x203);
@@ -1249,8 +1228,6 @@ three = $3303
             0x11, 0x22, 0x33, // hi table
         ]
     );
-
-    Ok(())
 }
 
 #[test]
@@ -1324,7 +1301,7 @@ fn function_table_not_allowed_in_proc_or_inline() {
 }
 
 #[test]
-fn asserts() -> Result<(), Box<dyn std::error::Error>> {
+fn asserts() {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -1359,13 +1336,12 @@ CONST = 100
 .assert PC == next_proc + 1
 .assert PC == $202
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(c.sym("proc"), 0x200);
     assert_eq!(c.sym("next_proc"), 0x201);
     assert_eq!(c.output, &[0, 1]);
-
-    Ok(())
 }
 
 #[test]
@@ -1566,7 +1542,7 @@ fn no_code_bank_set_before_inline_error() {
 }
 
 #[test]
-fn p0_and_p1_commands() -> Result<(), Box<dyn std::error::Error>> {
+fn p0_and_p1_commands() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -1582,7 +1558,8 @@ firstpage_var = $0180;
     mov A, zeropage_var
     mov A, firstpage_var
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(
         c.output,
@@ -1593,19 +1570,18 @@ firstpage_var = $0180;
             0xe4, 0x80, // mov A, $80
         ]
     );
-
-    Ok(())
 }
 
 #[test]
-fn dbrepeat() -> Result<(), Box<dyn std::error::Error>> {
+fn dbrepeat() {
     let c = assemble(
         r##"
 .codebank $200..$300
 
     .dbrepeat i in 0..10, i
 "##,
-    )?;
+    )
+    .unwrap();
     assert_eq!(c.output, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     let c = assemble(
@@ -1617,10 +1593,9 @@ END = 5
 
     .dbrepeat i in START..END, (i + 10) * 3
 "##,
-    )?;
+    )
+    .unwrap();
     assert_eq!(c.output, &[30, 33, 36, 39, 42]);
-
-    Ok(())
 }
 
 #[test]
@@ -1717,7 +1692,7 @@ fn dbrepeat_var_cleared_after_use() {
 }
 
 #[test]
-fn offsetof() -> Result<(), Box<dyn std::error::Error>> {
+fn offsetof() {
     let c = assemble(
         r##"
 .codebank $200..$300
@@ -1744,7 +1719,8 @@ fn offsetof() -> Result<(), Box<dyn std::error::Error>> {
     .db offsetof(Outer, wa)
     .db offsetof(Outer, b)
 "##,
-    )?;
+    )
+    .unwrap();
 
     assert_eq!(
         &c.output,
@@ -1753,8 +1729,6 @@ fn offsetof() -> Result<(), Box<dyn std::error::Error>> {
             0, 2, 5, 11, // Outer
         ]
     );
-
-    Ok(())
 }
 
 #[test]
