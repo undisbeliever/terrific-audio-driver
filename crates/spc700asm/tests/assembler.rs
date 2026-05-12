@@ -139,8 +139,7 @@ fn invalid_varbank_test() {
 .varbank bad4  unknown..unknown+1
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -176,8 +175,7 @@ fn invalid_var_lines_test() {
 .endvars
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -214,8 +212,7 @@ fn overflow_vars_test() {
 .endvars
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(8, AssemblerError::VarBankOverflows)]);
 }
@@ -312,8 +309,7 @@ fn struct_errors() {
 .endstruct
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -374,8 +370,7 @@ FORWARD_REFERENCED_CONSTANT = End + 2
 End:
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -393,8 +388,7 @@ fn unknown_symbol_asm_test() {
     mov missing_var, A
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -429,8 +423,7 @@ fn code_too_large_error() {
     inc A
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -587,8 +580,7 @@ fn duplicate_proc_name_is_error() {
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -609,8 +601,7 @@ fn empty_proc_is_error() {
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(5, AssemblerError::EmptyProc,)]);
 }
@@ -802,8 +793,7 @@ fn duplicate_inline_name_is_error() {
 inline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -837,8 +827,7 @@ fn inline_and_proc_with_same_name_is_error() {
 .endinline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -864,8 +853,7 @@ fn empty_inline_is_error() {
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(5, AssemblerError::EmptyInline)]);
 }
@@ -883,8 +871,7 @@ fn args_in_inline_call_is_error() {
     inline1 invalid
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -915,8 +902,7 @@ inline1
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -949,8 +935,7 @@ inline1
 inline3
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -972,8 +957,8 @@ fn nesting_inline_and_proc_is_error() {
 inline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
+
     assert_eq!(
         e.errors(),
         [
@@ -992,8 +977,8 @@ inline
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
+
     assert_eq!(
         e.errors(),
         [
@@ -1014,8 +999,8 @@ inline
 .endproc
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
+
     assert_eq!(
         e.errors(),
         [
@@ -1031,8 +1016,8 @@ inline
 .endinline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
+
     assert_eq!(
         e.errors(),
         [
@@ -1178,8 +1163,7 @@ fn function_table_errors() {
     .functiontable bytecode
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1249,8 +1233,7 @@ valid_label:
     .hifunctiontable ftname
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1284,8 +1267,7 @@ fn function_table_not_allowed_in_proc_or_inline() {
 .endinline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1379,8 +1361,7 @@ CONST = 100
 .assert 1 + (2 ; fails (expression error)
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1421,8 +1402,7 @@ fn cannot_access_pc_outside_asserts() {
 .endinline
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1445,8 +1425,7 @@ fn multiple_code_banks_is_error() {
 .codebank $300..$400
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1476,8 +1455,7 @@ fn no_code_bank_set_before_proc_error() {
     .functiontable ft
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(2, AssemblerError::CodeBankNotSet)]);
 }
@@ -1492,8 +1470,7 @@ fn no_code_bank_set_before_asm_error() {
     mov A, #0
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(2, AssemblerError::CodeBankNotSet)]);
 }
@@ -1513,8 +1490,7 @@ label:
     ret
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(5, AssemblerError::CodeBankNotSet)]);
 }
@@ -1535,8 +1511,7 @@ fn no_code_bank_set_before_inline_error() {
     i2
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(e.errors(), &[el(5, AssemblerError::CodeBankNotSet)]);
 }
@@ -1617,8 +1592,7 @@ fn dbrepeat_error() {
     .dbrepeat j in 0..10, 250 + j
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1659,8 +1633,7 @@ fn dbrepeat_var_cleared_after_use() {
     .db i
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1676,8 +1649,7 @@ fn dbrepeat_var_cleared_after_use() {
     .db i
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     assert_eq!(
         e.errors(),
@@ -1751,8 +1723,7 @@ fn offsetof_erorrs() {
     .db offsetof(
 "##,
     )
-    .err()
-    .unwrap();
+    .unwrap_err();
 
     let dbee = |line_no, expr, e| {
         el(
@@ -1816,7 +1787,7 @@ fn invalid_symbol_name_test() {
 "##
         );
 
-        let e = assemble(&asm).err().unwrap();
+        let e = assemble(&asm).unwrap_err();
 
         assert_eq!(
             &e.errors(),

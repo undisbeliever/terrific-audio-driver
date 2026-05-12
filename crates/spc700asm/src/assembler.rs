@@ -164,6 +164,17 @@ pub struct CompiledAsm {
     pub end_addr: i64,
 }
 
+impl std::fmt::Debug for CompiledAsm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CompiledAsm {{ {} bytes, {} symbols, .. }}",
+            self.output.len(),
+            self.symbols.len()
+        )
+    }
+}
+
 impl CompiledAsm {
     /// Gets the symbol's value
     ///
