@@ -125,21 +125,21 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
-  * [cc 1.2.60](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.2.62](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs), MIT License
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs), MIT License
-  * [js-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys), MIT License
-  * [pkg-config 0.3.32](https://github.com/rust-lang/pkg-config-rs), MIT License
-  * [wasm-bindgen-futures 0.4.67](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures), MIT License
-  * [wasm-bindgen-macro-support 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support), MIT License
-  * [wasm-bindgen-macro 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro), MIT License
-  * [wasm-bindgen-shared 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
-  * [wasm-bindgen 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
-  * [web-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
+  * [js-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys), MIT License
+  * [pkg-config 0.3.33](https://github.com/rust-lang/pkg-config-rs), MIT License
+  * [wasm-bindgen-futures 0.4.72](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures), MIT License
+  * [wasm-bindgen-macro-support 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support), MIT License
+  * [wasm-bindgen-macro 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro), MIT License
+  * [wasm-bindgen-shared 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
+  * [wasm-bindgen 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
+  * [web-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
-  * [bitflags 2.11.0](https://github.com/bitflags/bitflags), MIT License
-  * [log 0.4.29](https://github.com/rust-lang/log), MIT License
+  * [bitflags 2.11.1](https://github.com/bitflags/bitflags), MIT License
+  * [log 0.4.30](https://github.com/rust-lang/log), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive), MIT License
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits), MIT License
@@ -157,25 +157,25 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [futures-core 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
   * [futures-task 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
   * [futures-util 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
-  * [hashbrown 0.17.0](https://github.com/rust-lang/hashbrown), MIT License
+  * [hashbrown 0.17.1](https://github.com/rust-lang/hashbrown), MIT License
   * [utf8parse 0.2.2](https://github.com/alacritty/vte), MIT License
   * [indexmap 2.14.0](https://github.com/indexmap-rs/indexmap), MIT License
   * [equivalent 1.0.2](https://github.com/indexmap-rs/equivalent), MIT License
   * [bytes 1.11.1](https://github.com/tokio-rs/bytes), MIT License
-  * [autocfg 1.5.0](https://github.com/cuviper/autocfg), MIT License
+  * [autocfg 1.5.1](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser), MIT License
   * [ringbuf 0.4.8](https://github.com/agerasev/ringbuf.git), MIT License
   * [slab 0.4.12](https://github.com/tokio-rs/slab), MIT License
-  * [bumpalo 3.20.2](https://github.com/fitzgen/bumpalo), MIT License
+  * [bumpalo 3.20.3](https://github.com/fitzgen/bumpalo), MIT License
   * [mach2 0.4.3](https://github.com/JohnTitor/mach2), MIT License
   * [anstream 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-parse 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git), MIT License
-  * [clap 4.6.0](https://github.com/clap-rs/clap), MIT License
+  * [clap 4.6.1](https://github.com/clap-rs/clap), MIT License
   * [clap_builder 4.6.0](https://github.com/clap-rs/clap), MIT License
-  * [clap_derive 4.6.0](https://github.com/clap-rs/clap), MIT License
+  * [clap_derive 4.6.1](https://github.com/clap-rs/clap), MIT License
   * [clap_lex 1.1.0](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git), MIT License
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill), MIT License
@@ -183,10 +183,11 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [toml_datetime 1.1.1+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [toml_edit 0.25.11+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [toml_parser 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
-  * [libc 0.2.184](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.186](https://github.com/rust-lang/libc), MIT License
   * [alsa 0.9.1](https://github.com/diwic/alsa-rs), MIT License
   * [static_assertions 1.1.0](https://github.com/nvzqz/static-assertions-rs), MIT License
   * [alsa-sys 0.3.1](https://github.com/diwic/alsa-sys), MIT License
+  * [fltk-sys 1.5.23](https://github.com/fltk-rs/fltk-rs), MIT License
   * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs), MIT License
   * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
@@ -209,8 +210,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows-result 0.1.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows 0.54.0](https://github.com/microsoft/windows-rs), MIT License
   * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
-  * [fltk-sys 1.5.22](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk 1.5.22](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk 1.5.23](https://github.com/fltk-rs/fltk-rs), MIT License
   * [minipaste 0.1.0](https://github.com/MoAlyousef/minipaste), MIT License
   * [cxx-build 1.0.194](https://github.com/dtolnay/cxx), MIT License
   * [cxx 1.0.194](https://github.com/dtolnay/cxx), MIT License
@@ -231,13 +231,13 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [serde 1.0.228](https://github.com/serde-rs/serde), MIT License
   * [serde_core 1.0.228](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.149](https://github.com/serde-rs/json), MIT License
+  * [serde_json 1.0.150](https://github.com/serde-rs/json), MIT License
   * [syn 2.0.117](https://github.com/dtolnay/syn), MIT License
   * [thiserror-impl 1.0.69](https://github.com/dtolnay/thiserror), MIT License
   * [thiserror 1.0.69](https://github.com/dtolnay/thiserror), MIT License
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident), MIT License
   * [zmij 1.0.21](https://github.com/dtolnay/zmij), MIT License
-  * [winnow 1.0.1](https://github.com/winnow-rs/winnow), MIT License
+  * [winnow 1.0.3](https://github.com/winnow-rs/winnow), MIT License
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.8.0](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License

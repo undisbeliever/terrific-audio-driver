@@ -410,18 +410,18 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.60](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.62](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs)
-  * [js-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
-  * [pkg-config 0.3.32](https://github.com/rust-lang/pkg-config-rs)
-  * [wasm-bindgen-futures 0.4.67](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
-  * [wasm-bindgen-macro-support 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support)
-  * [wasm-bindgen-macro 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
-  * [wasm-bindgen-shared 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
-  * [wasm-bindgen 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen)
-  * [web-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
+  * [js-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
+  * [pkg-config 0.3.33](https://github.com/rust-lang/pkg-config-rs)
+  * [wasm-bindgen-futures 0.4.72](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
+  * [wasm-bindgen-macro-support 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support)
+  * [wasm-bindgen-macro 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
+  * [wasm-bindgen-shared 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
+  * [wasm-bindgen 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen)
+  * [web-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -457,8 +457,8 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.11.0](https://github.com/bitflags/bitflags)
-  * [log 0.4.29](https://github.com/rust-lang/log)
+  * [bitflags 2.11.1](https://github.com/bitflags/bitflags)
+  * [log 0.4.30](https://github.com/rust-lang/log)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
@@ -669,7 +669,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [hashbrown 0.17.0](https://github.com/rust-lang/hashbrown)
+  * [hashbrown 0.17.1](https://github.com/rust-lang/hashbrown)
 
 ```
 Copyright (c) 2016 Amanieu d'Antras
@@ -844,7 +844,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [autocfg 1.5.0](https://github.com/cuviper/autocfg)
+  * [autocfg 1.5.1](https://github.com/cuviper/autocfg)
 
 ```
 Copyright (c) 2018 Josh Stone
@@ -979,7 +979,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [bumpalo 3.20.2](https://github.com/fitzgen/bumpalo)
+  * [bumpalo 3.20.3](https://github.com/fitzgen/bumpalo)
 
 ```
 Copyright (c) 2019 Nick Fitzgerald
@@ -1054,9 +1054,9 @@ Used by:
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git)
   * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git)
   * [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.6.0](https://github.com/clap-rs/clap)
+  * [clap 4.6.1](https://github.com/clap-rs/clap)
   * [clap_builder 4.6.0](https://github.com/clap-rs/clap)
-  * [clap_derive 4.6.0](https://github.com/clap-rs/clap)
+  * [clap_derive 4.6.1](https://github.com/clap-rs/clap)
   * [clap_lex 1.1.0](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
@@ -1092,7 +1092,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.184](https://github.com/rust-lang/libc)
+  * [libc 0.2.186](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) The Rust Project Developers
@@ -1195,6 +1195,37 @@ Used by:
 MIT License
 
 Copyright (c) 2018 diwic
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [fltk-sys 1.5.23](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
+
+Copyright (c) 2019 Mohammed Alyousef
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1360,8 +1391,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.5.22](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.5.22](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.5.23](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1439,7 +1469,7 @@ Used by:
   * [serde 1.0.228](https://github.com/serde-rs/serde)
   * [serde_core 1.0.228](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.149](https://github.com/serde-rs/json)
+  * [serde_json 1.0.150](https://github.com/serde-rs/json)
   * [syn 2.0.117](https://github.com/dtolnay/syn)
   * [thiserror-impl 1.0.69](https://github.com/dtolnay/thiserror)
   * [thiserror 1.0.69](https://github.com/dtolnay/thiserror)
@@ -1477,7 +1507,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [winnow 1.0.1](https://github.com/winnow-rs/winnow)
+  * [winnow 1.0.3](https://github.com/winnow-rs/winnow)
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining
