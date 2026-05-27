@@ -27,7 +27,6 @@ use std::sync::OnceLock;
 #[derive(Clone)]
 pub struct CommonAudioData {
     data: Vec<u8>,
-    n_dir_items: usize,
     n_instruments_and_samples: usize,
     instruments_soa_offset: usize,
 
@@ -99,16 +98,12 @@ impl CommonAudioData {
         self.aram_size() - sfx_size
     }
 
-    pub fn n_dir_items(&self) -> usize {
-        self.n_dir_items
-    }
-
     pub fn n_instruments_and_samples(&self) -> usize {
         self.n_instruments_and_samples
     }
 
     pub fn dir_table_start_iter(&self) -> impl Iterator<Item = u16> + '_ {
-        let n_dir_items: usize = self.n_dir_items;
+        let n_dir_items: usize = self.n_instruments_and_samples;
         let range = Range {
             start: COMMON_DATA_DIR_TABLE_OFFSET,
             end: COMMON_DATA_DIR_TABLE_OFFSET + n_dir_items * COMMON_DATA_BYTES_PER_DIR,
@@ -121,12 +116,6 @@ impl CommonAudioData {
     pub fn instruments_soa_data(&self) -> &[u8] {
         let start = self.instruments_soa_offset;
         let end = start + self.n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT;
-        &self.data[start..end]
-    }
-
-    pub fn instruments_soa_scrn(&self) -> &[u8] {
-        let start = self.instruments_soa_offset;
-        let end = start + self.n_instruments_and_samples;
         &self.data[start..end]
     }
 
@@ -187,13 +176,13 @@ pub fn build_common_audio_data(
     let n_sfx_subroutines = sfx_subroutines.subroutines().len();
     let sfx_subroutine_data = sfx_subroutines.bytecode_data();
 
+    if n_dir_items > MAX_DIR_ITEMS {
+        errors.push(CommonAudioDataError::TooManyBrrSamples(n_dir_items));
+    }
     if n_instruments_and_samples > MAX_INSTRUMENTS_AND_SAMPLES {
         errors.push(CommonAudioDataError::TooManyInstrumentsAndSamples(
             n_instruments_and_samples,
         ));
-    }
-    if n_dir_items > MAX_DIR_ITEMS {
-        errors.push(CommonAudioDataError::TooManyBrrSamples(n_dir_items));
     }
     if n_sfx_subroutines > MAX_SFX_SUBROUTINES.into() {
         errors.push(CommonAudioDataError::TooManySfxSubroutines(
@@ -254,7 +243,7 @@ pub fn build_common_audio_data(
     const _: () = assert!(MAX_COMMON_DATA_SIZE < u16::MAX as usize);
     assert!(CAD_ADDR + common_data_size < u16::MAX.into());
 
-    assert!(samples_and_instruments.instruments_scrn.len() == n_instruments_and_samples);
+    assert!(n_dir_items == n_instruments_and_samples);
     assert!(
         samples_and_instruments
             .pitch_table
@@ -274,10 +263,9 @@ pub fn build_common_audio_data(
     push_ptr(pitch_table_addr, n_pitches, 0); // pitchTable_l
     push_ptr(pitch_table_addr, n_pitches, 1); // pitchTable_h
 
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 0); // instruments_scrn
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 1); // instruments_pitchOffset
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 2); // instruments_adsr1
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 3); // instruments_adsr2OrGain
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 0); // instruments_pitchOffset
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 1); // instruments_adsr1
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 2); // instruments_adsr2OrGain
 
     push_ptr(sfx_sub_table_addr, n_sfx_subroutines, 0); // sfxSubroutines_l
     push_ptr(sfx_sub_table_addr, n_sfx_subroutines, 1); // sfxSubroutines_h
@@ -340,7 +328,6 @@ pub fn build_common_audio_data(
     assert_eq!(out.len() + CAD_ADDR, instruments_soa_addr);
     let instruments_soa_addr = u16::try_from(instruments_soa_addr).unwrap();
     let instruments_soa_offset = out.len();
-    out.extend(&samples_and_instruments.instruments_scrn);
     out.extend(
         samples_and_instruments
             .pitch_table
@@ -360,7 +347,6 @@ pub fn build_common_audio_data(
 
     Ok(CommonAudioData {
         data: out,
-        n_dir_items,
         n_instruments_and_samples,
         instruments_soa_offset,
 

@@ -3597,11 +3597,10 @@ _subroutineId = zpTmp
 
     mov Y, A
 
+    mov channelSoA_virtualChannels_scrn + X, Y
+
     mov A, [commonData.instruments_pitchOffset] + Y
     mov channelSoA_instPitchOffset + X, A
-
-    mov A, [commonData.instruments_scrn] + Y
-    mov channelSoA_virtualChannels_scrn + X, A
 
     mov A, [commonData.instruments_adsr1] + Y
     mov channelSoA_virtualChannels_adsr1 + X, A
@@ -3623,11 +3622,10 @@ _subroutineId = zpTmp
 
     mov Y, A
 
+    mov channelSoA_virtualChannels_scrn + X, Y
+
     mov A, [commonData.instruments_pitchOffset] + Y
     mov channelSoA_instPitchOffset + X, A
-
-    mov A, [commonData.instruments_scrn] + Y
-    mov channelSoA_virtualChannels_scrn + X, A
 
 
     ; Read ADSR/GAIN from `instructionPtr`.

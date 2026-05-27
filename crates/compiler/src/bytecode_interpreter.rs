@@ -1724,7 +1724,6 @@ struct CommonAudioDataSoA<'a> {
     song_data_addr: u16,
     n_instruments: u8,
 
-    instruments_scrn: &'a [u8],
     instruments_pitch_offset: &'a [u8],
     instruments_adsr1: &'a [u8],
     instruments_adsr2_or_gain: &'a [u8],
@@ -1754,10 +1753,9 @@ impl CommonAudioDataSoA<'_> {
             audio_mode,
             song_data_addr,
             n_instruments,
-            instruments_scrn: inst_soa_data(0),
-            instruments_pitch_offset: inst_soa_data(1),
-            instruments_adsr1: inst_soa_data(2),
-            instruments_adsr2_or_gain: inst_soa_data(3),
+            instruments_pitch_offset: inst_soa_data(0),
+            instruments_adsr1: inst_soa_data(1),
+            instruments_adsr2_or_gain: inst_soa_data(2),
             pitch_table: c.pitch_table(),
         }
     }
@@ -1832,11 +1830,11 @@ fn build_channel(
     };
 
     let (inst_pitch_offset, scrn, inst_adsr_or_gain) = match c.instrument {
-        Some(i) => {
-            let i: usize = i.clamp(0, common.n_instruments).into();
+        Some(scrn) => {
+            let i: usize = scrn.clamp(0, common.n_instruments).into();
             (
                 common.instruments_pitch_offset[i],
-                common.instruments_scrn[i],
+                scrn,
                 (
                     common.instruments_adsr1[i],
                     common.instruments_adsr2_or_gain[i],

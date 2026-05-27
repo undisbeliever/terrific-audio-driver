@@ -280,23 +280,24 @@ impl SampleSizesWidget {
             self.brr_sizes.clear();
 
             let mut prev_brr_start = 0;
-            for scrn in cad.instruments_soa_scrn() {
-                let scrn = usize::from(*scrn);
-
+            for scrn in 0..cad.n_instruments_and_samples() {
                 if let Some(&brr_start) = d.brr_start_addrs.get(scrn) {
                     let s = if brr_start > prev_brr_start {
-                        let brr_end = match d.brr_start_addrs.get(scrn + 1) {
-                            Some(&v) => v,
-                            None => d.instruments_samples_range.end,
-                        };
+                        prev_brr_start = brr_start;
+
+                        let brr_end = d
+                            .brr_start_addrs
+                            .iter()
+                            .skip(scrn + 1)
+                            .find(|&&b| b > brr_start)
+                            .unwrap_or(&d.instruments_samples_range.end);
+
                         size_string(brr_end - brr_start)
                     } else {
                         String::new()
                     };
 
                     self.brr_sizes.push(s);
-
-                    prev_brr_start = brr_start;
                 }
             }
         }

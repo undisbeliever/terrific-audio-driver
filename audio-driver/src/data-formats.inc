@@ -52,8 +52,8 @@ MAX_SOUND_EFFECTS = 254
 ; Common Data
 ; ===========
 
-COMMON_DATA_HEADER_SIZE = 28
-COMMON_DATA_POINTERS_SIZE = 12 * 2
+COMMON_DATA_HEADER_SIZE = 26
+COMMON_DATA_POINTERS_SIZE = 11 * 2
 
 
 .struct DirItem
@@ -70,11 +70,6 @@ COMMON_DATA_POINTERS_SIZE = 12 * 2
     pitchTable_l : ptr
     pitchTable_h : ptr
 
-
-    ; Instruments SoA
-
-    ; The DIR table index for the instrument/sample
-    instruments_scrn : ptr
 
     ; offset between note c0, `FIRST_PLAY_NOTE_INSTRUCTION/2` and  `CommonDataHeader.pitchTable[0]`
     ; The pitch that will be played for each note-opcode is `pitchTable[note_opcode/2 + pitchOffset]`.

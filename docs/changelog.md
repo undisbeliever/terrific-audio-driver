@@ -5,6 +5,10 @@ Terrific Audio Driver Changelog
 Next Release
 ============
 
+Audio driver changes:
+ * The instrument ID is now equal to the S-DSP `VxSRCN` BRR sample index.
+
+
 MML Changes:
  * The MML compiler now merges `@` instrument and `A` ADSR envelope commands
    into a single `set_instrument_and_adsr` bytecode instruction.

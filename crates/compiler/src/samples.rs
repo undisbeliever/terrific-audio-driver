@@ -342,8 +342,6 @@ pub struct BrrDirectoryOffset {
 struct BrrDirectory {
     brr_data: Vec<u8>,
     brr_directory_offsets: Vec<BrrDirectoryOffset>,
-
-    instruments_scrn: Vec<u8>,
 }
 
 // NOTE: Does not check the size of the directory.
@@ -353,18 +351,14 @@ fn build_brr_directroy(
 ) -> BrrDirectory {
     let mut brr_data = Vec::new();
     let mut brr_directory_offsets = Vec::new();
-    let mut instruments_scrn =
-        Vec::with_capacity(instruments.expected_len() + samples.expected_len());
 
-    let mut sample_map: HashMap<&BrrSample, u8> = HashMap::new();
+    let mut sample_map: HashMap<&BrrSample, BrrDirectoryOffset> = HashMap::new();
 
     let instruments = instruments.data_iter().map(|s| &s.brr_sample);
     let samples = samples.data_iter().map(|s| &s.brr_sample);
 
     for brr in instruments.chain(samples) {
-        let scrn = match sample_map.get(&brr) {
-            Some(o) => *o,
-
+        match sample_map.get(&brr) {
             None => {
                 let start = brr_data.len();
                 let loop_point = start + usize::from(brr.loop_offset().unwrap_or(0));
@@ -375,24 +369,20 @@ fn build_brr_directroy(
                     loop_point: u16::try_from(loop_point & 0xffff).unwrap(),
                 };
 
-                let scrn = u8::try_from(brr_directory_offsets.len() & 0xff).unwrap();
+                sample_map.insert(brr, dir_item.clone());
 
                 brr_directory_offsets.push(dir_item);
                 brr_data.extend(brr.brr_data());
-
-                sample_map.insert(brr, scrn);
-
-                scrn
+            }
+            Some(o) => {
+                brr_directory_offsets.push(o.clone());
             }
         };
-
-        instruments_scrn.push(scrn);
     }
 
     BrrDirectory {
         brr_data,
         brr_directory_offsets,
-        instruments_scrn,
     }
 }
 
@@ -403,7 +393,6 @@ pub struct SampleAndInstrumentData {
 
     // Instruments SoA
     // (pitchOffset is in pitch_table)
-    pub(crate) instruments_scrn: Vec<u8>,
     pub(crate) instruments_adsr1: Vec<u8>,
     pub(crate) instruments_adsr2_or_gain: Vec<u8>,
 
@@ -475,7 +464,6 @@ pub fn combine_samples(
 
         pitch_table,
 
-        instruments_scrn: brr.instruments_scrn,
         instruments_adsr1,
         instruments_adsr2_or_gain,
 
