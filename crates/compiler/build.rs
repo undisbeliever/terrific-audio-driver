@@ -30,6 +30,8 @@ const LOADER_SYMBOLS: &[(&str, &str)] = &[("start_loader", "LOADER")];
 const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("TAD_IO_VERSION", "TAD_IO_VERSION"),
 
+    ("COMMON_DATA_ADDR", "COMMON_DATA_ADDR"),
+
     ("main", "DRIVER_CODE"),
     ("mainloop", "MAINLOOP_CODE"),
     ("process_music_channels", "PROCESS_MUSIC_CHANNELS_CODE"),

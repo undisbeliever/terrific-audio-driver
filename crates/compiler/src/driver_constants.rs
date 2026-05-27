@@ -101,7 +101,7 @@ pub mod addresses {
     );
 
     // MUST match `audio-driver/src/common-memmap.inc`
-    pub const COMMON_DATA: u16 = 0x1100 - 28;
+    pub const COMMON_DATA: u16 = _symbols::COMMON_DATA_ADDR;
 
     const _: () = assert!(
         _symbols::_LOADER_END_ADDR == DRIVER_CODE,
