@@ -464,11 +464,6 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ; (The low-byte is in zeropage)
     channelSoA_countdownTimer_h : [u8 : N_CHANNELS]
 
-    ; Offset between the note to play and the pitch table.
-    ;
-    ; NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
-    channelSoA_instPitchOffset : [u8 : N_CHANNELS]
-
     ; Semitone offset for all play-note and portamento-note instructions.
     channelSoA_transpose : [u8 : N_CHANNELS]
 
@@ -2727,10 +2722,12 @@ _target_h = zpTmp
     ror channelSoA_keyoffMsbFlag + X
 
     ; calculate pitch table index
+    mov Y, channelSoA_virtualChannels_scrn + X
+
     clrc
     adc A, channelSoA_transpose + X
     clrc
-    adc A, channelSoA_instPitchOffset + X
+    adc A, [commonData.instruments_pitchOffset] + Y
     mov Y, A
 
     ; Calculate voice pitch
@@ -2946,10 +2943,12 @@ _target_h = zpTmp
     ror channelSoA_keyoffMsbFlag + X
 
     ; calculate pitch table index
+    mov Y, channelSoA_virtualChannels_scrn + X
+
     clrc
     adc A, channelSoA_transpose + X
     clrc
-    adc A, channelSoA_instPitchOffset + X
+    adc A, [commonData.instruments_pitchOffset] + Y
     mov Y, A
 
     ; Calculate target pitch
@@ -3071,10 +3070,12 @@ _tmp_l = zpTmpWord.l
     ror channelSoA_keyoffMsbFlag + X
 
     ; calculate pitch table index
+    mov Y, channelSoA_virtualChannels_scrn + X
+
     clrc
     adc A, channelSoA_transpose + X
     clrc
-    adc A, channelSoA_instPitchOffset + X
+    adc A, [commonData.instruments_pitchOffset] + Y
     mov Y, A
 
     mov A, [commonData.pitchTable_l] + Y
@@ -3599,9 +3600,6 @@ _subroutineId = zpTmp
 
     mov channelSoA_virtualChannels_scrn + X, Y
 
-    mov A, [commonData.instruments_pitchOffset] + Y
-    mov channelSoA_instPitchOffset + X, A
-
     mov A, [commonData.instruments_adsr1] + Y
     mov channelSoA_virtualChannels_adsr1 + X, A
 
@@ -3623,9 +3621,6 @@ _subroutineId = zpTmp
     mov Y, A
 
     mov channelSoA_virtualChannels_scrn + X, Y
-
-    mov A, [commonData.instruments_pitchOffset] + Y
-    mov channelSoA_instPitchOffset + X, A
 
 
     ; Read ADSR/GAIN from `instructionPtr`.

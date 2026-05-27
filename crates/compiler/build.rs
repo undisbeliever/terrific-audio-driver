@@ -60,7 +60,6 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
 
     ("channelSoA_countdownTimer_l", "CHANNEL_COUNTDOWN_TIMER_L"),
     ("channelSoA_countdownTimer_h", "CHANNEL_COUNTDOWN_TIMER_H"),
-    ("channelSoA_instPitchOffset", "CHANNEL_INST_PITCH_OFFSET"),
     ("channelSoA_instructionPtr_l", "CHANNEL_INSTRUCTION_PTR_L"),
     ("channelSoA_instructionPtr_h", "CHANNEL_INSTRUCTION_PTR_H"),
     ("channelSoA_stackPointer", "CHANNEL_STACK_POINTER"),

@@ -184,8 +184,6 @@ fn assert_bc_intrepreter_matches_emu(
         "channel_loopStackPointer",
     );
 
-    test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
-
     test_channel_soa(addresses::CHANNEL_INVERT_FLAGS, "invertFlags");
 
     test_channel_soa(addresses::CHANNEL_VOLUME, "volume");

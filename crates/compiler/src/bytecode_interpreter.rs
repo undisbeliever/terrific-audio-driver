@@ -81,8 +81,6 @@ struct ChannelSoA {
     stack_pointer: u8,
     loop_stack_pointer: u8,
 
-    inst_pitch_offset: u8,
-
     volume: ChannelSoAPanVol,
     pan: ChannelSoAPanVol,
     invert_flags: u8,
@@ -1829,11 +1827,10 @@ fn build_channel(
         Err(_) => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
     };
 
-    let (inst_pitch_offset, scrn, inst_adsr_or_gain) = match c.instrument {
+    let (scrn, inst_adsr_or_gain) = match c.instrument {
         Some(scrn) => {
             let i: usize = scrn.clamp(0, common.n_instruments).into();
             (
-                common.instruments_pitch_offset[i],
                 scrn,
                 (
                     common.instruments_adsr1[i],
@@ -1841,7 +1838,7 @@ fn build_channel(
                 ),
             )
         }
-        None => (UNINITIALISED, 0, (0, 0)),
+        None => (0, (0, 0)),
     };
 
     let (pitch_l, pitch_h) = match c.note {
@@ -1969,7 +1966,6 @@ fn build_channel(
             },
             stack_pointer,
             loop_stack_pointer: loop_stack_index,
-            inst_pitch_offset,
             volume: volume_soa,
             pan: pan_soa,
             invert_flags,
@@ -2016,8 +2012,6 @@ fn unused_channel(channel_index: usize) -> Channel {
             instruction_ptr: 0,
             stack_pointer,
             loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
-
-            inst_pitch_offset: UNINITIALISED,
 
             volume: ChannelSoAPanVol {
                 value: STARTING_VOLUME,
@@ -2196,8 +2190,6 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
                 soa_write_u8(addresses::CHANNEL_KEYOFF_MSB_FLAG, c.keyoff_msb_flag);
-
-                soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
 
                 soa_write_u8(addresses::CHANNEL_VOLUME, c.volume.value);
                 soa_write_u8(addresses::CHANNEL_SUB_VOLUME, c.volume.sub_value);

@@ -37,7 +37,7 @@ STACK_BOTTOM_ADDR = $200 - STACK_SIZE
 BC_CHANNEL_STACK_SIZE = 21
 BC_CHANNEL_STACK_OFFSET = 6
 
-LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 12) * 10
+LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 11) * 10
 
 ; The -28 ensures the pitch-table and BRR directory is page aligned
 ; `COMMON_DATA_ADDR` MUST be an even address (The loader only works with even addresses).
