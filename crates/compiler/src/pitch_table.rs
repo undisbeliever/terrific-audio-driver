@@ -21,8 +21,6 @@ use crate::value_newtypes::u32_value_newtype;
 // This limit ensures pitch table offset fits in an i16
 pub const MAX_N_PITCHES: usize = 0x7fff;
 
-const PITCH_TABLE_OFFSET: u8 = opcodes::FIRST_PLAY_NOTE_INSTRUCTION / 2;
-
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 
 // Using micro-semitones to remove floating point equality comparisons.
@@ -351,9 +349,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
         let pt_offset = i32::try_from(pitches.len() & 0xff).unwrap();
 
         for (instrument_id, pitch) in slice {
-            let o = pt_offset
-                - (pitch.semitones_above_c0 + min_semitone_offset)
-                - PITCH_TABLE_OFFSET as i32;
+            let o = pt_offset - (pitch.semitones_above_c0 + min_semitone_offset);
             instrument_pto_and_note_range[*instrument_id] =
                 (PitchTableOffset(o as i16), pitch.note_range.clone());
         }
@@ -386,10 +382,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
             }
         };
 
-        instrument_pto_and_note_range[*inst_id] = (
-            PitchTableOffset(o.wrapping_sub(PITCH_TABLE_OFFSET as i16)),
-            sp.note_range.clone(),
-        );
+        instrument_pto_and_note_range[*inst_id] = (PitchTableOffset(o), sp.note_range.clone());
     }
 
     Pt {
@@ -401,12 +394,16 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 #[derive(Clone, Copy)]
 struct PitchTableAddress(u16);
 
+// Pitch table offset within the `PitchTable` struct
+// NOT pitch table offset within the driver.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PitchTableOffset(i16);
 
 impl PitchTableOffset {
     fn driver_offset(self, pt_addr: PitchTableAddress) -> u16 {
-        (((self.0 & 0x7fff) as u16) << 1).wrapping_add(pt_addr.0)
+        (((self.0 & 0x7fff) as u16) << 1)
+            .wrapping_add(pt_addr.0)
+            .wrapping_sub(opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u16)
     }
 }
 
@@ -465,9 +462,7 @@ impl PitchTable {
     }
 
     pub(crate) fn get_pitch(&self, offset: PitchTableOffset, note: Note) -> u16 {
-        let index = offset
-            .0
-            .wrapping_add(i16::from(PITCH_TABLE_OFFSET) + i16::from(note.note_id()));
+        let index = i32::from(offset.0) + i32::from(note.note_id());
 
         usize::try_from(index)
             .ok()
@@ -487,9 +482,10 @@ impl PitchTable {
             .get(usize::from(instrument))?
             .0;
 
-        let index = pto
-            .0
-            .wrapping_add(i16::from(note_opcode >> 1) + i16::from(transpose));
+        let index = pto.0.wrapping_add(
+            i16::from((note_opcode - opcodes::FIRST_PLAY_NOTE_INSTRUCTION) >> 1)
+                + i16::from(transpose),
+        );
 
         usize::try_from(index)
             .ok()
