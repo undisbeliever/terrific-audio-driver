@@ -42,11 +42,10 @@ LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 11) * 10
 ; The -28 ensures the pitch-table and BRR directory is page aligned
 ; `COMMON_DATA_ADDR` MUST be an even address (The loader only works with even addresses).
 ;
-; If this constant is modified, the following must also be updated:
-;   * `addresses::COMMON_DATA` in `crates/compiler/src/driver_constants.rs`
+; If this constant is modified, the following should also be updated:
 ;   * The Tad_AudioDriver_SIZE assert in `ca65-api/tad-audio.s`
 ;   * The Tad_AudioDriver_SIZE assert in `64tass-api/tad-process.inc`
-COMMON_DATA_ADDR = $1100 - 26
+COMMON_DATA_ADDR = $1100 - 24
 
 ; `CODE_ADDR` MUST be an even address (The loader only works with even addresses)
 CODE_ADDR = $200 + LOADER_SIZE

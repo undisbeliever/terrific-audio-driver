@@ -11,12 +11,15 @@ use crate::bytecode::InstrumentId;
 use crate::bytecode::PlayPitchPitch;
 use crate::data::InstrumentNoteRange;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
-use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
+use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
 use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
+
+// This limit ensures pitch table offset fits in an i16
+pub const MAX_N_PITCHES: usize = 0x7fff;
 
 const PITCH_TABLE_OFFSET: u8 = opcodes::FIRST_PLAY_NOTE_INSTRUCTION / 2;
 
@@ -351,10 +354,8 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
             let o = pt_offset
                 - (pitch.semitones_above_c0 + min_semitone_offset)
                 - PITCH_TABLE_OFFSET as i32;
-            instrument_pto_and_note_range[*instrument_id] = (
-                PitchTableOffset(o.to_le_bytes()[0]),
-                pitch.note_range.clone(),
-            );
+            instrument_pto_and_note_range[*instrument_id] =
+                (PitchTableOffset(o as i16), pitch.note_range.clone());
         }
 
         for semitone_shift in min_semitone_offset..=max_semitone_offset {
@@ -373,7 +374,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 
     // Samples
     for (inst_id, sp) in &sorted_pitches.samples {
-        let o: u8 = match pitches
+        let o: i16 = match pitches
             .windows(sp.pitches.len())
             .position(|s| s == sp.pitches)
         {
@@ -386,7 +387,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
         };
 
         instrument_pto_and_note_range[*inst_id] = (
-            PitchTableOffset(o.wrapping_sub(PITCH_TABLE_OFFSET)),
+            PitchTableOffset(o.wrapping_sub(PITCH_TABLE_OFFSET as i16)),
             sp.note_range.clone(),
         );
     }
@@ -397,11 +398,21 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
     }
 }
 
+#[derive(Clone, Copy)]
+struct PitchTableAddress(u16);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PitchTableOffset(i16);
+
+impl PitchTableOffset {
+    fn driver_offset(self, pt_addr: PitchTableAddress) -> u16 {
+        (((self.0 & 0x7fff) as u16) << 1).wrapping_add(pt_addr.0)
+    }
+}
+
 #[derive(Clone)]
 pub struct PitchTable {
-    table_data: [u16; MAX_N_PITCHES],
-
-    pub(crate) n_pitches: usize,
+    table_data: Vec<u16>,
 
     instrument_pto_and_note_range: Vec<(PitchTableOffset, RangeInclusive<Note>)>,
 }
@@ -419,19 +430,11 @@ pub(crate) fn merge_pitch_vec(
         return Err(PitchTableError::TooManyInstruments);
     }
 
-    let mut out = PitchTable {
-        table_data: [PITCH_REGISTER_FP_SCALE as u16; MAX_N_PITCHES],
+    Ok(PitchTable {
+        table_data: pt.pitches,
         instrument_pto_and_note_range: pt.instrument_pto_and_note_range,
-        n_pitches: pt.pitches.len(),
-    };
-
-    out.table_data[..pt.pitches.len()].copy_from_slice(&pt.pitches);
-
-    Ok(out)
+    })
 }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PitchTableOffset(u8);
 
 pub fn build_pitch_table(
     instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
@@ -442,6 +445,10 @@ pub fn build_pitch_table(
 }
 
 impl PitchTable {
+    pub(crate) fn n_pitches(&self) -> usize {
+        self.table_data.len()
+    }
+
     pub(crate) fn pitch_table_offset(&self, inst_id: InstrumentId) -> PitchTableOffset {
         self.instrument_pto_and_note_range[usize::from(inst_id.as_u8())].0
     }
@@ -458,36 +465,68 @@ impl PitchTable {
     }
 
     pub(crate) fn get_pitch(&self, offset: PitchTableOffset, note: Note) -> u16 {
-        let index: u8 = offset
+        let index = offset
             .0
-            .wrapping_add(PITCH_TABLE_OFFSET)
-            .wrapping_add(note.note_id());
+            .wrapping_add(i16::from(PITCH_TABLE_OFFSET) + i16::from(note.note_id()));
 
-        self.table_data[usize::from(index)]
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.table_data.get(i))
+            .copied()
+            .unwrap_or(PITCH_REGISTER_FP_SCALE as u16)
     }
 
-    pub(crate) fn get_pitch_u8(&self, index: u8) -> u16 {
-        self.table_data[usize::from(index)]
+    pub(crate) fn pitch_for_note_opcode(
+        &self,
+        instrument: u8,
+        note_opcode: u8,
+        transpose: i8,
+    ) -> Option<u16> {
+        let pto = self
+            .instrument_pto_and_note_range
+            .get(usize::from(instrument))?
+            .0;
+
+        let index = pto
+            .0
+            .wrapping_add(i16::from(note_opcode >> 1) + i16::from(transpose));
+
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.table_data.get(i))
+            .copied()
     }
 
     pub(crate) fn instruments_pitch_offset_len(&self) -> usize {
         self.instrument_pto_and_note_range.len()
     }
 
-    pub(crate) fn instruments_pitch_offset(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
-        self.instrument_pto_and_note_range.iter().map(|(o, _)| o.0)
+    pub(crate) fn instruments_pitch_offset_l(
+        &self,
+        pitch_table_addr: u16,
+    ) -> impl ExactSizeIterator<Item = u8> + use<'_> {
+        let pt_addr = PitchTableAddress(pitch_table_addr);
+
+        self.instrument_pto_and_note_range
+            .iter()
+            .map(move |(o, _)| o.driver_offset(pt_addr).to_le_bytes()[0])
     }
 
-    pub(crate) fn pitch_table_l(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
-        self.table_data[..self.n_pitches]
+    pub(crate) fn instruments_pitch_offset_h(
+        &self,
+        pitch_table_addr: u16,
+    ) -> impl ExactSizeIterator<Item = u8> + use<'_> {
+        let pt_addr = PitchTableAddress(pitch_table_addr);
+
+        self.instrument_pto_and_note_range
             .iter()
-            .map(|p| p.to_le_bytes()[0])
+            .map(move |(o, _)| o.driver_offset(pt_addr).to_le_bytes()[1])
     }
 
-    pub(crate) fn pitch_table_h(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
-        self.table_data[..self.n_pitches]
-            .iter()
-            .map(|p| p.to_le_bytes()[1])
+    pub(crate) fn write_pitch_table(&self, cad: &mut Vec<u8>) {
+        for p in &self.table_data {
+            cad.extend(p.to_be_bytes())
+        }
     }
 }
 

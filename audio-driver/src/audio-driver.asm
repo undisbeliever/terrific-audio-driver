@@ -82,6 +82,7 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
     zpTmpWord : u16
         zpTmp  = zpTmpWord
         zpTmp2 = zpTmpWord + 1
+    zpTmp3 : u8
 
 
     ; Increases once every song tick
@@ -2716,28 +2717,44 @@ _target_h = zpTmp
 ; Y unknown
 ; KEEP: X
 .proc _bc__play_note
+_pitch = zpTmpWord
+_pitch_l = zpTmpWord.l
+_pitch_h = zpTmpWord.h
+
     lsr A
     ; carry = key-off note bit
     ; write carry to the key-off flag
     ror channelSoA_keyoffMsbFlag + X
 
-    ; calculate pitch table index
+
+    ; calculate pitch address
     mov Y, channelSoA_virtualChannels_scrn + X
 
     clrc
     adc A, channelSoA_transpose + X
+    asl A
     clrc
-    adc A, [commonData.instruments_pitchOffset] + Y
-    mov Y, A
+
+    adc A, [commonData.instruments_pitchOffset_l] + Y
+    mov _pitch_l, A
+
+    mov A, #0
+    adc A, [commonData.instruments_pitchOffset_h] + Y
+    mov _pitch_h, A
+
 
     ; Calculate voice pitch
-    mov A, [commonData.pitchTable_l] + Y
+    mov Y, #1
+    mov A, [_pitch] + Y     ; low byte (_pitch is big-endian)
     clrc
     adc A, channelSoA_detune_l + X
     mov channelSoA_virtualChannels_pitch_l + X, A
 
-    mov A, [commonData.pitchTable_h] + Y
+    dec Y
+    ; Y = 0
+    mov A, [_pitch] + Y     ; high byte
     adc A, channelSoA_detune_h + X
+
 
     ; Fallthough
     .assert PC == _bc__play_note_set_pitch_h_and_read_length
@@ -2746,13 +2763,13 @@ _target_h = zpTmp
 
 ; IN: A = pitch_h virtual channel value
 ; IN: X = channelIndex
-; Y unknown
+; IN: Y = 0
 ; KEEP: X
 .proc _bc__play_note_set_pitch_h_and_read_length
     mov channelSoA_virtualChannels_pitch_h + X, A
 
     ; Get note length from the next byte in the instructionPtr
-    mov Y, #0
+    ; Y = 0
     mov A, [instructionPtr] + Y
     bne ByteLength
         ; u16be, 3 byte length
@@ -2933,6 +2950,10 @@ _target_h = zpTmp
 ; IN: Y = 0 (up) or -2 (down)
 ; KEEP: X
 .proc bc__portamento_up
+_pitch = zpTmpWord
+_pitch_l = zpTmpWord.l
+_pitch_h = zpTmpWord.h
+
     inc Y
     ; Y = 1 or -1
     mov channelSoA_portamento_direction + X, Y
@@ -2942,25 +2963,35 @@ _target_h = zpTmp
     ; write carry to the key-off flag
     ror channelSoA_keyoffMsbFlag + X
 
-    ; calculate pitch table index
+
+    ; calculate pitch address
     mov Y, channelSoA_virtualChannels_scrn + X
 
     clrc
     adc A, channelSoA_transpose + X
+    asl A
     clrc
-    adc A, [commonData.instruments_pitchOffset] + Y
-    mov Y, A
+
+    adc A, [commonData.instruments_pitchOffset_l] + Y
+    mov _pitch_l, A
+
+    mov A, #0
+    adc A, [commonData.instruments_pitchOffset_h] + Y
+    mov _pitch_h, A
+
 
     ; Calculate target pitch
-    mov A, [commonData.pitchTable_l] + Y
+    mov Y, #1
+    mov A, [_pitch] + Y     ; low byte (_pitch is big-endian)
     clrc
     adc A, channelSoA_detune_l + X
     mov channelSoA_portamento_target_l + X, A
 
-    mov A, [commonData.pitchTable_h] + Y
+    dec Y
+    ; Y = 0
+    mov A, [_pitch] + Y     ; high byte
     adc A, channelSoA_detune_h + X
 
-    mov Y, #0
 
     ; fallthrough
     .assert PC == _bc__portamento__read_speed_length
@@ -3061,30 +3092,46 @@ _tmp_l = zpTmpWord.l
 ; unknown Y
 ; KEEP: X
 .proc bc__portamento_calc
-_tmp = zpTmpWord
-_tmp_l = zpTmpWord.l
+_tmp = zpTmp
+_pitch = zpTmp2
+_pitch_l = zpTmp2
+_pitch_h = zpTmp3
+.assert _tmp < _pitch_l && _tmp < _pitch_h
+.assert _pitch_h ==_pitch + 1
 
     lsr A
     ; carry = key-off note bit
     ; write carry to the key-off flag
     ror channelSoA_keyoffMsbFlag + X
 
-    ; calculate pitch table index
+
+    ; calculate pitch address
     mov Y, channelSoA_virtualChannels_scrn + X
 
     clrc
     adc A, channelSoA_transpose + X
+    asl A
     clrc
-    adc A, [commonData.instruments_pitchOffset] + Y
-    mov Y, A
 
-    mov A, [commonData.pitchTable_l] + Y
+    adc A, [commonData.instruments_pitchOffset_l] + Y
+    mov _pitch_l, A
+
+    mov A, #0
+    adc A, [commonData.instruments_pitchOffset_h] + Y
+    mov _pitch_h, A
+
+
+    ; Calculate target pitch
+    mov Y, #1
+    mov A, [_pitch] + Y     ; low byte (_pitch is big-endian)
     clrc
     adc A, channelSoA_detune_l + X
     mov channelSoA_portamento_target_l + X, A
-    mov _tmp_l, A
+    mov _tmp, A
 
-    mov A, [commonData.pitchTable_h] + Y
+    dec Y
+    ; Y = 0
+    mov A, [_pitch] + Y     ; high byte
     adc A, channelSoA_detune_h + X
 
     ; fallthrough
@@ -3101,6 +3148,7 @@ _tmp_l = zpTmpWord.l
 _tmp = zpTmpWord
 _tmp_l = zpTmpWord.l
 _tmp_h = zpTmpWord.h
+.assert _tmp == bc__portamento_calc._tmp
 
     mov channelSoA_portamento_target_h + X, A
     mov _tmp_h, A

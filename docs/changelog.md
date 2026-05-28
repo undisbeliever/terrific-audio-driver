@@ -6,6 +6,8 @@ Next Release
 ============
 
 Audio driver changes:
+ * The 256 pitch table entry limit has been removed.
+   The pitch table offset is now 16-bit.
  * The instrument ID is now equal to the S-DSP `VxSRCN` BRR sample index.
 
 

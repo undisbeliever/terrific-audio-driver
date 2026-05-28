@@ -95,9 +95,6 @@ Sample Frequency
 This is the frequency of the instrument when played back at 32000Hz.  It is used to build a pitch
 table containing the sample-rate for every note and instrument that can be played.
 
-The pitch table is limited a maximum 256 entries.  To reduce the size of the pitch table, try to
-reduce the number of unique *Sample Frequencies* used in a project.
-
 
 Note range
 ==========

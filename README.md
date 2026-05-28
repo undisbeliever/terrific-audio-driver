@@ -51,7 +51,6 @@ Engine Limitations and Deliberate Design Decisions
       code.
  * All pitches and most pitch offsets are precalculated by the compiler.
     * The `VxPITCH` values for each note are precalculated by the compiler inside a pitch table.
-      * The pitch table holds a maximum 256 pitches (512 bytes) and is stored in the Common Audio Data.
       * Limiting an instruments first-last octave will reduce the number of pitch table entries
         required by the instrument.
     * Where possible, the portamento *pitch-offset per tick* value is precalculated by the MML

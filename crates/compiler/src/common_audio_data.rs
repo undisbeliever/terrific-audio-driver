@@ -9,13 +9,13 @@ use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
     COMMON_DATA_BYTES_PER_PITCH, COMMON_DATA_BYTES_PER_SFX_SUBROUTINE,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
-    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES,
-    MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
+    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SFX_DATA_ADDR,
+    MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
 };
 use crate::envelope::Envelope;
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
 use crate::opcodes;
-use crate::pitch_table::PitchTable;
+use crate::pitch_table::{PitchTable, MAX_N_PITCHES};
 use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::{
     tad_gui_sfx_buffer, CombinedSoundEffectsData, CompiledSfxSubroutines, CompiledSoundEffect,
@@ -169,7 +169,7 @@ pub fn build_common_audio_data(
 
     let mut errors = Vec::new();
 
-    let n_pitches = samples_and_instruments.pitch_table.n_pitches;
+    let n_pitches = samples_and_instruments.pitch_table.n_pitches();
     let n_instruments_and_samples = samples_and_instruments.n_instruments;
     let n_dir_items = samples_and_instruments.brr_directory_offsets.len();
     let n_sound_effects = sound_effects.sfx_header.len();
@@ -260,12 +260,10 @@ pub fn build_common_audio_data(
         out.extend(addr.to_le_bytes());
     };
 
-    push_ptr(pitch_table_addr, n_pitches, 0); // pitchTable_l
-    push_ptr(pitch_table_addr, n_pitches, 1); // pitchTable_h
-
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 0); // instruments_pitchOffset
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 1); // instruments_adsr1
-    push_ptr(instruments_soa_addr, n_instruments_and_samples, 2); // instruments_adsr2OrGain
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 0); // instruments_pitchOffset_l
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 1); // instruments_pitchOffset_h
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 2); // instruments_adsr1
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 3); // instruments_adsr2OrGain
 
     push_ptr(sfx_sub_table_addr, n_sfx_subroutines, 0); // sfxSubroutines_l
     push_ptr(sfx_sub_table_addr, n_sfx_subroutines, 1); // sfxSubroutines_h
@@ -321,8 +319,9 @@ pub fn build_common_audio_data(
     // pitch table
     assert!(n_pitches <= MAX_N_PITCHES);
     assert_eq!(out.len() + CAD_ADDR, usize::from(pitch_table_addr));
-    out.extend(samples_and_instruments.pitch_table.pitch_table_l());
-    out.extend(samples_and_instruments.pitch_table.pitch_table_h());
+    samples_and_instruments
+        .pitch_table
+        .write_pitch_table(&mut out);
 
     // instruments SoA
     assert_eq!(out.len() + CAD_ADDR, instruments_soa_addr);
@@ -331,7 +330,12 @@ pub fn build_common_audio_data(
     out.extend(
         samples_and_instruments
             .pitch_table
-            .instruments_pitch_offset(),
+            .instruments_pitch_offset_l(pitch_table_addr),
+    );
+    out.extend(
+        samples_and_instruments
+            .pitch_table
+            .instruments_pitch_offset_h(pitch_table_addr),
     );
     out.extend(&samples_and_instruments.instruments_adsr1);
     out.extend(&samples_and_instruments.instruments_adsr2_or_gain);

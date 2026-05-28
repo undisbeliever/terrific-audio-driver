@@ -52,8 +52,8 @@ MAX_SOUND_EFFECTS = 254
 ; Common Data
 ; ===========
 
-COMMON_DATA_HEADER_SIZE = 26
-COMMON_DATA_POINTERS_SIZE = 11 * 2
+COMMON_DATA_HEADER_SIZE = 24
+COMMON_DATA_POINTERS_SIZE = 10 * 2
 
 
 .struct DirItem
@@ -63,18 +63,18 @@ COMMON_DATA_POINTERS_SIZE = 11 * 2
 
 
 .struct CommonDataPointers
-    ; Pitch Table SoA
-    ; The pitch table must contain a maximum 256 pitches.
+    ; Pitch Table offset for the instrument.
     ;
-    ; CAUTION: This table is indexed by `play_note_opcode / 2 + instruments_pitchOffset`
-    pitchTable_l : ptr
-    pitchTable_h : ptr
-
-
-    ; offset between note c0, `FIRST_PLAY_NOTE_INSTRUCTION/2` and  `CommonDataHeader.pitchTable[0]`
-    ; The pitch that will be played for each note-opcode is `pitchTable[note_opcode/2 + pitchOffset]`.
-    ; (`pitchOffset + note_opcode / 2` is allowed to overflow and underflow)
-    instruments_pitchOffset : ptr
+    ; Equal to `instrument_pitch_table_addr - (note_range.start * 2) - FIRST_PLAY_NOTE_INSTRUCTION`.
+    ;
+    ;
+    ; The audio driver uses the following formula to convert a note to a pitch address:
+    ;   pitch_addr = ((note + transpose) << 1) + pitchOffset
+    ;
+    ; The pitch table is a u16 **big-endian** array.
+    ;
+    instruments_pitchOffset_l : ptr
+    instruments_pitchOffset_h : ptr
 
     ; The ADSR1 register value for the instrument/sample default envelope
     instruments_adsr1 : ptr

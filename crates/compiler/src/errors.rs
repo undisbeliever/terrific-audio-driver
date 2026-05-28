@@ -22,7 +22,7 @@ use crate::command_compiler::commands::{
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
+    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
     MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
 use crate::echo::{
@@ -37,7 +37,9 @@ use crate::mml::{
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
-use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate};
+use crate::pitch_table::{
+    InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate, MAX_N_PITCHES,
+};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};

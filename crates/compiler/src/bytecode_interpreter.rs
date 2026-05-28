@@ -1722,7 +1722,6 @@ struct CommonAudioDataSoA<'a> {
     song_data_addr: u16,
     n_instruments: u8,
 
-    instruments_pitch_offset: &'a [u8],
     instruments_adsr1: &'a [u8],
     instruments_adsr2_or_gain: &'a [u8],
 
@@ -1751,9 +1750,8 @@ impl CommonAudioDataSoA<'_> {
             audio_mode,
             song_data_addr,
             n_instruments,
-            instruments_pitch_offset: inst_soa_data(0),
-            instruments_adsr1: inst_soa_data(1),
-            instruments_adsr2_or_gain: inst_soa_data(2),
+            instruments_adsr1: inst_soa_data(2),
+            instruments_adsr2_or_gain: inst_soa_data(3),
             pitch_table: c.pitch_table(),
         }
     }
@@ -1766,19 +1764,13 @@ impl CommonAudioDataSoA<'_> {
         detune: i16,
     ) -> (u8, u8) {
         match instrument {
-            Some(i) => {
-                let i = self
-                    .instruments_pitch_offset
-                    .get(usize::from(i))
-                    .copied()
-                    .unwrap_or(0)
-                    .wrapping_add(note_opcode >> 1)
-                    .wrapping_add_signed(transpose);
-
-                let pitch = self.pitch_table.get_pitch_u8(i);
-
-                pitch.wrapping_add_signed(detune).to_le_bytes().into()
-            }
+            Some(i) => self
+                .pitch_table
+                .pitch_for_note_opcode(i, note_opcode, transpose)
+                .map(|p| p.wrapping_add_signed(detune))
+                .unwrap_or(0)
+                .to_le_bytes()
+                .into(),
             None => (0, 0),
         }
     }
