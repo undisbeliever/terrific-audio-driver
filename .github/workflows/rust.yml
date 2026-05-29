@@ -7,7 +7,7 @@ on:
       - "**"
   pull_request:
     branches:
-      - master
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,42 +16,28 @@ concurrency:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 40
     strategy:
       matrix:
         os:
           - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-    - name: Build
-      shell: bash
+      uses: actions/checkout@v6
+    - name: Install dependencies
       run: |
-        function log
-        {
-            declare -rAi TAG=(
-                [error]=31
-                [info]=32
-                [audit]=33
-            )
-            printf '%(%y-%m-%d_%T)T\x1b[%dm\t%s:\t%b\x1b[0m\n' -1 "${TAG[${1,,:?}]}" "${1^^}" "${2:?}" 1>&2
-            if [[ ${1} == 'error' ]]; then
-                return 1
-            fi
-        }
-        export -f log
-        if [[ ${RUNNER_OS} == "Linux" ]]; then
-            log 'info' 'Download dep'
-            sudo apt-get update
-            sudo apt-get install -y ninja-build libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev
-            log 'info' 'Cargo Fmt'
-            cargo fmt --check --all
-            log 'info' 'Cargo Clippy'
-            cargo clippy --quiet
-            log 'info' 'Cargo Test'
-            cargo test --quiet
-            cargo run --example test_bc_interpreter examples/example-project.terrificaudio
-            cargo run --example test_bc_interpreter manual-tests/manual-tests.terrificaudio
-            log 'info' 'Cargo Build'
-            cargo build --quiet
-        fi > /dev/null
+        sudo apt-get update -qy
+        sudo apt-get install -y ninja-build libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev
+    - name: Build
+      run: cargo build --quiet
+    - name: Unit tests
+      run: cargo test --quiet
+    - name: Bytecode interpreter test
+      run: |
+        cargo run --example test_bc_interpreter examples/example-project.terrificaudio
+        cargo run --example test_bc_interpreter manual-tests/manual-tests.terrificaudio
+    - name: Cargo clippy
+      run: cargo clippy --quiet
+    - name: fmt check
+      run: cargo fmt --check
+
