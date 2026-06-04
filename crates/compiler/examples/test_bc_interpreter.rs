@@ -10,7 +10,7 @@
 use compiler::{
     bytecode_interpreter::{self, SongInterpreter},
     common_audio_data::{build_common_audio_data, CommonAudioData},
-    data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
+    data::{load_project_file, validate_project_file_names},
     driver_constants::{
         addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
         N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
@@ -19,6 +19,7 @@ use compiler::{
     songs::{compile_mml_song, override_song_tick_clock, SongData},
     sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
     tad_apu::ApuEmulator,
+    textfile::load_text_file_with_limit,
     time::{TickClock, TickCounter},
 };
 use tad_emu::TadEmulator;

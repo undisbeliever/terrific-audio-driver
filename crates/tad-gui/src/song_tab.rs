@@ -12,12 +12,12 @@ use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat}
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
-use compiler::data::TextFile;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlCompileErrors, MmlPrefixError};
 use compiler::identifier::{ChannelId, MusicChannelIndex};
 use compiler::mml::MmlTickCountTable;
 use compiler::songs::{song_duration_string, SongData};
+use compiler::textfile::TextFile;
 use compiler::time::TickCounter;
 
 use fltk::app;

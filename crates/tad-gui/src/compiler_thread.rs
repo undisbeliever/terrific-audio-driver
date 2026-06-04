@@ -22,7 +22,7 @@ use compiler::common_audio_data::{
     build_cad_with_sfx_buffer, build_common_audio_data, CommonAudioData,
 };
 use compiler::data::{self, BrrEvaluator};
-use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
+use compiler::data::{DefaultSfxFlags, LoopSetting};
 use compiler::driver_constants::{self, COMMON_DATA_BYTES_PER_SOUND_EFFECT};
 use compiler::envelope::Envelope;
 use compiler::errors::{
@@ -45,6 +45,8 @@ use compiler::sound_effects::{
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
+use compiler::textfile::{load_text_file_with_limit, TextFile};
+use compiler::time::TickCounter;
 use compiler::Pan;
 
 extern crate fltk;
@@ -72,7 +74,6 @@ mod item_id {
         }
     }
 }
-use compiler::time::TickCounter;
 pub use item_id::ItemId;
 
 #[derive(Debug)]

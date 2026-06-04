@@ -11,10 +11,11 @@ use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data;
-use compiler::data::{load_text_file_with_limit, ProjectFile, Song, TextFile, MAX_FILE_SIZE};
+use compiler::data::{ProjectFile, Song};
 use compiler::identifier::Name;
 use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
 use compiler::sfx_file::{build_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
+use compiler::textfile::{load_text_file_with_limit, TextFile, MAX_FILE_SIZE};
 
 extern crate fltk;
 use fltk::dialog;

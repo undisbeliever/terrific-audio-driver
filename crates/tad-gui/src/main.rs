@@ -73,6 +73,7 @@ use compiler::songs::SongData;
 use compiler::sound_effects::{SfxSubroutinesMml, SoundEffectInput};
 use compiler::Pan;
 
+use compiler::textfile::TextFile;
 use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput, SfxToCompiler, ShortSongError};
 use driver_state_window::DriverStateWindow;
@@ -1181,7 +1182,7 @@ impl Project {
     }
 
     // NOTE: minimal deduplication. Do not create song tabs for a `song_id` or `path` that already exists
-    fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
+    fn new_song_tab(&mut self, song_id: ItemId, file: TextFile) {
         // Cannot use `hash_map::Entry` here because of the reuse_or_new_song_tab call.
         #[allow(clippy::map_entry)]
         if !self.song_tabs.contains_key(&song_id) {
@@ -1208,7 +1209,7 @@ impl Project {
     }
 
     /// Returns a previously closed or new SongTab with the given `song_id` and `mml_text`.
-    fn reuse_or_new_song_tab(&mut self, song_id: ItemId, mml_text: &data::TextFile) -> SongTab {
+    fn reuse_or_new_song_tab(&mut self, song_id: ItemId, mml_text: &TextFile) -> SongTab {
         match self.closed_song_tabs.pop() {
             Some(mut song_tab) => {
                 song_tab.reuse_tab(song_id, mml_text);

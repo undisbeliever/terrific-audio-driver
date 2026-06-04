@@ -10,10 +10,7 @@ use clap::{Args, Parser, Subcommand};
 
 use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
-    data::{
-        load_text_file_with_limit, load_text_file_with_limit_path, Song, TextFile,
-        UniqueNamesProjectFile,
-    },
+    data::{Song, UniqueNamesProjectFile},
     export::{
         bin_include_path, AsarExporter, AsarMemoryMap, Ca65Exporter, Ca65MemoryMap, Exporter,
         MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
@@ -26,6 +23,7 @@ use compiler::{
     songs::{compile_mml_song, song_duration_string, validate_song_size, SongData},
     sound_effects::{self, blank_compiled_sound_effects, CompiledSfxSubroutines, SfxExportOrder},
     spc_file_export::export_spc_file,
+    textfile::{load_text_file_with_limit, load_text_file_with_limit_path, TextFile},
 };
 
 use std::ffi::{OsStr, OsString};
