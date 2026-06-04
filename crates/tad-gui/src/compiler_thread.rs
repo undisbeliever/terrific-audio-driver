@@ -21,8 +21,6 @@ use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{
     build_cad_with_sfx_buffer, build_common_audio_data, CommonAudioData,
 };
-use compiler::data::{self, BrrEvaluator};
-use compiler::data::{DefaultSfxFlags, LoopSetting};
 use compiler::driver_constants::{self, COMMON_DATA_BYTES_PER_SOUND_EFFECT};
 use compiler::envelope::Envelope;
 use compiler::errors::{
@@ -33,6 +31,8 @@ use compiler::identifier::{ChannelId, Name};
 use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
+use compiler::project::{self, BrrEvaluator};
+use compiler::project::{DefaultSfxFlags, LoopSetting};
 use compiler::samples::{
     combine_samples, create_test_instrument_data, encode_or_load_brr_file,
     load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
@@ -96,9 +96,9 @@ impl<T> ReplaceAllVec<T> {
 pub struct ProjectToCompiler {
     pub default_sfx_flags: DefaultSfxFlags,
     pub sfx_export_order: GuiSfxExportOrder,
-    pub pf_songs: ReplaceAllVec<data::Song>,
-    pub instruments: ReplaceAllVec<data::Instrument>,
-    pub samples: ReplaceAllVec<data::Sample>,
+    pub pf_songs: ReplaceAllVec<project::Song>,
+    pub instruments: ReplaceAllVec<project::Instrument>,
+    pub samples: ReplaceAllVec<project::Sample>,
 }
 
 #[derive(Debug)]
@@ -124,10 +124,10 @@ pub enum ToCompiler {
     DefaultSfxFlagChanged(DefaultSfxFlags),
     SfxExportOrder(SfxExportOrderAction),
 
-    ProjectSongs(ItemChanged<data::Song>),
+    ProjectSongs(ItemChanged<project::Song>),
 
-    Instrument(ItemChanged<data::Instrument>),
-    Sample(ItemChanged<data::Sample>),
+    Instrument(ItemChanged<project::Instrument>),
+    Sample(ItemChanged<project::Sample>),
 
     AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator, FftSettings),
 
@@ -672,7 +672,7 @@ impl Sender {
 fn create_instrument_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &data::Instrument) -> Option<InstrumentSampleData>) + 'a {
+) -> impl (FnMut(ItemId, &project::Instrument) -> Option<InstrumentSampleData>) + 'a {
     |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Instrument(
@@ -691,7 +691,7 @@ fn create_instrument_compiler<'a>(
 fn create_sample_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &data::Sample) -> Option<SampleSampleData>) + 'a {
+) -> impl (FnMut(ItemId, &project::Sample) -> Option<SampleSampleData>) + 'a {
     |id, sample| match load_sample_for_sample(sample, sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Sample(id, Ok(SampleSize(s.sample_size()))));
@@ -705,7 +705,7 @@ fn create_sample_compiler<'a>(
 }
 
 fn build_play_instrument_data(
-    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
+    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(Box<CommonAudioData>, SongData)> {
@@ -731,7 +731,7 @@ fn build_play_instrument_data(
 }
 
 fn build_play_sample_data(
-    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    samples: &CList<project::Sample, Option<SampleSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(Box<CommonAudioData>, SongData)> {
@@ -753,8 +753,8 @@ fn build_play_sample_data(
 }
 
 fn instrument_and_sample_names(
-    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<project::Sample, Option<SampleSampleData>>,
 ) -> Arc<InstrumentAndSampleNames> {
     let i_names = instruments.items().iter().map(|inst| inst.name.clone());
     let s_names = samples.items().iter().map(|s| s.name.clone());
@@ -885,7 +885,7 @@ fn calc_sfx_data_size(
 }
 
 struct SongDependencies {
-    inst_map: data::UniqueNamesList<data::InstrumentOrSample>,
+    inst_map: project::UniqueNamesList<project::InstrumentOrSample>,
     combined_samples: SampleAndInstrumentData,
     common_data_no_sfx_size: usize,
     sfx_data_size: usize,
@@ -898,8 +898,8 @@ impl SongDependencies {
 }
 
 fn build_cad_no_sfx_and_song_dependencies(
-    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<project::Sample, Option<SampleSampleData>>,
     instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_export_order: &GuiSfxExportOrder,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
@@ -931,7 +931,7 @@ fn build_cad_no_sfx_and_song_dependencies(
         Err(e) => return Err(CombineSamplesError::CommonAudioData(e)),
     };
 
-    match data::validate_instrument_and_sample_names(
+    match project::validate_instrument_and_sample_names(
         instruments.items().iter(),
         samples.items.iter(),
     ) {
@@ -1094,7 +1094,7 @@ impl SongCompiler {
         &self,
         id: ItemId,
         source_path: &SourcePathBuf,
-        pf_songs: &IList<data::Song>,
+        pf_songs: &IList<project::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) -> SongState {
@@ -1115,7 +1115,7 @@ impl SongCompiler {
         }
     }
 
-    fn replace_all_and_load_songs(&mut self, pf_songs: &ReplaceAllVec<data::Song>) {
+    fn replace_all_and_load_songs(&mut self, pf_songs: &ReplaceAllVec<project::Song>) {
         self.songs = pf_songs
             .0
             .iter()
@@ -1136,12 +1136,12 @@ impl SongCompiler {
 
     fn process_pf_song_message(
         &mut self,
-        m: &ItemChanged<data::Song>,
-        pf_songs: &IList<data::Song>,
+        m: &ItemChanged<project::Song>,
+        pf_songs: &IList<project::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
-        let mut add_or_edit = |id: &ItemId, item: &data::Song| {
+        let mut add_or_edit = |id: &ItemId, item: &project::Song| {
             // Only add songs, do not modify them
             // (source is not editable by the GUI)
             #[allow(clippy::map_entry)] // Cannot use HashMap::entry() due to the borrow checker
@@ -1173,7 +1173,7 @@ impl SongCompiler {
     fn song_tab_closed(
         &mut self,
         id: ItemId,
-        pf_songs: &IList<data::Song>,
+        pf_songs: &IList<project::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
@@ -1195,7 +1195,7 @@ impl SongCompiler {
 
     fn compile_all_songs(
         &mut self,
-        pf_songs: &IList<data::Song>,
+        pf_songs: &IList<project::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
@@ -1227,7 +1227,7 @@ impl SongCompiler {
         &mut self,
         id: ItemId,
         mml: String,
-        pf_songs: &IList<data::Song>,
+        pf_songs: &IList<project::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
@@ -1269,7 +1269,7 @@ impl SongCompiler {
     fn export_to_spc_file(
         &self,
         id: ItemId,
-        pf_songs: &IList<data::Song>,
+        pf_songs: &IList<project::Song>,
         sd: &Option<SongDependencies>,
     ) -> Result<(String, Box<[u8]>), SpcFileError> {
         let common_audio_data = match sd {
@@ -1417,8 +1417,8 @@ fn analyse_sample(
 }
 
 fn compile_all_samples(
-    instruments: &mut CList<data::Instrument, Option<InstrumentSampleData>>,
-    samples: &mut CList<data::Sample, Option<SampleSampleData>>,
+    instruments: &mut CList<project::Instrument, Option<InstrumentSampleData>>,
+    samples: &mut CList<project::Sample, Option<SampleSampleData>>,
     sample_file_cache: &mut SampleFileCache,
     sender: &Sender,
 ) {

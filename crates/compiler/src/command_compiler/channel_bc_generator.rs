@@ -16,7 +16,6 @@ use crate::command_compiler::analysis::{
     AnalysedSoundEffectCommands, SubroutineAnalysis, TransposeStartRange,
 };
 use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
-use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, TempGain};
@@ -29,6 +28,7 @@ use crate::mml::{CommandTickTracker, CursorTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PitchTableOffset, PITCH_REGISTER_MAX};
+use crate::project::{self, UniqueNamesList};
 use crate::songs::{BytecodePos, Channel, LoopPoint};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::subroutines::{
@@ -91,7 +91,7 @@ enum AfterPlayNote {
 
 struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
-    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+    instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
     subroutines: &'a CompiledSubroutines,
 
     bc: Bytecode<'a>,
@@ -112,7 +112,7 @@ impl<'a> ChannelBcGenerator<'a> {
     pub(super) fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
-        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
         subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
         driver_transpose: TransposeStartRange,
@@ -953,8 +953,8 @@ impl<'a> ChannelBcGenerator<'a> {
             .get_index(inst_id.value().into())
             .expect("unknown inst_id")
         {
-            data::InstrumentOrSample::Instrument(i) => i.envelope,
-            data::InstrumentOrSample::Sample(s) => s.envelope,
+            project::InstrumentOrSample::Instrument(i) => i.envelope,
+            project::InstrumentOrSample::Sample(s) => s.envelope,
         };
 
         let old_inst = &self.bc.get_state().instrument;
@@ -1547,7 +1547,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
 pub(crate) struct CommandCompiler<'a> {
     pitch_table: &'a PitchTable,
-    data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &'a project::UniqueNamesList<project::InstrumentOrSample>,
     max_edl: EchoEdl,
 
     is_song: bool,
@@ -1560,7 +1560,7 @@ impl<'a> CommandCompiler<'a> {
     pub fn new(
         header_size: usize,
         pitch_table: &'a PitchTable,
-        data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
+        data_instruments: &'a project::UniqueNamesList<project::InstrumentOrSample>,
         max_edl: EchoEdl,
 
         is_song: bool,
@@ -1889,7 +1889,7 @@ impl<'a> CommandCompiler<'a> {
 
 pub(crate) fn compile_sound_effect(
     input: AnalysedSoundEffectCommands,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
     use_line_errors: bool,
@@ -1959,7 +1959,7 @@ pub(crate) fn compile_sound_effect(
 pub(crate) fn compile_mml_prefix(
     input: ChannelCommands,
     context: BytecodeContext,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
 ) -> Result<Vec<u8>, MmlPrefixError> {

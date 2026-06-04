@@ -19,7 +19,6 @@ use crate::command_compiler::channel_bc_generator::MAX_NO_LOOP_TICKS;
 use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
-use crate::data::LoopSetting;
 use crate::driver_constants::{
     addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
@@ -40,6 +39,7 @@ use crate::path::PathString;
 use crate::pitch_table::{
     InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate, MAX_N_PITCHES,
 };
+use crate::project::LoopSetting;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};

@@ -25,7 +25,6 @@ use crate::command_compiler::channel_bc_generator;
 use crate::command_compiler::commands::{
     MmlInstrument, SfxSubroutineCommands, SongCommands, SoundEffectCommands, SubroutineCommands,
 };
-use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES};
 use crate::errors::{
     MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError, SoundEffectErrorList,
@@ -33,6 +32,7 @@ use crate::errors::{
 use crate::identifier::{ChannelId, IdentifierStr, MusicChannelIndex, Name};
 use crate::mml::command_parser::parse_mml_tokens;
 use crate::pitch_table::PitchTable;
+use crate::project::{self, UniqueNamesList};
 use crate::songs::SongData;
 use crate::sound_effects::CompiledSfxSubroutines;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines};
@@ -77,7 +77,7 @@ impl MmlPrefixData {
 
 fn parse_subroutines<'a>(
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
@@ -117,7 +117,7 @@ pub(crate) fn parse_mml_song<'a>(
     mml: &'a str,
     file_name: &str,
     song_name: Option<Name>,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
 ) -> Result<(SongCommands<'a>, MmlCompileErrors), SongError> {
     let mut errors = MmlCompileErrors {
         song_name,
@@ -216,7 +216,7 @@ pub(crate) fn parse_mml_song<'a>(
 
 pub(crate) fn parse_sfx_subroutines<'a>(
     sfx: &'a str,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
 ) -> Result<SfxSubroutineCommands<'a>, SfxSubroutineErrors> {
     let lines = match split_mml_sfx_subroutines_header_lines(sfx) {
         Ok(l) => l,
@@ -264,7 +264,7 @@ pub(crate) fn parse_sfx_subroutines<'a>(
 
 pub(crate) fn parse_sound_effect<'a>(
     sfx: &'a str,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     sfx_subroutines: &CompiledSfxSubroutines,
 ) -> Result<SoundEffectCommands<'a>, SoundEffectErrorList> {
     let lines = match split_mml_sound_effect_lines(sfx) {
@@ -312,7 +312,7 @@ pub fn compile_mml_prefix(
     mml_prefix: &str,
     song: &SongData,
     pitch_table: &PitchTable,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
 ) -> Result<MmlPrefixData, MmlPrefixError> {
     if mml_prefix.len() > MAX_MML_PREFIX_STR_LENGTH {
         return Err(MmlPrefixError::PrefixStrTooLarge(mml_prefix.len()));

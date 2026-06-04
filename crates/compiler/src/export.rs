@@ -16,9 +16,9 @@ pub use self::tass64::{Tass64Exporter, Tass64MemoryMap};
 
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
-use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::MAX_N_SONGS;
 use crate::errors::{ExportError, ExportSegmentType};
+use crate::project::UniqueNamesProjectFile;
 use crate::songs::SongData;
 
 use std::ops::Range;

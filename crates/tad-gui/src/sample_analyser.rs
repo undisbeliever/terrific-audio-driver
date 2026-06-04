@@ -11,7 +11,7 @@ use crate::sample_widgets::{BrrSettingsWidget, SampleWidgetEditor, SourceFileTyp
 use crate::{GuiMessage, InstrumentOrSampleId};
 
 use brr::{BrrSample, MonoPcm16WaveFile};
-use compiler::data::{self, BrrEvaluator, LoopSetting};
+use compiler::project::{self, BrrEvaluator, LoopSetting};
 use fltk::valuator::HorSlider;
 
 use std::cell::RefCell;
@@ -128,8 +128,8 @@ struct State {
     item_id: Option<InstrumentOrSampleId>,
     source: SourcePathBuf,
     freq: f64,
-    loop_setting: data::LoopSetting,
-    evaluator: data::BrrEvaluator,
+    loop_setting: project::LoopSetting,
+    evaluator: project::BrrEvaluator,
 
     analysis: Option<SampleAnalysis>,
     analysis_error: Option<String>,
@@ -442,7 +442,7 @@ impl SampleAnalyserDialog {
         Self { state }
     }
 
-    pub fn show_for_instrument(&mut self, id: ItemId, inst: &data::Instrument) {
+    pub fn show_for_instrument(&mut self, id: ItemId, inst: &project::Instrument) {
         self.state.borrow_mut().show(
             InstrumentOrSampleId::Instrument(id),
             inst.source.clone(),
@@ -452,7 +452,7 @@ impl SampleAnalyserDialog {
         );
     }
 
-    pub fn show_for_sample(&mut self, id: ItemId, s: &data::Sample) {
+    pub fn show_for_sample(&mut self, id: ItemId, s: &project::Sample) {
         self.state.borrow_mut().show(
             InstrumentOrSampleId::Sample(id),
             s.source.clone(),

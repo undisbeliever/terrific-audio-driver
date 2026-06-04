@@ -9,9 +9,9 @@ use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
 use crate::command_compiler::parsers::{
     parse_bytecode_asm_instruction, parse_call_subroutine_command,
 };
-use crate::data;
-use crate::data::UniqueNamesList;
 use crate::identifier::{ChannelId, IdentifierStr};
+use crate::project;
+use crate::project::UniqueNamesList;
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
@@ -71,9 +71,9 @@ pub struct State {
 mod parser {
     use crate::{
         command_compiler::commands::MmlInstrument,
-        data::{self, UniqueNamesList},
         file_pos::LineIndexRange,
         mml::metadata::GlobalSettings,
+        project::{self, UniqueNamesList},
         time::TickCounter,
     };
 
@@ -89,7 +89,7 @@ mod parser {
         default_length: CommandTicks,
         keyoff_enabled: bool,
 
-        data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
+        data_instruments: &'b UniqueNamesList<project::InstrumentOrSample>,
         instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
         subroutines: &'b dyn SubroutineNameMap,
 
@@ -103,7 +103,7 @@ mod parser {
         pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
-            data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
+            data_instruments: &'b UniqueNamesList<project::InstrumentOrSample>,
             instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
             subroutines: &'b dyn SubroutineNameMap,
             settings: &'b GlobalSettings,
@@ -175,7 +175,7 @@ mod parser {
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<data::InstrumentOrSample> {
+        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<project::InstrumentOrSample> {
             self.data_instruments
         }
 
@@ -2651,7 +2651,7 @@ impl MaybeMergeableCommands {
 pub(crate) fn parse_mml_tokens<'a>(
     channel: ChannelId,
     tokens: MmlTokens<'a>,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,

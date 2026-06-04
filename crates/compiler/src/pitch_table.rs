@@ -9,12 +9,12 @@ use std::ops::RangeInclusive;
 use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::PlayPitchPitch;
-use crate::data::InstrumentNoteRange;
-use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
+use crate::project::InstrumentNoteRange;
+use crate::project::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
 

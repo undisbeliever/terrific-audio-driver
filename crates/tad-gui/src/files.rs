@@ -10,10 +10,10 @@ use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
-use compiler::data;
-use compiler::data::{ProjectFile, Song};
 use compiler::identifier::Name;
 use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
+use compiler::project;
+use compiler::project::{ProjectFile, Song};
 use compiler::sfx_file::{build_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
 use compiler::textfile::{load_text_file_with_limit, TextFile, MAX_FILE_SIZE};
 
@@ -388,7 +388,11 @@ pub fn open_project_dialog() -> Option<ProjectFile> {
 }
 
 pub fn new_project_dialog() -> Option<ProjectFile> {
-    let path = save_file_dialog("New Project", PROJECT_FILTER, data::PROJECT_FILE_EXTENSION)?;
+    let path = save_file_dialog(
+        "New Project",
+        PROJECT_FILTER,
+        project::PROJECT_FILE_EXTENSION,
+    )?;
 
     if path.try_exists().ok() == Some(true) {
         dialog::message_title("Cannot create a new project");
@@ -396,8 +400,8 @@ pub fn new_project_dialog() -> Option<ProjectFile> {
         return load_project_file_or_show_error_message(&path);
     }
 
-    let project = data::Project::default();
-    let contents = match data::serialize_project(&project) {
+    let project = project::Project::default();
+    let contents = match project::serialize_project(&project) {
         Ok(c) => c,
         Err(e) => {
             dialog::message_title("Cannot serialize new project");
@@ -432,7 +436,7 @@ pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFil
         return None;
     }
 
-    match data::load_project_file(&path) {
+    match project::load_project_file(&path) {
         Ok(pf) => Some(pf),
         Err(e) => {
             dialog::message_title("Error loading project file");
@@ -516,7 +520,7 @@ pub fn add_song_to_pf_dialog(
                     // The MML file is already open
                     sender.send(GuiMessage::EditProjectSongs(ListMessage::AddWithItemId(
                         id,
-                        data::Song {
+                        project::Song {
                             name: song_name_from_path(&p.source_path),
                             source: p.source_path,
                         },
@@ -572,7 +576,7 @@ pub fn open_instrument_sample_dialog(
     };
 
     if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &inst.source) {
-        let new_inst = data::Instrument {
+        let new_inst = project::Instrument {
             source: new_source,
             ..inst.clone()
         };
@@ -592,7 +596,7 @@ pub fn open_sample_sample_dialog(
     };
 
     if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &sample.source) {
-        let new_sample = data::Sample {
+        let new_sample = project::Sample {
             source: new_source,
             ..sample.clone()
         };
@@ -622,13 +626,13 @@ pub trait Serializer {
 
 impl Serializer for ProjectData {
     const FILE_TYPE: &'static str = "project";
-    const FILE_EXTENSION: &'static str = data::PROJECT_FILE_EXTENSION;
+    const FILE_EXTENSION: &'static str = project::PROJECT_FILE_EXTENSION;
     const DIALOG_FILTER: Option<&'static str> = None;
 
     fn serialize(pd: &ProjectData) -> Result<Vec<u8>, String> {
         let project = pd.to_project();
 
-        compiler::data::serialize_project(&project).map_err(|e| e.to_string())
+        compiler::project::serialize_project(&project).map_err(|e| e.to_string())
     }
 }
 

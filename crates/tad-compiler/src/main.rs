@@ -10,7 +10,6 @@ use clap::{Args, Parser, Subcommand};
 
 use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
-    data::{Song, UniqueNamesProjectFile},
     export::{
         bin_include_path, AsarExporter, AsarMemoryMap, Ca65Exporter, Ca65MemoryMap, Exporter,
         MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
@@ -18,6 +17,7 @@ use compiler::{
     identifier::{is_name_or_id, Name},
     mml::MmlTickCountTable,
     pitch_table::{build_pitch_table, PitchTable},
+    project::{Song, UniqueNamesProjectFile},
     samples::build_sample_and_instrument_data,
     sfx_file,
     songs::{compile_mml_song, song_duration_string, validate_song_size, SongData},
@@ -785,9 +785,9 @@ fn main() {
 // ==============
 
 fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
-    match compiler::data::load_project_file(path) {
+    match compiler::project::load_project_file(path) {
         Err(e) => error!("Cannot load project file: {}", e),
-        Ok(m) => match compiler::data::validate_project_file_names(m) {
+        Ok(m) => match compiler::project::validate_project_file_names(m) {
             Ok(vm) => vm,
             Err(e) => error!("{}", e.multiline_display()),
         },

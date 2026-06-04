@@ -4,16 +4,16 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::data::{
-    BrrEvaluator, Instrument, InstrumentNoteRange, InstrumentOrSample, LoopSetting, Sample,
-    UniqueNamesProjectFile,
-};
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
     instrument_pitch, maximize_pitch_range, merge_pitch_vec, sample_pitch, sort_pitches_iterator,
     InstrumentPitch, PitchTable, SamplePitches,
+};
+use crate::project::{
+    BrrEvaluator, Instrument, InstrumentNoteRange, InstrumentOrSample, LoopSetting, Sample,
+    UniqueNamesProjectFile,
 };
 
 use brr::{

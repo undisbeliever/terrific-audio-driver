@@ -5,14 +5,14 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::{
-    data::{
-        About, BlockNumber, BrrEvaluator, DefaultSfxFlags, Instrument, InstrumentNoteRange,
-        LoopSetting, Project, Sample, SampleNumber, Song,
-    },
     envelope::{Adsr, Envelope, Gain},
     identifier::Name,
     notes::Note,
     path::SourcePathBuf,
+    project::{
+        About, BlockNumber, BrrEvaluator, DefaultSfxFlags, Instrument, InstrumentNoteRange,
+        LoopSetting, Project, Sample, SampleNumber, Song,
+    },
 };
 
 fn name(name: &str) -> Name {

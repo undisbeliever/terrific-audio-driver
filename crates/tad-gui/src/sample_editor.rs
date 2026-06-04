@@ -14,9 +14,9 @@ use crate::sample_widgets::{
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
-use compiler::data::{self, LoopSetting, Sample};
 use compiler::notes::Note;
 use compiler::path::SourcePathBuf;
+use compiler::project::{self, LoopSetting, Sample};
 use fltk::group::{Flex, Group};
 use fltk::misc::Spinner;
 
@@ -31,8 +31,8 @@ use fltk::input::Input;
 use fltk::output::Output;
 use fltk::prelude::*;
 
-fn blank_sample() -> data::Sample {
-    data::Sample {
+fn blank_sample() -> project::Sample {
+    project::Sample {
         name: "name".parse().unwrap(),
         source: SourcePathBuf::default(),
         loop_setting: LoopSetting::None,
@@ -47,7 +47,7 @@ fn blank_sample() -> data::Sample {
 pub struct SampleMapping;
 
 impl TableMapping for SampleMapping {
-    type DataType = data::Sample;
+    type DataType = project::Sample;
     type RowType = RowWithStatus<SimpleRow<1>>;
 
     const CAN_CLONE: bool = true;
@@ -65,15 +65,15 @@ impl TableMapping for SampleMapping {
         GuiMessage::Sample(ListMessage::Add(blank_sample()))
     }
 
-    fn to_message(lm: ListMessage<data::Sample>) -> GuiMessage {
+    fn to_message(lm: ListMessage<project::Sample>) -> GuiMessage {
         GuiMessage::Sample(lm)
     }
 
-    fn new_row(i: &data::Sample) -> Self::RowType {
+    fn new_row(i: &project::Sample) -> Self::RowType {
         RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
     }
 
-    fn edit_row(r: &mut Self::RowType, i: &data::Sample) -> bool {
+    fn edit_row(r: &mut Self::RowType, i: &project::Sample) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
 

@@ -8,18 +8,18 @@ use super::IdentifierStr;
 
 use crate::bytecode::InstrumentId;
 use crate::command_compiler::commands::MmlInstrument;
-use crate::data;
-use crate::data::UniqueNamesList;
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::Line;
+use crate::project;
+use crate::project::UniqueNamesList;
 
 use std::collections::HashMap;
 
 fn parse_instrument(
     id: IdentifierStr,
     line: &Line,
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::InstrumentOrSample>,
 ) -> Result<MmlInstrument, ErrorWithPos<MmlLineError>> {
     if line.text.is_empty() {
         return Err(ErrorWithPos(line.range(), MmlLineError::NoInstrument));
@@ -80,7 +80,7 @@ fn parse_instrument(
 
 pub fn parse_instruments(
     instrument_lines: Vec<(IdentifierStr, Line)>,
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::InstrumentOrSample>,
 ) -> (Vec<MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();

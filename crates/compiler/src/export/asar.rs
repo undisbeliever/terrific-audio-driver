@@ -6,8 +6,8 @@
 
 use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, BLANK_SONG_NAME};
 
-use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::TAD_IO_VERSION;
+use crate::project::UniqueNamesProjectFile;
 use crate::sound_effects::SfxExportOrder;
 
 use std::fmt::Write;

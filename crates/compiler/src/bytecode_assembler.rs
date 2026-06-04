@@ -25,8 +25,8 @@ use crate::value_newtypes::{
 use crate::{
     bytecode::State,
     command_compiler::analysis::TransposeStartRange,
-    data::{InstrumentOrSample, UniqueNamesList},
     pitch_table::PitchTable,
+    project::{InstrumentOrSample, UniqueNamesList},
     subroutines::{CompiledSubroutines, SubroutineNameMap},
     time::TickCounter,
 };

@@ -8,7 +8,6 @@
 
 use crate::command_compiler::analysis::{TransposeRange, TransposeStartRange};
 use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis, SkipLastLoopAnalysis};
-use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     FIR_FILTER_SIZE, MAX_INSTRUMENTS_AND_SAMPLES,
@@ -20,6 +19,7 @@ use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
+use crate::project::{self, InstrumentOrSample, UniqueNamesList};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -1451,7 +1451,7 @@ pub struct Bytecode<'a> {
     context: BytecodeContext,
     bytecode: Vec<u8>,
 
-    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+    instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
     pitch_table: &'a PitchTable,
     subroutines: &'a CompiledSubroutines,
     subroutin_name_map: &'a dyn SubroutineNameMap,
@@ -1469,7 +1469,7 @@ pub struct Bytecode<'a> {
 impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
-        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
@@ -1492,7 +1492,7 @@ impl<'a> Bytecode<'a> {
     pub fn new_append_to_vec(
         vec: Vec<u8>,
         context: BytecodeContext,
-        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,

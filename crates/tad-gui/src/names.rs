@@ -6,8 +6,8 @@
 
 use crate::compiler_thread::ItemId;
 
-use compiler::data;
 use compiler::identifier::Name;
+use compiler::project;
 use compiler::sound_effects::SoundEffectInput;
 
 pub trait NameGetter {
@@ -29,19 +29,19 @@ impl NameGetter for Name {
     }
 }
 
-impl NameGetter for data::Song {
+impl NameGetter for project::Song {
     fn name(&self) -> &Name {
         &self.name
     }
 }
 
-impl NameGetter for data::Instrument {
+impl NameGetter for project::Instrument {
     fn name(&self) -> &Name {
         &self.name
     }
 }
 
-impl NameGetter for data::Sample {
+impl NameGetter for project::Sample {
     fn name(&self) -> &Name {
         &self.name
     }
@@ -63,19 +63,19 @@ impl NameSetter for Name {
     }
 }
 
-impl NameSetter for data::Song {
+impl NameSetter for project::Song {
     fn set_name(&mut self, name: Name) {
         self.name = name;
     }
 }
 
-impl NameSetter for data::Instrument {
+impl NameSetter for project::Instrument {
     fn set_name(&mut self, name: Name) {
         self.name = name;
     }
 }
 
-impl NameSetter for data::Sample {
+impl NameSetter for project::Sample {
     fn set_name(&mut self, name: Name) {
         self.name = name;
     }

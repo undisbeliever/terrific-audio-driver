@@ -6,9 +6,9 @@
 
 use crate::helpers::{is_input_done_event, InputForm};
 
-use compiler::data::{self, BlockNumber, BrrEvaluator, LoopSetting, SampleNumber};
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::path::SourcePathBuf;
+use compiler::project::{self, BlockNumber, BrrEvaluator, LoopSetting, SampleNumber};
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use fltk::button::RadioRoundButton;
 
@@ -408,7 +408,7 @@ impl BrrSettingsWidget {
         }
     }
 
-    pub fn set_value(&mut self, ls: &LoopSetting, e: data::BrrEvaluator) {
+    pub fn set_value(&mut self, ls: &LoopSetting, e: project::BrrEvaluator) {
         self.set_loop_setting_value(ls);
 
         self.evaluator

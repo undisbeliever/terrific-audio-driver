@@ -16,9 +16,9 @@ use crate::GuiMessage;
 use crate::{helpers::*, ProjectData};
 
 use compiler::common_audio_data::CommonAudioData;
-use compiler::data::{self, DefaultSfxFlags};
 use compiler::identifier::Name;
 use compiler::path::SourcePathBuf;
+use compiler::project::{self, DefaultSfxFlags};
 use compiler::songs::{song_duration_string, SongAramSize, SongData};
 
 use std::cell::RefCell;
@@ -62,7 +62,7 @@ impl TableRow for SongRow {
 
 pub struct SongMapping;
 impl TableMapping for SongMapping {
-    type DataType = data::Song;
+    type DataType = project::Song;
     type RowType = RowWithStatus<SongRow>;
 
     const CAN_CLONE: bool = false;
@@ -85,11 +85,11 @@ impl TableMapping for SongMapping {
         GuiMessage::AddSongToProjectDialog
     }
 
-    fn to_message(lm: ListMessage<data::Song>) -> GuiMessage {
+    fn to_message(lm: ListMessage<project::Song>) -> GuiMessage {
         GuiMessage::EditProjectSongs(lm)
     }
 
-    fn new_row(song: &data::Song) -> Self::RowType {
+    fn new_row(song: &project::Song) -> Self::RowType {
         RowWithStatus::new_unchecked(SongRow {
             name: song.name.as_str().to_owned(),
             filename: song.source.as_str().to_owned(),
@@ -98,7 +98,7 @@ impl TableMapping for SongMapping {
         })
     }
 
-    fn edit_row(r: &mut Self::RowType, song: &data::Song) -> bool {
+    fn edit_row(r: &mut Self::RowType, song: &project::Song) -> bool {
         let mut edited = false;
 
         let write_if_changed = |dest: &mut String, src: &str| {
@@ -244,7 +244,7 @@ impl ProjectTab {
     }
 }
 
-impl ListWithCompilerOutputEditor<data::Song, Result<Arc<SongData>, ShortSongError>>
+impl ListWithCompilerOutputEditor<project::Song, Result<Arc<SongData>, ShortSongError>>
     for ProjectTab
 {
     type TableMapping = SongMapping;

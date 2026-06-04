@@ -63,11 +63,11 @@ use crate::tabs::{FileType, SaveResult, SaveType, Tab, TabManager};
 
 use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SharedSongInterpreter};
 
-use compiler::data;
-use compiler::data::{DefaultSfxFlags, ProjectFile};
 use compiler::driver_constants;
 use compiler::identifier::Name;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
+use compiler::project;
+use compiler::project::{DefaultSfxFlags, ProjectFile};
 use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
 use compiler::songs::SongData;
 use compiler::sound_effects::{SfxSubroutinesMml, SoundEffectInput};
@@ -128,15 +128,15 @@ pub enum GuiMessage {
 
     DefaultSfxFlagChanged(DefaultSfxFlags),
     EditSfxExportOrder(SfxExportOrderMessage),
-    EditProjectSongs(ListMessage<data::Song>),
+    EditProjectSongs(ListMessage<project::Song>),
 
     SelectProjectSong(usize),
 
-    Instrument(ListMessage<data::Instrument>),
-    Sample(ListMessage<data::Sample>),
-    EditInstrument(ItemId, data::Instrument),
+    Instrument(ListMessage<project::Instrument>),
+    Sample(ListMessage<project::Sample>),
+    EditInstrument(ItemId, project::Instrument),
     UserChangedSelectedInstrument,
-    EditSample(ItemId, data::Sample),
+    EditSample(ItemId, project::Sample),
     UserChangedSelectedSample,
 
     NewMmlFile,
@@ -169,8 +169,8 @@ pub enum GuiMessage {
     CommitSampleAnalyserChanges {
         id: InstrumentOrSampleId,
         freq: f64,
-        loop_setting: data::LoopSetting,
-        evaluator: data::BrrEvaluator,
+        loop_setting: project::LoopSetting,
+        evaluator: project::BrrEvaluator,
     },
 
     OpenInstrumentSampleDialog(ItemId),
@@ -223,10 +223,14 @@ pub enum GuiMessage {
 }
 
 pub type ProjectSongsData =
-    ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>;
+    ListWithCompilerOutput<project::Song, Result<Arc<SongData>, ShortSongError>>;
 
-pub type InstrumentsAndSamplesData =
-    ListPairWithCompilerOutputs<data::Instrument, InstrumentOutput, data::Sample, SampleOutput>;
+pub type InstrumentsAndSamplesData = ListPairWithCompilerOutputs<
+    project::Instrument,
+    InstrumentOutput,
+    project::Sample,
+    SampleOutput,
+>;
 
 pub struct ProjectData {
     pf_parent_path: ParentPathBuf,
@@ -238,17 +242,17 @@ pub struct ProjectData {
     sfx_export_order: GuiSfxExportOrder,
 
     // Using ShortSongError so I do not have to clong a complicated `SongError` struct.
-    project_songs: ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>,
+    project_songs: ListWithCompilerOutput<project::Song, Result<Arc<SongData>, ShortSongError>>,
 
     instruments_and_samples: InstrumentsAndSamplesData,
 }
 
 impl ProjectData {
-    pub fn instruments(&self) -> &ListWithCompilerOutput<data::Instrument, InstrumentOutput> {
+    pub fn instruments(&self) -> &ListWithCompilerOutput<project::Instrument, InstrumentOutput> {
         self.instruments_and_samples.list1()
     }
 
-    pub fn samples(&self) -> &ListWithCompilerOutput<data::Sample, SampleOutput> {
+    pub fn samples(&self) -> &ListWithCompilerOutput<project::Sample, SampleOutput> {
         self.instruments_and_samples.list2()
     }
 }
@@ -817,7 +821,7 @@ impl Project {
                     if let Some((index, inst)) = self.data.instruments().get_id(id) {
                         self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
                             index,
-                            data::Instrument {
+                            project::Instrument {
                                 freq,
                                 loop_setting,
                                 evaluator,
@@ -830,7 +834,7 @@ impl Project {
                     if let Some((index, sample)) = self.data.samples().get_id(id) {
                         self.process(GuiMessage::Sample(ListMessage::ItemEdited(
                             index,
-                            data::Sample {
+                            project::Sample {
                                 loop_setting,
                                 evaluator,
                                 ..sample.clone()
@@ -845,7 +849,7 @@ impl Project {
                     self.sender
                         .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                             index,
-                            data::Song { name, ..s.clone() },
+                            project::Song { name, ..s.clone() },
                         )))
                 }
             }
@@ -1299,7 +1303,7 @@ impl Project {
             self.sender
                 .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                     index,
-                    data::Song {
+                    project::Song {
                         source,
                         ..song.clone()
                     },
@@ -1315,7 +1319,7 @@ impl Project {
                     self.sender
                         .send(GuiMessage::EditProjectSongs(ListMessage::AddWithItemId(
                             id,
-                            data::Song {
+                            project::Song {
                                 name: song_name_from_path(&source),
                                 source,
                             },
@@ -1345,10 +1349,10 @@ impl Project {
 }
 
 impl ProjectData {
-    pub fn to_project(&self) -> compiler::data::Project {
-        compiler::data::Project {
+    pub fn to_project(&self) -> compiler::project::Project {
+        compiler::project::Project {
             // Always update the About version
-            about: data::About {
+            about: project::About {
                 version: CARGO_PKG_VERSION.to_owned(),
             },
 

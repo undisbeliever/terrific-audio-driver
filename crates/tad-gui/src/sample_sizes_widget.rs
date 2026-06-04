@@ -10,9 +10,9 @@ use crate::list_editor::{LaVec, ListAction};
 use crate::InstrumentsAndSamplesData;
 
 use compiler::common_audio_data::CommonAudioData;
-use compiler::data::{Instrument, Sample};
 use compiler::driver_constants::{addresses, COMMON_DATA_HEADER_SIZE};
 use compiler::identifier::Name;
+use compiler::project::{Instrument, Sample};
 use compiler::songs::{SongAramSize, BLANK_SONG_ARAM_SIZE};
 use fltk::table::TableContext;
 

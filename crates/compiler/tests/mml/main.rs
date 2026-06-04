@@ -34,7 +34,6 @@ mod vibrato;
 mod volume_pan;
 
 use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
-use compiler::data::{SampleNumber, UniqueNamesList};
 use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
@@ -46,9 +45,10 @@ use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
 };
+use compiler::project::{SampleNumber, UniqueNamesList};
 use compiler::songs::SongData;
 use compiler::subroutines::{CompiledSubroutines, Subroutine, SubroutineNameMap, SubroutineState};
-use compiler::{bytecode_assembler, data, opcodes};
+use compiler::{bytecode_assembler, opcodes, project};
 
 use std::fmt::Write;
 
@@ -650,7 +650,7 @@ fn assemble_channel_bytecode(
 }
 
 struct DummyData {
-    instruments_and_samples: UniqueNamesList<data::InstrumentOrSample>,
+    instruments_and_samples: UniqueNamesList<project::InstrumentOrSample>,
     pitch_table: PitchTable,
 }
 
@@ -658,7 +658,7 @@ fn dummy_data() -> DummyData {
     const SF: f64 = SAMPLE_FREQ;
 
     #[rustfmt::skip]
-    let instruments_and_samples = data::validate_instrument_and_sample_names([
+    let instruments_and_samples = project::validate_instrument_and_sample_names([
         dummy_instrument("dummy_instrument", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("dummy_instrument_2", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
@@ -674,10 +674,10 @@ fn dummy_data() -> DummyData {
         dummy_note_instrument("f1000_d5_g5", 3000.0, "d5", "g5", Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
-            data::Sample{
+            project::Sample{
                 name: "sample".parse().unwrap(),
                 source: Default::default(),
-                loop_setting: data::LoopSetting::None,
+                loop_setting: project::LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
                 sample_rates: vec![32000, 16000, 18000],
@@ -701,15 +701,15 @@ fn dummy_instrument(
     first_octave: u32,
     last_octave: u32,
     envelope: Envelope,
-) -> data::Instrument {
-    data::Instrument {
+) -> project::Instrument {
+    project::Instrument {
         name: Name::try_from(name.to_owned()).unwrap(),
         source: Default::default(),
         freq,
-        loop_setting: data::LoopSetting::LoopWithFilter(SampleNumber(0)),
+        loop_setting: project::LoopSetting::LoopWithFilter(SampleNumber(0)),
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        note_range: data::InstrumentNoteRange::Octave {
+        note_range: project::InstrumentNoteRange::Octave {
             first: Octave::try_new(first_octave).unwrap(),
             last: Octave::try_new(last_octave).unwrap(),
         },
@@ -724,15 +724,15 @@ fn dummy_note_instrument(
     first_note: &str,
     last_note: &str,
     envelope: Envelope,
-) -> data::Instrument {
-    data::Instrument {
+) -> project::Instrument {
+    project::Instrument {
         name: Name::try_from(name.to_owned()).unwrap(),
         source: Default::default(),
         freq,
-        loop_setting: data::LoopSetting::LoopWithFilter(SampleNumber(0)),
+        loop_setting: project::LoopSetting::LoopWithFilter(SampleNumber(0)),
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        note_range: data::InstrumentNoteRange::Note {
+        note_range: project::InstrumentNoteRange::Note {
             first: Note::parse_bytecode_argument(first_note).unwrap(),
             last: Note::parse_bytecode_argument(last_note).unwrap(),
         },

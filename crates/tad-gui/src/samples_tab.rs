@@ -19,7 +19,7 @@ use crate::{helpers::*, InstrumentsAndSamplesData};
 use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrumentWidget};
 use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
 
-use compiler::data::{self, Instrument};
+use compiler::project::{self, Instrument};
 use compiler::songs::SongAramSize;
 use fltk::button::Button;
 
@@ -405,18 +405,18 @@ impl ListWithCompilerOutputEditor<Instrument, InstrumentOutput> for SamplesTab {
     }
 }
 
-impl ListWithCompilerOutputEditor<data::Sample, SampleOutput> for SamplesTab {
+impl ListWithCompilerOutputEditor<project::Sample, SampleOutput> for SamplesTab {
     type TableMapping = SampleMapping;
 
     fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
         &mut self.sample_table
     }
 
-    fn list_edited(&mut self, action: &ListAction<data::Sample>) {
+    fn list_edited(&mut self, action: &ListAction<project::Sample>) {
         self.sample_sizes_widget.borrow_mut().sample_edited(action);
     }
 
-    fn item_edited(&mut self, id: ItemId, value: &data::Sample) {
+    fn item_edited(&mut self, id: ItemId, value: &project::Sample) {
         self.sample_editor.borrow_mut().item_edited(id, value);
         self.test_sample_widget.borrow_mut().item_edited(id, value);
     }
@@ -439,7 +439,7 @@ impl ListWithCompilerOutputEditor<data::Sample, SampleOutput> for SamplesTab {
 
     fn selected_item_changed(
         &mut self,
-        samples: &ListWithCompilerOutput<data::Sample, SampleOutput>,
+        samples: &ListWithCompilerOutput<project::Sample, SampleOutput>,
     ) {
         match samples.get_selected_row(&self.sample_table) {
             Some((id, sample, co)) => {

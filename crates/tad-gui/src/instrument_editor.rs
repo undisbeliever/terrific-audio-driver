@@ -14,10 +14,10 @@ use crate::sample_widgets::{
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
-use compiler::data::{self, Instrument, InstrumentNoteRange, LoopSetting};
 use compiler::errors::ValueError;
 use compiler::notes::{Note, Octave, PitchSemitoneIndex, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
+use compiler::project::{self, Instrument, InstrumentNoteRange, LoopSetting};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -39,7 +39,7 @@ fn blank_instrument() -> Instrument {
         loop_setting: LoopSetting::None,
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        note_range: data::InstrumentNoteRange::Octave {
+        note_range: project::InstrumentNoteRange::Octave {
             first: STARTING_OCTAVE,
             last: STARTING_OCTAVE,
         },
@@ -51,7 +51,7 @@ fn blank_instrument() -> Instrument {
 pub struct InstrumentMapping;
 
 impl TableMapping for InstrumentMapping {
-    type DataType = data::Instrument;
+    type DataType = project::Instrument;
     type RowType = RowWithStatus<SimpleRow<1>>;
 
     const CAN_CLONE: bool = true;
@@ -69,7 +69,7 @@ impl TableMapping for InstrumentMapping {
         GuiMessage::Instrument(ListMessage::Add(blank_instrument()))
     }
 
-    fn to_message(lm: ListMessage<data::Instrument>) -> GuiMessage {
+    fn to_message(lm: ListMessage<project::Instrument>) -> GuiMessage {
         GuiMessage::Instrument(lm)
     }
 
@@ -326,7 +326,7 @@ impl InstrumentEditor {
 
             match (new_first, new_last) {
                 (Some(first), Some(last)) => {
-                    Some(data::InstrumentNoteRange::Octave { first, last })
+                    Some(project::InstrumentNoteRange::Octave { first, last })
                 }
                 _ => None,
             }
@@ -343,7 +343,9 @@ impl InstrumentEditor {
             let new_last = InputHelper::read_or_reset(&mut self.last_note, &last);
 
             match (new_first, new_last) {
-                (Some(first), Some(last)) => Some(data::InstrumentNoteRange::Note { first, last }),
+                (Some(first), Some(last)) => {
+                    Some(project::InstrumentNoteRange::Note { first, last })
+                }
                 _ => None,
             }
         } else {
@@ -408,7 +410,7 @@ impl InstrumentEditor {
         }
 
         match data.note_range {
-            data::InstrumentNoteRange::Octave { first, last } => {
+            project::InstrumentNoteRange::Octave { first, last } => {
                 self.octave_range.set_value(true);
                 self.note_range.set_value(false);
 
@@ -428,7 +430,7 @@ impl InstrumentEditor {
                     &Note::last_note_for_octave(last),
                 );
             }
-            data::InstrumentNoteRange::Note { first, last } => {
+            project::InstrumentNoteRange::Note { first, last } => {
                 self.note_range.set_value(true);
                 self.octave_range.set_value(false);
 

@@ -13,7 +13,6 @@ use crate::command_compiler::analysis::TransposeStartRange;
 use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::{ChannelCommands, MmlInstrument};
 use crate::command_compiler::subroutines::subroutine_compile_order;
-use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,
     MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK,
@@ -27,6 +26,7 @@ use crate::identifier::{ChannelId, MusicChannelIndex, Name};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::Note;
 use crate::pitch_table::PitchTable;
+use crate::project::{self, single_item_unique_names_list, InstrumentOrSample, UniqueNamesList};
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
@@ -239,14 +239,14 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
     static LOCK: OnceLock<UniqueNamesList<InstrumentOrSample>> = OnceLock::new();
 
     LOCK.get_or_init(|| {
-        let inst = InstrumentOrSample::Instrument(data::Instrument {
+        let inst = InstrumentOrSample::Instrument(project::Instrument {
             name: Name::try_new("name".to_owned()).unwrap(),
             source: Default::default(),
             freq: 0.0,
-            loop_setting: data::LoopSetting::None,
+            loop_setting: project::LoopSetting::None,
             evaluator: Default::default(),
             ignore_gaussian_overflow: false,
-            note_range: data::InstrumentNoteRange::Note {
+            note_range: project::InstrumentNoteRange::Note {
                 first: Note::MIN,
                 last: Note::MAX,
             },
@@ -500,7 +500,7 @@ pub fn override_song_tick_clock(song: &mut SongData, tick_clock: TickClock) {
 fn compile_song_commands(
     song: crate::command_compiler::commands::SongCommands,
     pitch_table: &PitchTable,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     errors: MmlCompileErrors,
 ) -> Result<SongData, SongError> {
     let mut errors = errors;
@@ -616,7 +616,7 @@ pub fn compile_mml_song(
     mml: &str,
     file_name: &str,
     song_name: Option<Name>,
-    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {
     let (s, errors) = mml::parse_mml_song(mml, file_name, song_name, data_instruments)?;

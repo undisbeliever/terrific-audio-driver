@@ -10,14 +10,14 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
-use compiler::data;
-use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument};
 use compiler::driver_constants::{
     addresses, io_commands, AudioMode, FIRST_SFX_CHANNEL, N_SFX_CHANNELS,
 };
 use compiler::envelope::{Envelope, Gain};
 use compiler::identifier::Name;
 use compiler::notes::Octave;
+use compiler::project;
+use compiler::project::{validate_sfx_export_order, DefaultSfxFlags, Instrument};
 use compiler::samples::combine_samples;
 use compiler::sound_effects::{
     combine_sound_effects, compile_sfx_subroutines, compile_sound_effect_input, SfxFlags,
@@ -508,10 +508,10 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         name: Name::from_str("__dummy").unwrap(),
         source: Default::default(),
         freq: 500.0,
-        loop_setting: data::LoopSetting::None,
+        loop_setting: project::LoopSetting::None,
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        note_range: data::InstrumentNoteRange::Octave {
+        note_range: project::InstrumentNoteRange::Octave {
             first: Octave::try_new(2).unwrap(),
             last: Octave::try_new(5).unwrap(),
         },
@@ -519,9 +519,11 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         comment: None,
     };
 
-    let instruments_and_samples =
-        data::validate_instrument_and_sample_names([dummy_instrument].iter(), std::iter::empty())
-            .unwrap();
+    let instruments_and_samples = project::validate_instrument_and_sample_names(
+        [dummy_instrument].iter(),
+        std::iter::empty(),
+    )
+    .unwrap();
 
     let subroutines = compile_sfx_subroutines(
         &SfxSubroutinesMml(String::new()),

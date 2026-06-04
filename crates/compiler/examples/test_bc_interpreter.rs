@@ -10,11 +10,11 @@
 use compiler::{
     bytecode_interpreter::{self, SongInterpreter},
     common_audio_data::{build_common_audio_data, CommonAudioData},
-    data::{load_project_file, validate_project_file_names},
     driver_constants::{
         addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
         N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
     },
+    project::{load_project_file, validate_project_file_names},
     samples::build_sample_and_instrument_data,
     songs::{compile_mml_song, override_song_tick_clock, SongData},
     sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
