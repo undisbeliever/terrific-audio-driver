@@ -1019,6 +1019,7 @@ impl std::fmt::Debug for SampleAnalysis {
     }
 }
 
+#[expect(dead_code)]
 // Called by the compiler thread
 pub fn analyse_sample(
     brr_sample: Arc<BrrSample>,

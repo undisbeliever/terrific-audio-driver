@@ -500,6 +500,7 @@ pub struct SfxCannotFitInSfxBuffer();
 
 #[derive(Debug)]
 pub enum PitchError {
+    NoNotes,
     SampleRateTooHigh,
     SampleRateTooLow,
     FirstOctaveGreaterThanLastOctave,
@@ -1761,6 +1762,7 @@ impl Display for SfxCannotFitInSfxBuffer {
 impl Display for PitchError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::NoNotes => write!(f, "sample has no notes"),
             Self::SampleRateTooHigh => write!(f, "sample rate too high"),
             Self::SampleRateTooLow => write!(f, "sample rate too low"),
             Self::FirstOctaveGreaterThanLastOctave => {

@@ -11,6 +11,8 @@ use crate::errors::{DeserializeError, ProjectFileError, ProjectFileErrors, Uniqu
 use crate::identifier::Name;
 use crate::notes::{Note, Octave};
 use crate::path::{ParentPathBuf, SourcePathBuf};
+use crate::pitch_table::SPC_SAMPLE_RATE;
+use crate::samples::BRR_EXTENSION;
 use crate::textfile::load_text_file_with_limit_path;
 
 use std::collections::HashMap;
@@ -47,6 +49,7 @@ impl From<BlockNumber> for brr::BlockNumber {
 //   3. Backwards compatible with the v0.0.3 LoopSetting serde JSON
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(tag = "loop", content = "loop_setting")]
+// ::TODO move and/or rename::
 pub enum LoopSetting {
     /// This setting depends on the source file:
     ///     * wav files - The sample does not loop
@@ -168,44 +171,7 @@ impl LoopSetting {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Copy, PartialEq)]
-pub enum BrrEvaluator {
-    #[serde(rename = "default")]
-    #[default]
-    Default,
-    #[serde(rename = "square_error")]
-    SquaredError,
-    #[serde(rename = "se_avoid_gaussian_overflow")]
-    SquaredErrorAvoidGaussianOverflow,
-}
-
-impl BrrEvaluator {
-    pub fn to_evaluator(&self) -> brr::Evaluator {
-        match self {
-            Self::Default => brr::DEFAULT_EVALUATOR,
-            Self::SquaredError => brr::Evaluator::SquaredError,
-            Self::SquaredErrorAvoidGaussianOverflow => {
-                brr::Evaluator::SquaredErrorAvoidGaussianOverflow
-            }
-        }
-    }
-
-    pub fn is_default(&self) -> bool {
-        matches!(self, Self::Default)
-    }
-
-    // Used to verify I have implemented all `brr::Evaluator` items
-    #[allow(dead_code)]
-    fn from_evaluator(e: brr::Evaluator) -> Self {
-        match e {
-            brr::Evaluator::SquaredError => Self::SquaredError,
-            brr::Evaluator::SquaredErrorAvoidGaussianOverflow => {
-                Self::SquaredErrorAvoidGaussianOverflow
-            }
-        }
-    }
-}
-
+// ::TODO move and/or rename::
 #[derive(Serialize, Clone, PartialEq, Debug)]
 #[serde(untagged)]
 pub enum InstrumentNoteRange {
@@ -257,6 +223,7 @@ impl<'de> Deserialize<'de> for InstrumentNoteRange {
     }
 }
 
+// ::TODO move and/or rename::
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
@@ -291,6 +258,7 @@ impl Instrument {
     }
 }
 
+// ::TODO move and/or rename::
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Sample {
     pub name: Name,
@@ -311,6 +279,271 @@ pub struct Sample {
     pub envelope: Envelope,
 
     pub comment: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, Clone, Copy, PartialEq)]
+pub enum BrrEvaluator {
+    #[serde(rename = "default")]
+    #[default]
+    Default,
+    #[serde(rename = "square_error")]
+    SquaredError,
+    #[serde(rename = "se_avoid_gaussian_overflow")]
+    SquaredErrorAvoidGaussianOverflow,
+}
+
+impl BrrEvaluator {
+    pub fn to_evaluator(&self) -> brr::Evaluator {
+        match self {
+            Self::Default => brr::DEFAULT_EVALUATOR,
+            Self::SquaredError => brr::Evaluator::SquaredError,
+            Self::SquaredErrorAvoidGaussianOverflow => {
+                brr::Evaluator::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
+    }
+
+    // Used to verify I have implemented all `brr::Evaluator` items
+    #[allow(dead_code)]
+    fn from_evaluator(e: brr::Evaluator) -> Self {
+        match e {
+            brr::Evaluator::SquaredError => Self::SquaredError,
+            brr::Evaluator::SquaredErrorAvoidGaussianOverflow => {
+                Self::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Default, Debug)]
+pub enum BrrLoopFilter {
+    /// Resets the BRR filter at the loop point.
+    ///
+    /// The BRR block after the loop point will always use BRR filter 0, which ensures
+    /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
+    #[serde(rename = "reset_filter")]
+    #[default]
+    Reset,
+
+    /// This mode will not reset the BRR filter at the loop point.  It can create better sounding
+    /// sample, however most samples will not loop perfectly, which can add low-frequency
+    /// oscillation or glitches to the sample.
+    #[serde(rename = "with_filter")]
+    Auto,
+
+    /// Use BRR filter 1 at the loop-point.
+    #[serde(rename = "filter_1")]
+    Filter1,
+
+    /// Use BRR filter 2 at the loop-point.
+    #[serde(rename = "filter_2")]
+    Filter2,
+
+    /// Use BRR filter 3 at the loop-point.
+    #[serde(rename = "filter_3")]
+    Filter3,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+pub struct WaveSource {
+    pub source: SourcePathBuf,
+
+    #[serde(default)]
+    pub evaluator: BrrEvaluator,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_point: Option<SampleNumber>,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_filter: Option<BrrLoopFilter>,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dupe_block_hack: Option<BlockNumber>,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+pub struct BrrSource {
+    pub source: SourcePathBuf,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_point: Option<SampleNumber>,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[serde(tag = "type")]
+pub enum BrrSampleSource {
+    #[serde(rename = "wav")]
+    WaveFile(WaveSource),
+    #[serde(rename = "brr")]
+    BrrFile(BrrSource),
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+pub enum SampleTuning {
+    #[serde(rename = "frequency")]
+    Frequency(f64),
+    #[serde(rename = "wavelength")]
+    Wavelength(f64),
+}
+
+impl SampleTuning {
+    pub fn frequency(&self) -> f64 {
+        match *self {
+            SampleTuning::Frequency(f) => f,
+            SampleTuning::Wavelength(w) => SPC_SAMPLE_RATE as f64 / w,
+        }
+    }
+
+    pub fn wavelength(&self) -> f64 {
+        match *self {
+            SampleTuning::Frequency(f) => SPC_SAMPLE_RATE as f64 / f,
+            SampleTuning::Wavelength(w) => w,
+        }
+    }
+}
+
+/// Pitch table inputs
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[serde(tag = "type")]
+pub enum BrrSamplePitches {
+    #[serde(rename = "octave")]
+    Octaves {
+        #[serde(flatten)]
+        tuning: SampleTuning,
+
+        #[serde(rename = "first_octave")]
+        first: Octave,
+        #[serde(rename = "last_octave")]
+        last: Octave,
+    },
+    #[serde(rename = "notes")]
+    Notes {
+        #[serde(flatten)]
+        tuning: SampleTuning,
+
+        #[serde(rename = "first_note")]
+        first: Note,
+        #[serde(rename = "last_note")]
+        last: Note,
+    },
+    #[serde(rename = "sample_rates")]
+    SampleRates(Vec<u32>),
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+pub struct BrrSample {
+    pub name: Name,
+
+    pub source: BrrSampleSource,
+
+    #[serde(default)]
+    pub ignore_gaussian_overflow: bool,
+
+    #[serde(default)]
+    pub pitches: Option<BrrSamplePitches>,
+
+    pub envelope: Envelope,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub comment: String,
+}
+
+fn convert_old_source(
+    source: SourcePathBuf,
+    loop_setting: LoopSetting,
+    evaluator: BrrEvaluator,
+) -> BrrSampleSource {
+    match (source.extension(), loop_setting) {
+        (Some(BRR_EXTENSION), LoopSetting::None) => BrrSampleSource::BrrFile(BrrSource {
+            source,
+            loop_point: None,
+        }),
+        (Some(BRR_EXTENSION), LoopSetting::OverrideBrrLoopPoint(lp)) => {
+            BrrSampleSource::BrrFile(BrrSource {
+                source,
+                loop_point: Some(lp),
+            })
+        }
+        (_, loop_setting) => {
+            let (loop_point, loop_filter, dupe_block_hack) = match loop_setting {
+                LoopSetting::None => (None, None, None),
+                LoopSetting::OverrideBrrLoopPoint(lp) => {
+                    (Some(lp), Some(BrrLoopFilter::Reset), None)
+                }
+                LoopSetting::LoopWithFilter(lp) => (Some(lp), Some(BrrLoopFilter::Auto), None),
+                LoopSetting::LoopResetFilter(lp) => (Some(lp), Some(BrrLoopFilter::Reset), None),
+                LoopSetting::LoopFilter1(lp) => (Some(lp), Some(BrrLoopFilter::Filter1), None),
+                LoopSetting::LoopFilter2(lp) => (Some(lp), Some(BrrLoopFilter::Filter2), None),
+                LoopSetting::LoopFilter3(lp) => (Some(lp), Some(BrrLoopFilter::Filter3), None),
+                LoopSetting::DupeBlockHack(b) => {
+                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Auto), Some(b))
+                }
+                LoopSetting::DupeBlockHackFilter1(b) => {
+                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter1), Some(b))
+                }
+                LoopSetting::DupeBlockHackFilter2(b) => {
+                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter2), Some(b))
+                }
+                LoopSetting::DupeBlockHackFilter3(b) => {
+                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter3), Some(b))
+                }
+            };
+
+            BrrSampleSource::WaveFile(WaveSource {
+                source,
+                evaluator,
+                loop_point,
+                loop_filter,
+                dupe_block_hack,
+            })
+        }
+    }
+}
+
+impl From<Instrument> for BrrSample {
+    fn from(value: Instrument) -> Self {
+        Self {
+            name: value.name,
+            source: convert_old_source(value.source, value.loop_setting, value.evaluator),
+            ignore_gaussian_overflow: value.ignore_gaussian_overflow,
+            pitches: Some(match value.note_range {
+                InstrumentNoteRange::Octave { first, last } => BrrSamplePitches::Octaves {
+                    tuning: SampleTuning::Frequency(value.freq),
+                    first,
+                    last,
+                },
+                InstrumentNoteRange::Note { first, last } => BrrSamplePitches::Notes {
+                    tuning: SampleTuning::Frequency(value.freq),
+                    first,
+                    last,
+                },
+            }),
+            envelope: value.envelope,
+            comment: value.comment.unwrap_or_default(),
+        }
+    }
+}
+
+impl From<Sample> for BrrSample {
+    fn from(value: Sample) -> Self {
+        Self {
+            name: value.name,
+            source: convert_old_source(value.source, value.loop_setting, value.evaluator),
+            ignore_gaussian_overflow: value.ignore_gaussian_overflow,
+            pitches: Some(BrrSamplePitches::SampleRates(value.sample_rates)),
+            envelope: value.envelope,
+            comment: value.comment.unwrap_or_default(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
@@ -494,6 +727,7 @@ impl<T> UniqueNamesList<T> {
     }
 }
 
+// ::TODO remove::
 pub enum InstrumentOrSample {
     Instrument(Instrument),
     Sample(Sample),

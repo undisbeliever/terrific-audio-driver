@@ -8,12 +8,11 @@ use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedS
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
-    instrument_pitch, maximize_pitch_range, merge_pitch_vec, sample_pitch, sort_pitches_iterator,
-    InstrumentPitch, PitchTable, SamplePitches,
+    brr_sample_pitches, maximize_pitch_note_range, merge_pitch_vec, sort_pitches_iterator,
+    PitchTable, SamplePitches,
 };
 use crate::project::{
-    BrrEvaluator, Instrument, InstrumentNoteRange, InstrumentOrSample, LoopSetting, Sample,
-    UniqueNamesProjectFile,
+    self, Instrument, InstrumentNoteRange, InstrumentOrSample, Sample, UniqueNamesProjectFile,
 };
 
 use brr::{
@@ -117,103 +116,107 @@ impl SampleFileCache {
 }
 
 fn encode_wave_file(
-    source: &SourcePathBuf,
+    s: &project::WaveSource,
     cache: &mut SampleFileCache,
-    loop_setting: &LoopSetting,
-    evaluator: BrrEvaluator,
 ) -> Result<BrrSample, BrrError> {
-    let wav = match cache.load_wav_file(source) {
+    let wav = match cache.load_wav_file(&s.source) {
         Ok(w) => w,
         Err(e) => return Err(e.clone()),
     };
 
-    let (loop_point, dupe_block_hack, loop_filter) = match loop_setting {
-        LoopSetting::None => (None, None, None),
-        LoopSetting::OverrideBrrLoopPoint(_) => {
-            return Err(BrrError::InvalidLoopSettingWav(loop_setting.clone()))
-        }
-        &LoopSetting::LoopWithFilter(lp) => (Some(lp.into()), None, None),
-        &LoopSetting::LoopResetFilter(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter0)),
-        &LoopSetting::LoopFilter1(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter1)),
-        &LoopSetting::LoopFilter2(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter2)),
-        &LoopSetting::LoopFilter3(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter3)),
-        &LoopSetting::DupeBlockHack(dbh) => (None, Some(dbh.into()), None),
-        &LoopSetting::DupeBlockHackFilter1(dbh) => {
-            (None, Some(dbh.into()), Some(BrrFilter::Filter1))
-        }
-        &LoopSetting::DupeBlockHackFilter2(dbh) => {
-            (None, Some(dbh.into()), Some(BrrFilter::Filter2))
-        }
-        &LoopSetting::DupeBlockHackFilter3(dbh) => {
-            (None, Some(dbh.into()), Some(BrrFilter::Filter3))
-        }
+    let loop_filter = match s.loop_filter {
+        None => None,
+        Some(project::BrrLoopFilter::Reset) => Some(BrrFilter::Filter0),
+        Some(project::BrrLoopFilter::Auto) => None,
+        Some(project::BrrLoopFilter::Filter1) => Some(BrrFilter::Filter1),
+        Some(project::BrrLoopFilter::Filter2) => Some(BrrFilter::Filter2),
+        Some(project::BrrLoopFilter::Filter3) => Some(BrrFilter::Filter3),
+    };
+
+    // ::TODO allow loop offset and dupe_block_hack at the same time::
+    let loop_point = match (s.loop_point, s.dupe_block_hack) {
+        (Some(project::SampleNumber(0)), Some(_)) => None,
+        (Some(sn), _) => Some(sn.into()),
+        (None, _) => None,
     };
 
     match encode_brr(
         &wav.samples,
-        evaluator.to_evaluator(),
+        s.evaluator.to_evaluator(),
         loop_point,
-        dupe_block_hack,
+        s.dupe_block_hack.map(|o| o.into()),
         loop_filter,
     ) {
         Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrEncodeError(source.to_path_string(), e)),
+        Err(e) => Err(BrrError::BrrEncodeError(s.source.to_path_string(), e)),
     }
 }
 
 fn load_brr_file(
-    source: &SourcePathBuf,
+    s: &project::BrrSource,
     cache: &mut SampleFileCache,
-    loop_setting: &LoopSetting,
 ) -> Result<BrrSample, BrrError> {
-    let loop_point = match loop_setting {
-        LoopSetting::None => None,
-        LoopSetting::OverrideBrrLoopPoint(lp) => Some(*lp),
-
-        ls => return Err(BrrError::InvalidLoopSettingBrr(ls.clone())),
-    };
-
-    let brr = match cache.load_brr_file(source) {
+    let brr = match cache.load_brr_file(&s.source) {
         Ok(b) => b,
         Err(e) => return Err(e.clone()),
     };
 
-    match brr.clone().into_brr_sample(loop_point.map(|l| l.0.into())) {
+    match brr.clone().into_brr_sample(s.loop_point.map(|l| l.into())) {
         Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
-    }
-}
-
-// MUST NOT detect gaussian overflow here - used by tad-gui sample analyser.
-pub fn encode_or_load_brr_file(
-    source: &SourcePathBuf,
-    cache: &mut SampleFileCache,
-    loop_setting: &LoopSetting,
-    evaluator: BrrEvaluator,
-) -> Result<BrrSample, BrrError> {
-    match source.extension() {
-        Some(WAV_EXTENSION) => encode_wave_file(source, cache, loop_setting, evaluator),
-        Some(BRR_EXTENSION) => load_brr_file(source, cache, loop_setting),
-        _ => Err(BrrError::UnknownFileType(source.to_path_string())),
+        Err(e) => Err(BrrError::BrrParseError(s.source.to_path_string(), e)),
     }
 }
 
 #[derive(Clone)]
-pub struct SampleData<PitchT> {
+pub struct SampleData {
     brr_sample: BrrSample,
-    pitch: PitchT,
+    pitch: SamplePitches,
     adsr1: u8,
     adsr2_or_gain: u8,
 }
 
-impl<PitchT> SampleData<PitchT> {
+impl SampleData {
     pub fn sample_size(&self) -> usize {
         self.brr_sample.brr_data().len()
     }
 }
 
-pub type InstrumentSampleData = SampleData<InstrumentPitch>;
-pub type SampleSampleData = SampleData<SamplePitches>;
+pub fn compile_brr_sample(
+    input: &project::BrrSample,
+    cache: &mut SampleFileCache,
+) -> Result<SampleData, SampleError> {
+    let brr_sample = {
+        let mut s = match &input.source {
+            project::BrrSampleSource::WaveFile(s) => encode_wave_file(s, cache),
+            project::BrrSampleSource::BrrFile(s) => load_brr_file(s, cache),
+        };
+
+        if !input.ignore_gaussian_overflow
+            && s.as_ref()
+                .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+        {
+            s = Err(BrrError::GaussianOverflowDetected);
+        }
+        s
+    };
+
+    let pitch = brr_sample_pitches(input);
+
+    let envelope = input.envelope.engine_value();
+
+    match (brr_sample, pitch) {
+        (Ok(brr_sample), Ok(pitch)) => Ok(SampleData {
+            brr_sample,
+            pitch,
+            adsr1: envelope.0,
+            adsr2_or_gain: envelope.1,
+        }),
+        (b, p) => Err(SampleError {
+            brr_error: b.err(),
+            pitch_error: p.err(),
+        }),
+    }
+}
 
 pub trait CompiledDataList {
     type Item;
@@ -233,79 +236,27 @@ impl<T> CompiledDataList for [T] {
     }
 }
 
+// ::TODO remove::
 pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
-) -> Result<InstrumentSampleData, SampleError> {
-    let mut brr_sample =
-        encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting, inst.evaluator);
-
-    if !inst.ignore_gaussian_overflow
-        && brr_sample
-            .as_ref()
-            .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
-    {
-        brr_sample = Err(BrrError::GaussianOverflowDetected);
-    }
-
-    let pitch = instrument_pitch(inst);
-
-    let envelope = inst.envelope.engine_value();
-
-    match (brr_sample, pitch) {
-        (Ok(brr_sample), Ok(pitch)) => Ok(SampleData {
-            brr_sample,
-            pitch,
-            adsr1: envelope.0,
-            adsr2_or_gain: envelope.1,
-        }),
-        (b, p) => Err(SampleError {
-            brr_error: b.err(),
-            pitch_error: p.err(),
-        }),
-    }
+) -> Result<SampleData, SampleError> {
+    // Test new BrrSample compiler with old project data
+    compile_brr_sample(&inst.clone().into(), cache)
 }
 
+// ::TODO remove::
 pub fn load_sample_for_sample(
     sample: &Sample,
     cache: &mut SampleFileCache,
-) -> Result<SampleSampleData, SampleError> {
-    let mut brr_sample = encode_or_load_brr_file(
-        &sample.source,
-        cache,
-        &sample.loop_setting,
-        sample.evaluator,
-    );
-
-    if !sample.ignore_gaussian_overflow
-        && brr_sample
-            .as_ref()
-            .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
-    {
-        brr_sample = Err(BrrError::GaussianOverflowDetected);
-    }
-
-    let pitch = sample_pitch(sample);
-
-    let envelope = sample.envelope.engine_value();
-
-    match (brr_sample, pitch) {
-        (Ok(brr_sample), Ok(pitch)) => Ok(SampleData {
-            brr_sample,
-            pitch,
-            adsr1: envelope.0,
-            adsr2_or_gain: envelope.1,
-        }),
-        (b, p) => Err(SampleError {
-            brr_error: b.err(),
-            pitch_error: p.err(),
-        }),
-    }
+) -> Result<SampleData, SampleError> {
+    // Test new BrrSample compiler with old project data
+    compile_brr_sample(&sample.clone().into(), cache)
 }
 
 fn compile_samples(
     project: &UniqueNamesProjectFile,
-) -> Result<(Vec<InstrumentSampleData>, Vec<SampleSampleData>), Vec<TaggedSampleError>> {
+) -> Result<(Vec<SampleData>, Vec<SampleData>), Vec<TaggedSampleError>> {
     let mut errors = Vec::new();
 
     let mut cache = SampleFileCache::new(project.parent_path.clone());
@@ -346,8 +297,8 @@ struct BrrDirectory {
 
 // NOTE: Does not check the size of the directory.
 fn build_brr_directroy(
-    instruments: &(impl CompiledDataList<Item = InstrumentSampleData> + ?Sized),
-    samples: &(impl CompiledDataList<Item = SampleSampleData> + ?Sized),
+    instruments: &(impl CompiledDataList<Item = SampleData> + ?Sized),
+    samples: &(impl CompiledDataList<Item = SampleData> + ?Sized),
 ) -> BrrDirectory {
     let mut brr_data = Vec::new();
     let mut brr_directory_offsets = Vec::new();
@@ -409,10 +360,8 @@ impl SampleAndInstrumentData {
 /// Creates SampleAndInstrumentData without the first/last octave limits.
 ///
 /// Returns: sample data and the largest note that can be played by the sample.
-pub fn create_test_instrument_data(
-    sample: &InstrumentSampleData,
-) -> Option<(SampleAndInstrumentData, Note)> {
-    let (pitch, max_note) = maximize_pitch_range(&sample.pitch);
+pub fn create_test_instrument_data(sample: &SampleData) -> Option<(SampleAndInstrumentData, Note)> {
+    let (pitch, max_note) = maximize_pitch_note_range(&sample.pitch)?;
 
     let samples = [SampleData {
         pitch,
@@ -425,8 +374,8 @@ pub fn create_test_instrument_data(
 
 /// Panics if instrument/samples `data_iter().count()` != `expected_len()`.
 pub fn combine_samples(
-    instruments: &(impl CompiledDataList<Item = InstrumentSampleData> + ?Sized),
-    samples: &(impl CompiledDataList<Item = SampleSampleData> + ?Sized),
+    instruments: &(impl CompiledDataList<Item = SampleData> + ?Sized),
+    samples: &(impl CompiledDataList<Item = SampleData> + ?Sized),
 ) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {
     let total_len = instruments.expected_len() + samples.expected_len();
 
@@ -441,8 +390,10 @@ pub fn combine_samples(
     let brr = build_brr_directroy(instruments, samples);
 
     let sorted_pitches = sort_pitches_iterator(
-        instruments.data_iter().map(|s| s.pitch.clone()),
-        samples.data_iter().map(|s| s.pitch.clone()),
+        instruments
+            .data_iter()
+            .chain(samples.data_iter())
+            .map(|s| s.pitch.clone()),
     );
 
     let pitch_table = match merge_pitch_vec(sorted_pitches, total_len) {

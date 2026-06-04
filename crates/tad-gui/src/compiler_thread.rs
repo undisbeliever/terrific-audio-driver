@@ -6,7 +6,7 @@
 
 use crate::audio_thread::{AudioMessage, AudioThreadSongInterpreter, MusicChannelsMask, SiCad};
 use crate::names::NameGetter;
-use crate::sample_analyser::{self, FftSettings, SampleAnalysis};
+use crate::sample_analyser::{FftSettings, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
@@ -34,9 +34,8 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::project::{self, BrrEvaluator};
 use compiler::project::{DefaultSfxFlags, LoopSetting};
 use compiler::samples::{
-    combine_samples, create_test_instrument_data, encode_or_load_brr_file,
-    load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
-    SampleAndInstrumentData, SampleFileCache, SampleSampleData, WAV_EXTENSION,
+    combine_samples, create_test_instrument_data, load_sample_for_instrument,
+    load_sample_for_sample, CompiledDataList, SampleAndInstrumentData, SampleData, SampleFileCache,
 };
 use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
@@ -672,7 +671,7 @@ impl Sender {
 fn create_instrument_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &project::Instrument) -> Option<InstrumentSampleData>) + 'a {
+) -> impl (FnMut(ItemId, &project::Instrument) -> Option<SampleData>) + 'a {
     |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Instrument(
@@ -691,7 +690,7 @@ fn create_instrument_compiler<'a>(
 fn create_sample_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &project::Sample) -> Option<SampleSampleData>) + 'a {
+) -> impl (FnMut(ItemId, &project::Sample) -> Option<SampleData>) + 'a {
     |id, sample| match load_sample_for_sample(sample, sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Sample(id, Ok(SampleSize(s.sample_size()))));
@@ -705,7 +704,7 @@ fn create_sample_compiler<'a>(
 }
 
 fn build_play_instrument_data(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
+    instruments: &CList<project::Instrument, Option<SampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(Box<CommonAudioData>, SongData)> {
@@ -731,7 +730,7 @@ fn build_play_instrument_data(
 }
 
 fn build_play_sample_data(
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
+    samples: &CList<project::Sample, Option<SampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(Box<CommonAudioData>, SongData)> {
@@ -753,8 +752,8 @@ fn build_play_sample_data(
 }
 
 fn instrument_and_sample_names(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
+    instruments: &CList<project::Instrument, Option<SampleData>>,
+    samples: &CList<project::Sample, Option<SampleData>>,
 ) -> Arc<InstrumentAndSampleNames> {
     let i_names = instruments.items().iter().map(|inst| inst.name.clone());
     let s_names = samples.items().iter().map(|s| s.name.clone());
@@ -898,8 +897,8 @@ impl SongDependencies {
 }
 
 fn build_cad_no_sfx_and_song_dependencies(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
+    instruments: &CList<project::Instrument, Option<SampleData>>,
+    samples: &CList<project::Sample, Option<SampleData>>,
     instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_export_order: &GuiSfxExportOrder,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
@@ -1387,6 +1386,7 @@ fn calculate_tick_song_driver_state(
     ));
 }
 
+#[expect(unused_variables)]
 fn analyse_sample(
     cache: &mut SampleFileCache,
     source: SourcePathBuf,
@@ -1394,6 +1394,11 @@ fn analyse_sample(
     evaluator: BrrEvaluator,
     fft_settings: FftSettings,
 ) -> Result<SampleAnalysis, BrrError> {
+    // ::TODO implement::
+    // Temporally disabled until the GUI is updated to the new project format::
+    Err(BrrError::UnknownFileType(source.to_path_string()))
+
+    /*
     let brr_sample = Arc::new(encode_or_load_brr_file(
         &source,
         cache,
@@ -1414,11 +1419,12 @@ fn analyse_sample(
         wav_sample,
         fft_settings,
     ))
+    */
 }
 
 fn compile_all_samples(
-    instruments: &mut CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &mut CList<project::Sample, Option<SampleSampleData>>,
+    instruments: &mut CList<project::Instrument, Option<SampleData>>,
+    samples: &mut CList<project::Sample, Option<SampleData>>,
     sample_file_cache: &mut SampleFileCache,
     sender: &Sender,
 ) {

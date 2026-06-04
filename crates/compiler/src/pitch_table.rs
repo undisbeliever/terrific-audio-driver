@@ -13,8 +13,8 @@ use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
-use crate::project::InstrumentNoteRange;
-use crate::project::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
+use crate::project::BrrSample;
+use crate::project::{BrrSamplePitches, Instrument, InstrumentOrSample, UniqueNamesList};
 use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
 
@@ -66,9 +66,48 @@ pub struct InstrumentPitch {
 }
 
 #[derive(Clone)]
-pub struct SamplePitches {
+pub struct SampleRates {
     pitches: Vec<u16>,
     note_range: RangeInclusive<Note>,
+}
+
+#[derive(Clone)]
+pub enum SamplePitches {
+    Notes(InstrumentPitch),
+    SampleRates(SampleRates),
+}
+
+pub(crate) fn brr_sample_pitches(input: &BrrSample) -> Result<SamplePitches, PitchError> {
+    match &input.pitches {
+        Some(BrrSamplePitches::Octaves {
+            tuning,
+            first,
+            last,
+        }) => {
+            if first <= last {
+                note_pitches(
+                    tuning.frequency(),
+                    Note::first_note_for_octave(*first)..=Note::last_note_for_octave(*last),
+                    true,
+                )
+            } else {
+                Err(PitchError::FirstOctaveGreaterThanLastOctave)
+            }
+        }
+        Some(BrrSamplePitches::Notes {
+            tuning,
+            first,
+            last,
+        }) => {
+            if first <= last {
+                note_pitches(tuning.frequency(), *first..=*last, false)
+            } else {
+                Err(PitchError::FirstNoteGreaterThanLastNote)
+            }
+        }
+        Some(BrrSamplePitches::SampleRates(sr)) => sample_pitches(sr),
+        None => Err(PitchError::NoNotes),
+    }
 }
 
 // Calculates the maximum number of semitones a sample can be incremented by.
@@ -85,34 +124,24 @@ fn maximum_semitone_increment(microsemitones: i32) -> i32 {
     (max_microsemitones_playback + microsemitones) / MICROSEMITONE_SCALE
 }
 
-pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
-    if inst.freq < MIN_SAMPLE_FREQ {
+fn note_pitches(
+    freq: f64,
+    note_range: RangeInclusive<Note>,
+    octave_tuning: bool,
+) -> Result<SamplePitches, PitchError> {
+    if freq < MIN_SAMPLE_FREQ {
         return Err(PitchError::SampleRateTooLow);
     }
 
-    if inst.freq > MAX_SAMPLE_FREQ {
+    if freq > MAX_SAMPLE_FREQ {
         return Err(PitchError::SampleRateTooHigh);
     }
 
-    let note_range = match inst.note_range {
-        InstrumentNoteRange::Octave { first, last } => {
-            if first > last {
-                return Err(PitchError::FirstOctaveGreaterThanLastOctave);
-            }
-            Note::first_note_for_octave(first)..=Note::last_note_for_octave(last)
-        }
-        InstrumentNoteRange::Note { first, last } => {
-            if first > last {
-                return Err(PitchError::FirstNoteGreaterThanLastNote);
-            }
-            first..=last
-        }
-    };
+    assert!(!note_range.is_empty());
     let first_semitone = note_range.start().i32_note_id();
     let last_semitone = note_range.end().i32_note_id();
 
-    let mst_above_c0 =
-        f64::log2(inst.freq / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET;
+    let mst_above_c0 = f64::log2(freq / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET;
 
     assert!(
         f64::log2(MAX_SAMPLE_FREQ / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET
@@ -134,21 +163,21 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
     let last_semitone_valid = max_semitone_offset <= maximum_semitone_increment;
 
     if first_semitone_valid && last_semitone_valid {
-        Ok(InstrumentPitch {
+        Ok(SamplePitches::Notes(InstrumentPitch {
             microsemitones,
             semitones_above_c0,
             min_semitone_offset,
             max_semitone_offset,
             note_range,
-        })
+        }))
     } else {
         const SEMITONES_PER_OCTAVE: u8 = notes::SEMITONES_PER_OCTAVE;
 
         let valid_notes = Note::from_i32_clamp(semitones_above_c0 + MIN_MIN_SEMITONE_OFFSET)
             ..=Note::from_i32_clamp(semitones_above_c0 + maximum_semitone_increment);
 
-        match inst.note_range {
-            InstrumentNoteRange::Octave { .. } => {
+        match octave_tuning {
+            true => {
                 let valid_octaves = valid_notes.start().note_id().div_ceil(SEMITONES_PER_OCTAVE)
                     ..=((valid_notes.end().note_id() - notes::SEMITONES_PER_OCTAVE + 1)
                         / SEMITONES_PER_OCTAVE);
@@ -161,8 +190,40 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
                     )),
                 }
             }
-            InstrumentNoteRange::Note { .. } => Err(PitchError::InvalidNoteRange(valid_notes)),
+            false => Err(PitchError::InvalidNoteRange(valid_notes)),
         }
+    }
+}
+
+fn sample_pitches(sample_rates: &[u32]) -> Result<SamplePitches, PitchError> {
+    if sample_rates.is_empty() {
+        return Err(PitchError::NoSampleRatesInSample);
+    }
+    if sample_rates.len() > Note::MAX.note_id().into() {
+        return Err(PitchError::TooManySampleRatesInSample);
+    }
+
+    let mut invalid_sample_rates = Vec::new();
+    let mut pitches = Vec::with_capacity(sample_rates.len());
+
+    for sample_rate in sample_rates.iter().copied() {
+        let pitch = u64::from(sample_rate) * u64::from(PITCH_REGISTER_FP_SCALE)
+            / u64::from(SPC_SAMPLE_RATE);
+
+        if pitch <= u64::from(PITCH_REGISTER_MAX) {
+            pitches.push(pitch.try_into().unwrap());
+        } else {
+            invalid_sample_rates.push(sample_rate);
+        }
+    }
+
+    if invalid_sample_rates.is_empty() {
+        Ok(SamplePitches::SampleRates(SampleRates {
+            note_range: Note::MIN..=Note::from_note_id_usize(pitches.len() - 1).unwrap(),
+            pitches,
+        }))
+    } else {
+        Err(PitchError::InvalidSampleRates(invalid_sample_rates))
     }
 }
 
@@ -171,7 +232,12 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
 /// Used by the play-sample feature of the GUI.
 ///
 /// Returns: a new `InstrumentPitch` and the largest note that can be played with `pitch`.
-pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch, Note) {
+pub(crate) fn maximize_pitch_note_range(pitch: &SamplePitches) -> Option<(SamplePitches, Note)> {
+    let pitch = match pitch {
+        SamplePitches::Notes(p) => p,
+        SamplePitches::SampleRates(_) => return None,
+    };
+
     let maximum_semitone_increment = maximum_semitone_increment(pitch.microsemitones);
 
     let max_semitone = (pitch.semitones_above_c0 + maximum_semitone_increment)
@@ -191,33 +257,33 @@ pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch,
         max_semitone_offset,
     };
 
-    (new_pitch, max_note)
+    Some((SamplePitches::Notes(new_pitch), max_note))
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
 pub(crate) struct SortedPitches {
     instruments: Vec<(usize, InstrumentPitch)>,
-    samples: Vec<(usize, SamplePitches)>,
+    samples: Vec<(usize, SampleRates)>,
 }
 
-/// Assumes `pv` iterator outputs all instruments in the correct order.
-pub(crate) fn sort_pitches_iterator(
-    instruments: impl Iterator<Item = InstrumentPitch>,
-    samples: impl Iterator<Item = SamplePitches>,
-) -> SortedPitches {
-    let instruments: Vec<(usize, InstrumentPitch)> = instruments.enumerate().collect();
+/// Assumes `pv` iterator outputs all samples in the correct order.
+pub(crate) fn sort_pitches_iterator(it: impl Iterator<Item = SamplePitches>) -> SortedPitches {
+    let mut instruments: Vec<(usize, InstrumentPitch)> = Vec::with_capacity(it.size_hint().0);
+    let mut samples: Vec<(usize, SampleRates)> = Vec::with_capacity(it.size_hint().0);
 
-    let samples = samples
-        .enumerate()
-        .map(|(i, p)| (i + instruments.len(), p))
-        .collect();
+    for (i, p) in it.enumerate() {
+        match p {
+            SamplePitches::Notes(n) => instruments.push((i, n)),
+            SamplePitches::SampleRates(sr) => samples.push((i, sr)),
+        }
+    }
 
     sort_pitches_vec(instruments, samples)
 }
 
 fn sort_pitches_vec(
     mut instruments: Vec<(usize, InstrumentPitch)>,
-    samples: Vec<(usize, SamplePitches)>,
+    samples: Vec<(usize, SampleRates)>,
 ) -> SortedPitches {
     // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
     instruments.sort_by_key(|(_, p)| p.microsemitones);
@@ -227,41 +293,8 @@ fn sort_pitches_vec(
     }
 }
 
-pub fn sample_pitch(sample: &Sample) -> Result<SamplePitches, PitchError> {
-    if sample.sample_rates.is_empty() {
-        return Err(PitchError::NoSampleRatesInSample);
-    }
-    if sample.sample_rates.len() > Note::MAX.note_id().into() {
-        return Err(PitchError::TooManySampleRatesInSample);
-    }
-
-    let mut invalid_sample_rates = Vec::new();
-    let mut pitches = Vec::with_capacity(sample.sample_rates.len());
-
-    for sample_rate in &sample.sample_rates {
-        let sample_rate = *sample_rate;
-
-        let pitch = u64::from(sample_rate) * u64::from(PITCH_REGISTER_FP_SCALE)
-            / u64::from(SPC_SAMPLE_RATE);
-
-        if pitch <= u64::from(PITCH_REGISTER_MAX) {
-            pitches.push(pitch.try_into().unwrap());
-        } else {
-            invalid_sample_rates.push(sample_rate);
-        }
-    }
-
-    if invalid_sample_rates.is_empty() {
-        Ok(SamplePitches {
-            note_range: Note::MIN..=Note::from_note_id_usize(pitches.len() - 1).unwrap(),
-            pitches,
-        })
-    } else {
-        Err(PitchError::InvalidSampleRates(invalid_sample_rates))
-    }
-}
-
 fn inst_pitch_vec(
+    // ::TODO change to UniqueNamesList<BrrSamples>::
     instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
 ) -> Result<SortedPitches, PitchTableError> {
     let mut instruments = Vec::with_capacity(instruments_and_samples.len());
@@ -269,16 +302,18 @@ fn inst_pitch_vec(
 
     let mut errors = Vec::new();
 
-    for (i, inst) in instruments_and_samples.list().iter().enumerate() {
-        match inst {
-            InstrumentOrSample::Instrument(inst) => match instrument_pitch(inst) {
-                Ok(ip) => instruments.push((i, ip)),
-                Err(e) => errors.push((i, inst.name.clone(), e)),
-            },
-            InstrumentOrSample::Sample(sample) => match sample_pitch(sample) {
-                Ok(sp) => samples.push((i, sp)),
-                Err(e) => errors.push((i, sample.name.clone(), e)),
-            },
+    for (i, s) in instruments_and_samples.list().iter().enumerate() {
+        // Convert old project data to new format to test pitch table converter
+        // ::TODO remove::
+        let s = match s {
+            InstrumentOrSample::Instrument(i) => i.clone().into(),
+            InstrumentOrSample::Sample(s) => s.clone().into(),
+        };
+
+        match brr_sample_pitches(&s) {
+            Ok(SamplePitches::Notes(n)) => instruments.push((i, n)),
+            Ok(SamplePitches::SampleRates(sr)) => samples.push((i, sr)),
+            Err(e) => errors.push((i, s.name.clone(), e)),
         }
     }
 
