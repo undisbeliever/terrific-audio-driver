@@ -30,6 +30,11 @@ opt-level = 3
 opt-level = 3
 
 
+# Significantly speed up test_bc_interpreter in the debug build
+[profile.dev.package.shvc-sound-emu]
+opt-level = 2
+
+
 [workspace.package]
 rust-version = "1.85"
 
