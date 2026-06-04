@@ -440,7 +440,7 @@ pub struct Song {
 
 /// A small struct that documents (in the project file) what the project file is and the tad-gui
 /// version used to create the project file.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, PartialEq)]
 pub struct About {
     pub version: String,
 }
@@ -457,7 +457,7 @@ impl Serialize for About {
     }
 }
 
-#[derive(Deserialize, Serialize, Default, Debug)]
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
 pub struct Project {
     #[serde(default, rename = "_about")]
     pub about: About,

@@ -67,6 +67,12 @@ impl SourcePathBuf {
         }
     }
 
+    pub fn new_from_str(rp: &str) -> Self {
+        Self {
+            relative_path: rp.into(),
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         self.relative_path.as_str()
     }
