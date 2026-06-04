@@ -4,8 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::data::{load_text_file_with_limit, Name, TextFile};
+use crate::data::{load_text_file_with_limit, TextFile};
 use crate::errors::FileError;
+use crate::identifier::Name;
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::sound_effects::{SfxFlags, SfxSubroutinesMml, SoundEffectInput, SoundEffectText};
 

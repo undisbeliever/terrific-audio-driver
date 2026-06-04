@@ -11,13 +11,14 @@ use clap::{Args, Parser, Subcommand};
 use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{
-        is_name_or_id, load_text_file_with_limit, load_text_file_with_limit_path, Name, Song,
-        TextFile, UniqueNamesProjectFile,
+        load_text_file_with_limit, load_text_file_with_limit_path, Song, TextFile,
+        UniqueNamesProjectFile,
     },
     export::{
         bin_include_path, AsarExporter, AsarMemoryMap, Ca65Exporter, Ca65MemoryMap, Exporter,
         MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
     },
+    identifier::{is_name_or_id, Name},
     mml::MmlTickCountTable,
     pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,

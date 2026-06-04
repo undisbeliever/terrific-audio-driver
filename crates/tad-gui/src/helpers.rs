@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::notes::Note;
-use compiler::{data::Name, envelope::Adsr, envelope::Gain, notes::Octave};
+use compiler::{envelope::Adsr, envelope::Gain, identifier::Name, notes::Octave};
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Event, Key};

@@ -18,8 +18,9 @@ use crate::tabs::{FileType, Tab};
 use crate::{helpers::*, ProjectSongsData};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
-use compiler::data::{DefaultSfxFlags, Name};
+use compiler::data::DefaultSfxFlags;
 use compiler::errors::SfxErrorLines;
+use compiler::identifier::Name;
 use compiler::sfx_file::SoundEffectsFile;
 use compiler::sound_effects::{
     SfxExportOrder, SfxFlags, SfxSubroutinesMml, SoundEffectInput, SoundEffectText,

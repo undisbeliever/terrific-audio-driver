@@ -4,11 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::data::Name;
-use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::IdentifierError;
+use serde::{Deserialize, Serialize};
 
+use crate::driver_constants::N_MUSIC_CHANNELS;
+use crate::errors::{IdentifierError, ValueError};
+
+use std::fmt::Display;
 use std::ops::RangeInclusive;
+use std::str::FromStr;
 
 pub const FIRST_MUSIC_CHANNEL: char = 'A';
 pub const LAST_MUSIC_CHANNEL: char = 'H';
@@ -122,5 +125,102 @@ impl IdentifierBuf {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[serde(try_from = "String")]
+pub struct Name(String);
+
+pub fn is_name_or_id(s: &str) -> bool {
+    s.bytes()
+        .all(|b| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'))
+}
+
+impl Name {
+    fn is_name_char(c: char) -> bool {
+        matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_')
+    }
+
+    pub fn is_valid_name(s: &str) -> bool {
+        let mut iter = s.bytes();
+
+        // first character
+        if let Some(b) = iter.next() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'_' => {}
+                _ => return false,
+            }
+        }
+
+        for b in iter {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {}
+                _ => return false,
+            }
+        }
+
+        true
+    }
+
+    pub fn try_new(s: String) -> Result<Self, ValueError> {
+        if Self::is_valid_name(&s) {
+            Ok(Self(s))
+        } else {
+            Err(ValueError::InvalidName(s))
+        }
+    }
+
+    pub fn try_new_lossy(s: String) -> Option<Self> {
+        if !s.is_empty() {
+            Some(Self::new_lossy(s))
+        } else {
+            None
+        }
+    }
+
+    pub fn new_lossy(s: String) -> Self {
+        if s.is_empty() {
+            Self("_".to_owned())
+        } else {
+            let mut s = s.replace(|c| !Self::is_name_char(c), "_");
+            if let Some(c) = s.chars().next() {
+                if c.is_ascii_digit() {
+                    s.replace_range(0..0, "_");
+                }
+            }
+
+            Self(s)
+        }
+    }
+
+    pub fn take_string(self) -> String {
+        self.0
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for Name {
+    type Error = ValueError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::try_new(s)
+    }
+}
+
+impl FromStr for Name {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_new(s.to_owned())
+    }
+}
+
+impl Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

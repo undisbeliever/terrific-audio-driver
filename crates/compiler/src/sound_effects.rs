@@ -14,7 +14,7 @@ use crate::command_compiler::commands::{CommandWithPos, LoopAnalysis, SoundEffec
 use crate::command_compiler::parsers::parse_bytecode_asm_instruction;
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
-    DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
+    DefaultSfxFlags, InstrumentOrSample, UniqueNamesList, UniqueSoundEffectExportOrder,
 };
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
@@ -26,7 +26,7 @@ use crate::errors::{
     SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_pos, split_lines};
-use crate::identifier::ChannelId;
+use crate::identifier::{ChannelId, Name};
 use crate::mml::{self, CommandTickTracker, CursorTracker, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;

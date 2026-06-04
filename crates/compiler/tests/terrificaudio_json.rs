@@ -7,9 +7,10 @@
 use compiler::{
     data::{
         About, BlockNumber, BrrEvaluator, DefaultSfxFlags, Instrument, InstrumentNoteRange,
-        LoopSetting, Name, Project, Sample, SampleNumber, Song,
+        LoopSetting, Project, Sample, SampleNumber, Song,
     },
     envelope::{Adsr, Envelope, Gain},
+    identifier::Name,
     notes::Note,
     path::SourcePathBuf,
 };

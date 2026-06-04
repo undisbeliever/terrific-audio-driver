@@ -66,6 +66,7 @@ use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SharedSongInte
 use compiler::data;
 use compiler::data::{DefaultSfxFlags, ProjectFile};
 use compiler::driver_constants;
+use compiler::identifier::Name;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
 use compiler::songs::SongData;
@@ -157,7 +158,7 @@ pub enum GuiMessage {
     AddMissingSoundEffects,
 
     AddSongToProjectDialog,
-    SetProjectSongName(usize, data::Name),
+    SetProjectSongName(usize, Name),
 
     ShowSampleSizes,
 

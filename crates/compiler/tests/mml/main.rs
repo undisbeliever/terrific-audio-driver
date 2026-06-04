@@ -34,13 +34,14 @@ mod vibrato;
 mod volume_pan;
 
 use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
-use compiler::data::{Name, SampleNumber, UniqueNamesList};
+use compiler::data::{SampleNumber, UniqueNamesList};
 use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
+use compiler::identifier::Name;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,

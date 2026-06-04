@@ -12,7 +12,8 @@ use crate::names::{
 use crate::GuiMessage;
 use crate::{sfx_export_order, tables};
 
-use compiler::data::Name;
+use compiler::identifier::Name;
+
 use fltk::button::Button;
 use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};

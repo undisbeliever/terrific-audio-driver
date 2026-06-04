@@ -13,7 +13,7 @@ use crate::command_compiler::analysis::TransposeStartRange;
 use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::{ChannelCommands, MmlInstrument};
 use crate::command_compiler::subroutines::subroutine_compile_order;
-use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
+use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,
     MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK,
@@ -23,7 +23,7 @@ use crate::driver_constants::{
 use crate::echo::{EchoBuffer, EchoEdl};
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
-use crate::identifier::{ChannelId, MusicChannelIndex};
+use crate::identifier::{ChannelId, MusicChannelIndex, Name};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::Note;
 use crate::pitch_table::PitchTable;
@@ -615,7 +615,7 @@ fn calc_song_duration(
 pub fn compile_mml_song(
     mml: &str,
     file_name: &str,
-    song_name: Option<data::Name>,
+    song_name: Option<Name>,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {

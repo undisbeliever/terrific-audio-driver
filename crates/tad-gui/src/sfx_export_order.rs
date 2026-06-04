@@ -13,8 +13,8 @@ use crate::names::{deduplicate_item_name, deduplicate_names};
 use crate::tables::{SimpleRow, TableEvent};
 use crate::GuiMessage;
 
-use compiler::data::Name;
 use compiler::driver_constants::MAX_SOUND_EFFECTS;
+use compiler::identifier::Name;
 use compiler::sound_effects::SfxExportOrder;
 
 use fltk::app::Sender;

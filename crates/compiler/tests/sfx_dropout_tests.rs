@@ -11,11 +11,12 @@ use std::sync::OnceLock;
 
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
-use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument, Name};
+use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument};
 use compiler::driver_constants::{
     addresses, io_commands, AudioMode, FIRST_SFX_CHANNEL, N_SFX_CHANNELS,
 };
 use compiler::envelope::{Envelope, Gain};
+use compiler::identifier::Name;
 use compiler::notes::Octave;
 use compiler::samples::combine_samples;
 use compiler::sound_effects::{

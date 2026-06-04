@@ -30,7 +30,7 @@ use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES};
 use crate::errors::{
     MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError, SoundEffectErrorList,
 };
-use crate::identifier::{ChannelId, IdentifierStr, MusicChannelIndex};
+use crate::identifier::{ChannelId, IdentifierStr, MusicChannelIndex, Name};
 use crate::mml::command_parser::parse_mml_tokens;
 use crate::pitch_table::PitchTable;
 use crate::songs::SongData;
@@ -116,7 +116,7 @@ fn parse_subroutines<'a>(
 pub(crate) fn parse_mml_song<'a>(
     mml: &'a str,
     file_name: &str,
-    song_name: Option<data::Name>,
+    song_name: Option<Name>,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> Result<(SongCommands<'a>, MmlCompileErrors), SongError> {
     let mut errors = MmlCompileErrors {

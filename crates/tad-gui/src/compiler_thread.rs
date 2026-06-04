@@ -29,7 +29,7 @@ use compiler::errors::{
     self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
-use compiler::identifier::ChannelId;
+use compiler::identifier::{ChannelId, Name};
 use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
@@ -214,10 +214,10 @@ pub enum CompilerOutput {
 }
 
 #[derive(Debug, Default)]
-pub struct InstrumentAndSampleNames(Vec<data::Name>);
+pub struct InstrumentAndSampleNames(Vec<Name>);
 
 impl InstrumentAndSampleNames {
-    pub fn get(&self, index: usize) -> Option<&data::Name> {
+    pub fn get(&self, index: usize) -> Option<&Name> {
         self.0.get(index)
     }
 }
@@ -468,7 +468,7 @@ struct CList<ItemT, OutT> {
     items: Vec<ItemT>,
     output: Vec<OutT>,
     map: HashMap<ItemId, usize>,
-    name_map: HashMap<data::Name, usize>,
+    name_map: HashMap<Name, usize>,
 }
 
 impl<ItemT, OutT> CList<ItemT, OutT>
@@ -489,7 +489,7 @@ where
         &self.items
     }
 
-    fn get_output_for_name(&self, name: &data::Name) -> Option<&OutT> {
+    fn get_output_for_name(&self, name: &Name) -> Option<&OutT> {
         self.name_map.get(name).and_then(|i| self.output.get(*i))
     }
 
@@ -497,7 +497,7 @@ where
         self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
-    fn name_map(&self) -> &HashMap<data::Name, usize> {
+    fn name_map(&self) -> &HashMap<Name, usize> {
         &self.name_map
     }
 
@@ -981,7 +981,7 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
         self.output.is_empty()
     }
 
-    fn get(&self, name: &data::Name) -> Option<&CompiledSoundEffect> {
+    fn get(&self, name: &Name) -> Option<&CompiledSoundEffect> {
         self.get_output_for_name(name)?.as_deref()
     }
 }
@@ -1049,7 +1049,7 @@ impl SongCompiler {
     // (so the size can be retested when the sound effects are changed)
     fn compile_song(
         id: ItemId,
-        name: Option<&data::Name>,
+        name: Option<&Name>,
         f: &TextFile,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,

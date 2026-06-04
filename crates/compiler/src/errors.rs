@@ -19,7 +19,7 @@ use crate::command_compiler::channel_bc_generator::MAX_NO_LOOP_TICKS;
 use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
-use crate::data::{LoopSetting, Name};
+use crate::data::LoopSetting;
 use crate::driver_constants::{
     addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
@@ -30,7 +30,7 @@ use crate::echo::{
 };
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
-use crate::identifier::IdentifierBuf;
+use crate::identifier::{IdentifierBuf, Name};
 use crate::mml::{
     MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE, PX_PAN_RANGE,
 };

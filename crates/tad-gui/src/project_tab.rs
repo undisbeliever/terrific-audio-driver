@@ -16,8 +16,8 @@ use crate::GuiMessage;
 use crate::{helpers::*, ProjectData};
 
 use compiler::common_audio_data::CommonAudioData;
-use compiler::data::Name;
 use compiler::data::{self, DefaultSfxFlags};
+use compiler::identifier::Name;
 use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize, SongData};
 

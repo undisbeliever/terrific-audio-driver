@@ -7,7 +7,7 @@
 use crate::compiler_thread::ItemId;
 
 use compiler::data;
-use compiler::data::Name;
+use compiler::identifier::Name;
 use compiler::sound_effects::SoundEffectInput;
 
 pub trait NameGetter {
