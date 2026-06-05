@@ -16,8 +16,8 @@ use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 use crate::{helpers::*, InstrumentsAndSamplesData};
 
-use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrumentWidget};
-use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
+use crate::instrument_editor::InstrumentMapping;
+use crate::sample_editor::SampleMapping;
 
 use compiler::project::{self, Instrument};
 use compiler::songs::SongAramSize;
@@ -28,7 +28,6 @@ use std::rc::Rc;
 
 use fltk::app;
 use fltk::enums::Color;
-use fltk::frame::Frame;
 use fltk::group::{Flex, Wizard};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
@@ -36,8 +35,6 @@ use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 #[derive(PartialEq)]
 enum SelectedEditor {
     CombinedSamplesResult,
-    Instrument(ItemId),
-    Sample(ItemId),
 }
 
 pub struct SamplesTab {
@@ -54,14 +51,6 @@ pub struct SamplesTab {
 
     sample_sizes_group: Flex,
     sample_sizes_widget: Rc<RefCell<SampleSizesWidget>>,
-
-    instrument_group: Flex,
-    instrument_editor: Rc<RefCell<InstrumentEditor>>,
-    test_instrument_widget: Rc<RefCell<TestInstrumentWidget>>,
-
-    sample_group: Flex,
-    sample_editor: Rc<RefCell<SampleEditor>>,
-    test_sample_widget: Rc<RefCell<TestSampleWidget>>,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -112,41 +101,6 @@ impl SamplesTab {
             SampleSizesWidget::new(&mut sample_sizes_group, instruments_and_samples);
         sample_sizes_group.end();
 
-        let mut instrument_group = Flex::default().column().size_of_parent();
-        instrument_group.set_margin(margin);
-
-        let (instrument_editor, se_height) = InstrumentEditor::new(sender);
-        instrument_group.fixed(instrument_editor.borrow().widget(), se_height + group.pad());
-
-        let test_instrument_widget = {
-            let mut ts_flex = Flex::default().row();
-            Frame::default();
-            let test_instrument_widget = TestInstrumentWidget::new(sender);
-            Frame::default();
-            ts_flex.end();
-
-            {
-                let tsw = test_instrument_widget.borrow();
-                let ts_group = tsw.widget();
-                ts_flex.fixed(ts_group, ts_group.width());
-                instrument_group.fixed(&ts_flex, ts_group.height());
-            }
-
-            test_instrument_widget
-        };
-
-        instrument_group.end();
-
-        let mut sample_group = Flex::default().column().size_of_parent();
-        sample_group.set_margin(margin);
-
-        let (sample_editor, se_height) = SampleEditor::new(sender);
-        sample_group.fixed(sample_editor.borrow().widget(), se_height + group.pad());
-
-        let test_sample_widget = TestSampleWidget::new(sender);
-
-        sample_group.end();
-
         editor_wizard.end();
 
         let mut console = TextDisplay::default();
@@ -176,12 +130,6 @@ impl SamplesTab {
             inst_table,
             sample_table,
             editor_wizard,
-            instrument_group,
-            instrument_editor,
-            test_instrument_widget,
-            sample_group,
-            sample_editor,
-            test_sample_widget,
             console,
             console_buffer,
         }
@@ -235,8 +183,6 @@ impl SamplesTab {
 
         match &self.selected_editor {
             SelectedEditor::CombinedSamplesResult => self.update_sample_sizes_widget_and_console(),
-            SelectedEditor::Instrument(_) => (),
-            SelectedEditor::Sample(_) => (),
         }
     }
 
@@ -247,9 +193,6 @@ impl SamplesTab {
     pub fn show_sample_sizes_widget(&mut self) {
         self.inst_table.clear_selected_row();
         self.sample_table.clear_selected_row();
-
-        self.sample_editor.borrow_mut().disable_editor();
-        self.test_sample_widget.borrow_mut().clear_selected();
 
         if !matches!(self.selected_editor, SelectedEditor::CombinedSamplesResult) {
             self.selected_editor = SelectedEditor::CombinedSamplesResult;
@@ -279,68 +222,6 @@ impl SamplesTab {
             }
         }
     }
-
-    fn selected_instrument_output_changed(&mut self, compiler_output: &Option<InstrumentOutput>) {
-        self.test_instrument_widget
-            .borrow_mut()
-            .set_active(matches!(compiler_output, Some(Ok(_))));
-
-        match compiler_output {
-            None => {
-                self.console_buffer.set_text("");
-            }
-            Some(Ok(o)) => {
-                self.console_buffer
-                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
-                self.console.set_text_color(Color::Foreground);
-            }
-            Some(Err(errors)) => {
-                let mut text = "ERROR:".to_owned();
-
-                if let Some(e) = &errors.brr_error {
-                    text += &format!("\n\t{}", e)
-                }
-                if let Some(e) = &errors.pitch_error {
-                    text += &format!("\n\t{}", e)
-                }
-
-                self.console_buffer.set_text(&text);
-                self.console.set_text_color(Color::Red);
-                self.console.scroll(0, 0);
-            }
-        }
-    }
-
-    fn selected_sample_output_changed(&mut self, compiler_output: &Option<SampleOutput>) {
-        self.test_sample_widget
-            .borrow_mut()
-            .set_active(matches!(compiler_output, Some(Ok(_))));
-
-        match compiler_output {
-            None => {
-                self.console_buffer.set_text("");
-            }
-            Some(Ok(o)) => {
-                self.console_buffer
-                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
-                self.console.set_text_color(Color::Foreground);
-            }
-            Some(Err(errors)) => {
-                let mut text = "ERROR:".to_owned();
-
-                if let Some(e) = &errors.brr_error {
-                    text += &format!("\n\t{}", e)
-                }
-                if let Some(e) = &errors.pitch_error {
-                    text += &format!("\n\t{}", e)
-                }
-
-                self.console_buffer.set_text(&text);
-                self.console.set_text_color(Color::Red);
-                self.console.scroll(0, 0);
-            }
-        }
-    }
 }
 
 impl ListWithCompilerOutputEditor<Instrument, InstrumentOutput> for SamplesTab {
@@ -356,24 +237,17 @@ impl ListWithCompilerOutputEditor<Instrument, InstrumentOutput> for SamplesTab {
             .instrument_edited(action);
     }
 
-    fn item_edited(&mut self, id: ItemId, value: &Instrument) {
-        self.instrument_editor.borrow_mut().item_edited(id, value)
-    }
+    fn item_edited(&mut self, _id: ItemId, _value: &Instrument) {}
 
     fn set_compiler_output(
         &mut self,
         index: usize,
-        id: ItemId,
+        _id: ItemId,
         compiler_output: &Option<InstrumentOutput>,
     ) {
         self.sample_sizes_widget
             .borrow_mut()
             .instrument_compiled(index, compiler_output);
-
-        let sel_id = self.instrument_editor.borrow().selected_id();
-        if sel_id == Some(id) {
-            self.selected_instrument_output_changed(compiler_output);
-        }
     }
 
     fn selected_item_changed(
@@ -381,25 +255,11 @@ impl ListWithCompilerOutputEditor<Instrument, InstrumentOutput> for SamplesTab {
         instruments: &ListWithCompilerOutput<Instrument, InstrumentOutput>,
     ) {
         match instruments.get_selected_row(&self.inst_table) {
-            Some((id, inst, co)) => {
+            Some(_) => {
                 self.sample_table.clear_selected_row();
-
-                if self.selected_editor != SelectedEditor::Instrument(id) {
-                    self.selected_editor = SelectedEditor::Instrument(id);
-
-                    self.instrument_editor.borrow_mut().set_selected(id, inst);
-                    self.test_instrument_widget.borrow_mut().set_selected(id);
-
-                    self.editor_wizard
-                        .set_current_widget(&self.instrument_group);
-
-                    self.selected_instrument_output_changed(co);
-                }
             }
             None => {
-                if matches!(self.selected_editor, SelectedEditor::Instrument(_)) {
-                    self.show_sample_sizes_widget();
-                }
+                self.show_sample_sizes_widget();
             }
         }
     }
@@ -416,25 +276,17 @@ impl ListWithCompilerOutputEditor<project::Sample, SampleOutput> for SamplesTab 
         self.sample_sizes_widget.borrow_mut().sample_edited(action);
     }
 
-    fn item_edited(&mut self, id: ItemId, value: &project::Sample) {
-        self.sample_editor.borrow_mut().item_edited(id, value);
-        self.test_sample_widget.borrow_mut().item_edited(id, value);
-    }
+    fn item_edited(&mut self, _id: ItemId, _value: &project::Sample) {}
 
     fn set_compiler_output(
         &mut self,
         index: usize,
-        id: ItemId,
+        _id: ItemId,
         compiler_output: &Option<SampleOutput>,
     ) {
         self.sample_sizes_widget
             .borrow_mut()
             .sample_compiled(index, compiler_output);
-
-        let selected_id = self.sample_editor.borrow().selected_id();
-        if selected_id == Some(id) {
-            self.selected_sample_output_changed(compiler_output);
-        }
     }
 
     fn selected_item_changed(
@@ -442,26 +294,11 @@ impl ListWithCompilerOutputEditor<project::Sample, SampleOutput> for SamplesTab 
         samples: &ListWithCompilerOutput<project::Sample, SampleOutput>,
     ) {
         match samples.get_selected_row(&self.sample_table) {
-            Some((id, sample, co)) => {
+            Some(_) => {
                 self.inst_table.clear_selected_row();
-
-                if self.selected_editor != SelectedEditor::Sample(id) {
-                    self.selected_editor = SelectedEditor::Sample(id);
-
-                    self.sample_editor.borrow_mut().set_selected(id, sample);
-                    self.test_sample_widget
-                        .borrow_mut()
-                        .set_selected(id, sample);
-
-                    self.editor_wizard.set_current_widget(&self.sample_group);
-
-                    self.selected_sample_output_changed(co);
-                }
             }
             None => {
-                if matches!(self.selected_editor, SelectedEditor::Sample(_)) {
-                    self.show_sample_sizes_widget();
-                }
+                self.show_sample_sizes_widget();
             }
         }
     }

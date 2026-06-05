@@ -185,6 +185,7 @@ pub struct BrrSettingsWidget {
     evaluator: Choice,
 }
 
+#[expect(dead_code)]
 impl BrrSettingsWidget {
     pub fn new(form: &mut InputForm) -> Self {
         let loop_settings = form.add_three_inputs::<Choice, Choice, IntInput>("Loop:", 25, 15);
@@ -458,6 +459,7 @@ pub struct SampleEnvelopeWidget {
     prev_gain: Gain,
 }
 
+#[expect(dead_code)]
 impl SampleEnvelopeWidget {
     pub fn new(form: &mut InputForm) -> Self {
         let nrg = form.add_group("Envelope:", 1);

@@ -15,7 +15,6 @@ mod driver_state_window;
 mod envelope_widget;
 mod files;
 mod help;
-mod helpers;
 mod instrument_editor;
 mod licenses_dialog;
 mod list_editor;
@@ -32,6 +31,10 @@ mod sfx_window;
 mod symbols;
 mod tables;
 mod tabs;
+
+// ::TODO remove dead_code::
+#[expect(dead_code)]
+mod helpers;
 
 mod about_tab;
 mod project_tab;
