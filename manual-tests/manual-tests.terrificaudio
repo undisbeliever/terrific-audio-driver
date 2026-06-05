@@ -68,6 +68,45 @@
       "last_octave": 6,
       "envelope": "adsr 12 1 1 16",
       "comment": null
+    },
+    {
+      "name": "dummy_tuning_1",
+      "source": "samples/sine.wav",
+      "freq": 2094.0,
+      "loop": "dupe_block_hack",
+      "loop_setting": 2,
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 0,
+      "last_octave": 7,
+      "envelope": "gain F127",
+      "comment": "Used to pad the pitch table to more than 340 entries.  Using a tuning slightly higher than C7 so dummy_tuning_1 is processed first."
+    },
+    {
+      "name": "dummy_tuning_2",
+      "source": "samples/sine.wav",
+      "freq": 2100.0,
+      "loop": "dupe_block_hack",
+      "loop_setting": 2,
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 0,
+      "last_octave": 7,
+      "envelope": "gain F127",
+      "comment": "Used to extend the pitch table beyond 256 entries."
+    },
+    {
+      "name": "dummy_tuning_3",
+      "source": "samples/sine.wav",
+      "freq": 2150.0,
+      "loop": "dupe_block_hack",
+      "loop_setting": 2,
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 0,
+      "last_octave": 7,
+      "envelope": "gain F127",
+      "comment": "Used to extend the pitch table beyond 256 entries."
     }
   ],
   "samples": [],

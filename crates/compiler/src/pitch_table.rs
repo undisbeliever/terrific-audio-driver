@@ -346,7 +346,8 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 
         // The mask to prevent an overflow panic.
         // The length of `pitches` is tested after this loop ends
-        let pt_offset = i32::try_from(pitches.len() & 0xff).unwrap();
+        const _: () = assert!((MAX_N_PITCHES + 1).is_power_of_two());
+        let pt_offset = i32::try_from(pitches.len() & MAX_N_PITCHES).unwrap();
 
         for (instrument_id, pitch) in slice {
             let o = pt_offset - (pitch.semitones_above_c0 + min_semitone_offset);
