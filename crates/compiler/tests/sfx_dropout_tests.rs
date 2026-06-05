@@ -500,7 +500,7 @@ fn test_emu() -> Emu {
 
 // Should only be called once
 fn _build_test_common_audio_data() -> CommonAudioData {
-    let samples = combine_samples([].as_slice(), [].as_slice()).unwrap();
+    let samples = combine_samples([].as_slice()).unwrap();
     let pitch_table = samples.pitch_table();
 
     // Required to prevent a `ProjectFileErrors([BrrSample(Empty)])` error

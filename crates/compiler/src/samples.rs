@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
+use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError};
+use crate::identifier::Name;
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
@@ -12,7 +13,7 @@ use crate::pitch_table::{
     PitchTable, SamplePitches,
 };
 use crate::project::{
-    self, BrrSamplePitches, Instrument, InstrumentNoteRange, Sample, UniqueNamesProjectFile,
+    self, BrrSamplePitches, Instrument, InstrumentNoteRange, UniqueNamesProjectFile,
 };
 
 use brr::{
@@ -236,49 +237,24 @@ impl<T> CompiledDataList for [T] {
     }
 }
 
-// ::TODO remove::
-pub fn load_sample_for_instrument(
-    inst: &Instrument,
-    cache: &mut SampleFileCache,
-) -> Result<SampleData, SampleError> {
-    // Test new BrrSample compiler with old project data
-    compile_brr_sample(&inst.clone().into(), cache)
-}
-
-// ::TODO remove::
-pub fn load_sample_for_sample(
-    sample: &Sample,
-    cache: &mut SampleFileCache,
-) -> Result<SampleData, SampleError> {
-    // Test new BrrSample compiler with old project data
-    compile_brr_sample(&sample.clone().into(), cache)
-}
-
 fn compile_samples(
     project: &UniqueNamesProjectFile,
-) -> Result<(Vec<SampleData>, Vec<SampleData>), Vec<TaggedSampleError>> {
+) -> Result<Vec<SampleData>, Vec<(usize, Name, SampleError)>> {
     let mut errors = Vec::new();
 
     let mut cache = SampleFileCache::new(project.parent_path.clone());
 
-    let mut instruments = Vec::new();
-    for (i, inst) in project.instruments.list().iter().enumerate() {
-        match load_sample_for_instrument(inst, &mut cache) {
-            Ok(b) => instruments.push(b),
-            Err(e) => errors.push(TaggedSampleError::Instrument(i, inst.name.clone(), e)),
-        }
-    }
+    let mut out = Vec::new();
 
-    let mut samples = Vec::new();
-    for (i, sample) in project.samples.list().iter().enumerate() {
-        match load_sample_for_sample(sample, &mut cache) {
-            Ok(b) => samples.push(b),
-            Err(e) => errors.push(TaggedSampleError::Sample(i, sample.name.clone(), e)),
+    for (i, s) in project.brr_samples.list().iter().enumerate() {
+        match compile_brr_sample(s, &mut cache) {
+            Ok(b) => out.push(b),
+            Err(e) => errors.push((i, s.name.clone(), e)),
         }
     }
 
     if errors.is_empty() {
-        Ok((instruments, samples))
+        Ok(out)
     } else {
         Err(errors)
     }
@@ -297,7 +273,6 @@ struct BrrDirectory {
 
 // NOTE: Does not check the size of the directory.
 fn build_brr_directroy(
-    instruments: &(impl CompiledDataList<Item = SampleData> + ?Sized),
     samples: &(impl CompiledDataList<Item = SampleData> + ?Sized),
 ) -> BrrDirectory {
     let mut brr_data = Vec::new();
@@ -305,10 +280,9 @@ fn build_brr_directroy(
 
     let mut sample_map: HashMap<&BrrSample, BrrDirectoryOffset> = HashMap::new();
 
-    let instruments = instruments.data_iter().map(|s| &s.brr_sample);
-    let samples = samples.data_iter().map(|s| &s.brr_sample);
+    for s in samples.data_iter() {
+        let brr = &s.brr_sample;
 
-    for brr in instruments.chain(samples) {
         match sample_map.get(&brr) {
             None => {
                 let start = brr_data.len();
@@ -367,34 +341,26 @@ pub fn create_test_instrument_data(sample: &SampleData) -> Option<(SampleAndInst
         pitch,
         ..sample.clone()
     }];
-    let data = combine_samples(samples.as_slice(), [].as_slice()).ok()?;
+    let data = combine_samples(samples.as_slice()).ok()?;
 
     Some((data, max_note))
 }
 
 /// Panics if instrument/samples `data_iter().count()` != `expected_len()`.
 pub fn combine_samples(
-    instruments: &(impl CompiledDataList<Item = SampleData> + ?Sized),
     samples: &(impl CompiledDataList<Item = SampleData> + ?Sized),
 ) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {
-    let total_len = instruments.expected_len() + samples.expected_len();
+    let total_len = samples.expected_len();
 
     let mut instruments_adsr1 = Vec::with_capacity(total_len);
-    instruments_adsr1.extend(instruments.data_iter().map(|s| s.adsr1));
     instruments_adsr1.extend(samples.data_iter().map(|s| s.adsr1));
 
     let mut instruments_adsr2_or_gain = Vec::with_capacity(total_len);
-    instruments_adsr2_or_gain.extend(instruments.data_iter().map(|s| s.adsr2_or_gain));
     instruments_adsr2_or_gain.extend(samples.data_iter().map(|s| s.adsr2_or_gain));
 
-    let brr = build_brr_directroy(instruments, samples);
+    let brr = build_brr_directroy(samples);
 
-    let sorted_pitches = sort_pitches_iterator(
-        instruments
-            .data_iter()
-            .chain(samples.data_iter())
-            .map(|s| s.pitch.clone()),
-    );
+    let sorted_pitches = sort_pitches_iterator(samples.data_iter().map(|s| s.pitch.clone()));
 
     let pitch_table = match merge_pitch_vec(sorted_pitches, total_len) {
         Ok(pt) => pt,
@@ -431,19 +397,13 @@ pub fn build_sample_and_instrument_data(
         pitch_table_error: None,
     };
 
-    let sample_data = match compile_samples(project) {
-        Ok(o) => Some(o),
+    match compile_samples(project) {
+        Ok(s) => combine_samples(s.as_slice()),
         Err(e) => {
             error.sample_errors.extend(e);
-            None
+            Err(error)
         }
-    };
-
-    if !error.sample_errors.is_empty() {
-        return Err(error);
     }
-    let (instruments, samples) = sample_data.unwrap();
-    combine_samples(instruments.as_slice(), samples.as_slice())
 }
 
 pub fn instrument_note_range(inst: &Instrument) -> RangeInclusive<Note> {

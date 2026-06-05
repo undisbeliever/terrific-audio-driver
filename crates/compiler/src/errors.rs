@@ -469,14 +469,8 @@ pub struct SampleError {
 }
 
 #[derive(Debug)]
-pub enum TaggedSampleError {
-    Instrument(usize, Name, SampleError),
-    Sample(usize, Name, SampleError),
-}
-
-#[derive(Debug)]
 pub struct SampleAndInstrumentDataError {
-    pub sample_errors: Vec<TaggedSampleError>,
+    pub sample_errors: Vec<(usize, Name, SampleError)>,
     pub pitch_table_error: Option<PitchTableError>,
 }
 
@@ -2446,24 +2440,12 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
 
         writeln!(f, "Error compiling samples")?;
 
-        for e in &error.sample_errors {
-            match e {
-                TaggedSampleError::Instrument(i, n, e) => {
-                    if let Some(e) = &e.brr_error {
-                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
-                    }
-                    if let Some(e) = &e.pitch_error {
-                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
-                    }
-                }
-                TaggedSampleError::Sample(i, n, e) => {
-                    if let Some(e) = &e.brr_error {
-                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
-                    }
-                    if let Some(e) = &e.pitch_error {
-                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
-                    }
-                }
+        for (i, n, e) in &error.sample_errors {
+            if let Some(e) = &e.brr_error {
+                writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+            }
+            if let Some(e) = &e.pitch_error {
+                writeln!(f, "  Instrument {} {}: {}", i, n, e)?
             }
         }
 

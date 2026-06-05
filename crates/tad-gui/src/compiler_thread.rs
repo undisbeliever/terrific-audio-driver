@@ -34,8 +34,8 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::project::{self, BrrEvaluator};
 use compiler::project::{DefaultSfxFlags, LoopSetting};
 use compiler::samples::{
-    combine_samples, create_test_instrument_data, load_sample_for_instrument,
-    load_sample_for_sample, CompiledDataList, SampleAndInstrumentData, SampleData, SampleFileCache,
+    combine_samples, compile_brr_sample, create_test_instrument_data, CompiledDataList,
+    SampleAndInstrumentData, SampleData, SampleFileCache,
 };
 use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
@@ -638,15 +638,24 @@ impl<ItemT, OutT> CList<ItemT, Option<OutT>> {
     }
 }
 
-impl<ItemT, OutT> CompiledDataList for CList<ItemT, Option<OutT>> {
-    type Item = OutT;
+// ::TODO remove::
+struct CombinedSamples<'a>(
+    &'a CList<project::Instrument, Option<SampleData>>,
+    &'a CList<project::Sample, Option<SampleData>>,
+);
+
+impl CompiledDataList for CombinedSamples<'_> {
+    type Item = SampleData;
 
     fn expected_len(&self) -> usize {
-        self.output.len()
+        self.0.output.len() + self.1.output.len()
     }
 
     fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
-        self.output.iter().flatten()
+        let it0 = self.0.output.iter().flatten();
+        let it1 = self.1.output.iter().flatten();
+
+        it0.chain(it1)
     }
 }
 
@@ -672,7 +681,7 @@ fn create_instrument_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
 ) -> impl (FnMut(ItemId, &project::Instrument) -> Option<SampleData>) + 'a {
-    |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
+    |id, inst| match compile_brr_sample(&inst.clone().into(), sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Instrument(
                 id,
@@ -691,7 +700,7 @@ fn create_sample_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
 ) -> impl (FnMut(ItemId, &project::Sample) -> Option<SampleData>) + 'a {
-    |id, sample| match load_sample_for_sample(sample, sample_file_cache) {
+    |id, sample| match compile_brr_sample(&sample.clone().into(), sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Sample(id, Ok(SampleSize(s.sample_size()))));
             Some(s)
@@ -739,7 +748,7 @@ fn build_play_sample_data(
         _ => return None,
     };
 
-    let sample_data = combine_samples([].as_slice(), [sample].as_slice()).ok()?;
+    let sample_data = combine_samples([sample].as_slice()).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
@@ -914,7 +923,7 @@ fn build_cad_no_sfx_and_song_dependencies(
         });
     }
 
-    let combined_samples = match combine_samples(instruments, samples) {
+    let combined_samples = match combine_samples(&CombinedSamples(instruments, samples)) {
         Ok(s) => s,
         Err(e) => {
             return Err(CombineSamplesError::CombineError(e));
