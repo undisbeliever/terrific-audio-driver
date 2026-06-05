@@ -19,7 +19,7 @@ use std::collections::HashMap;
 fn parse_instrument(
     id: IdentifierStr,
     line: &Line,
-    inst_map: &UniqueNamesList<project::InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::BrrSample>,
 ) -> Result<MmlInstrument, ErrorWithPos<MmlLineError>> {
     if line.text.is_empty() {
         return Err(ErrorWithPos(line.range(), MmlLineError::NoInstrument));
@@ -80,7 +80,7 @@ fn parse_instrument(
 
 pub fn parse_instruments(
     instrument_lines: Vec<(IdentifierStr, Line)>,
-    inst_map: &UniqueNamesList<project::InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::BrrSample>,
 ) -> (Vec<MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();

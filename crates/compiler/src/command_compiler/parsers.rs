@@ -19,7 +19,7 @@ use crate::{bytecode_assembler, Transpose};
 fn parse_set_instrument_asm<'a>(
     name: &str,
     envelope: Option<Envelope>,
-    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
 ) -> Result<Command<'a>, ChannelError> {
     match data_instruments.get_with_index(name) {
         Some((i, _inst)) => match InstrumentId::try_from(i) {
@@ -50,7 +50,7 @@ pub fn parse_call_subroutine_command<'a>(
 
 pub fn parse_bytecode_asm_instruction<'a>(
     asm: &'a str,
-    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     subroutines: &dyn SubroutineNameMap,
     channel_id: ChannelId,
 ) -> Result<Command<'a>, ChannelError> {

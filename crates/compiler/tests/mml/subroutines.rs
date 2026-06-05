@@ -960,7 +960,7 @@ A @sample !s
 "#,
         "!s",
         4,
-        ChannelError::CannotSetInstrumentHintForSample,
+        ChannelError::CannotSetInstrumentHintNoTuning,
     );
 
     assert_one_channel_error_in_mml(
@@ -987,7 +987,7 @@ A @2 !s
 "#,
         "A",
         6,
-        BytecodeError::SubroutineInstrumentHintSampleMismatch.into(),
+        BytecodeError::SubroutineInstrumentHintNoTuning.into(),
     );
 }
 

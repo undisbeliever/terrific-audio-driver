@@ -348,7 +348,7 @@ pub enum BrrLoopFilter {
     Filter3,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
 pub struct WaveSource {
     pub source: SourcePathBuf,
 
@@ -368,7 +368,7 @@ pub struct WaveSource {
     pub dupe_block_hack: Option<BlockNumber>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
 pub struct BrrSource {
     pub source: SourcePathBuf,
 
@@ -671,12 +671,9 @@ impl NameGetter for Sample {
     }
 }
 
-impl NameGetter for InstrumentOrSample {
+impl NameGetter for BrrSample {
     fn name(&self) -> &Name {
-        match self {
-            Self::Instrument(i) => &i.name,
-            Self::Sample(s) => &s.name,
-        }
+        &self.name
     }
 }
 
@@ -727,21 +724,6 @@ impl<T> UniqueNamesList<T> {
     }
 }
 
-// ::TODO remove::
-pub enum InstrumentOrSample {
-    Instrument(Instrument),
-    Sample(Sample),
-}
-
-impl InstrumentOrSample {
-    pub fn envelope(&self) -> Envelope {
-        match self {
-            Self::Instrument(i) => i.envelope,
-            Self::Sample(s) => s.envelope,
-        }
-    }
-}
-
 pub struct UniqueSoundEffectExportOrder {
     pub export_order: UniqueNamesList<Name>,
     pub n_high_priority_sfx: usize,
@@ -756,7 +738,7 @@ pub struct UniqueNamesProjectFile {
     pub instruments: UniqueNamesList<Instrument>,
     pub samples: UniqueNamesList<Sample>,
 
-    pub instruments_and_samples: UniqueNamesList<InstrumentOrSample>,
+    pub brr_samples: UniqueNamesList<BrrSample>,
 
     pub default_sfx_flags: DefaultSfxFlags,
     pub sfx_export_order: UniqueSoundEffectExportOrder,
@@ -824,19 +806,13 @@ where
     UniqueNamesList { list, map }
 }
 
-pub fn validate_instrument_and_sample_names<'a>(
-    instruments: impl Iterator<Item = &'a Instrument>,
-    samples: impl Iterator<Item = &'a Sample>,
-) -> Result<UniqueNamesList<InstrumentOrSample>, ProjectFileErrors> {
+pub fn validate_brr_sample_names(
+    brr_samples: Vec<BrrSample>,
+) -> Result<UniqueNamesList<BrrSample>, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let instruments = instruments.cloned().map(InstrumentOrSample::Instrument);
-    let samples = samples.cloned().map(InstrumentOrSample::Sample);
-
-    let list = instruments.chain(samples).collect();
-
-    let out = validate_list_names(list, true, MAX_INSTRUMENTS_AND_SAMPLES, |e| {
-        errors.push(ProjectFileError::InstrumentOrSample(e))
+    let out = validate_list_names(brr_samples, true, MAX_INSTRUMENTS_AND_SAMPLES, |e| {
+        errors.push(ProjectFileError::BrrSample(e))
     });
 
     if errors.is_empty() {
@@ -844,6 +820,17 @@ pub fn validate_instrument_and_sample_names<'a>(
     } else {
         Err(ProjectFileErrors(errors))
     }
+}
+
+// ::TODO remove::
+pub fn validate_instrument_and_sample_names<'a>(
+    instruments: impl Iterator<Item = &'a Instrument>,
+    samples: impl Iterator<Item = &'a Sample>,
+) -> Result<UniqueNamesList<BrrSample>, ProjectFileErrors> {
+    let instruments = instruments.cloned().map(BrrSample::from);
+    let samples = samples.cloned().map(BrrSample::from);
+
+    validate_brr_sample_names(instruments.chain(samples).collect())
 }
 
 pub fn validate_sfx_export_order(
@@ -912,7 +899,7 @@ pub fn validate_project_file_names(
         errors.push(ProjectFileError::Song(e))
     });
 
-    let instruments_and_samples = if errors.is_empty() {
+    let brr_samples = if errors.is_empty() {
         match validate_instrument_and_sample_names(instruments.list().iter(), samples.list().iter())
         {
             Ok(instruments) => Some(instruments),
@@ -932,7 +919,7 @@ pub fn validate_project_file_names(
             parent_path: pf.parent_path,
             instruments,
             samples,
-            instruments_and_samples: instruments_and_samples.unwrap(),
+            brr_samples: brr_samples.unwrap(),
             sfx_export_order: sfx_export_order.unwrap(),
             default_sfx_flags: pf.contents.default_sfx_flags,
             sound_effect_file: pf.contents.sound_effect_file,

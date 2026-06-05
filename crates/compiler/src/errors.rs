@@ -80,9 +80,9 @@ pub enum UniqueNameListError {
 pub enum ProjectFileError {
     Instrument(UniqueNameListError),
     Sample(UniqueNameListError),
+    BrrSample(UniqueNameListError),
     SoundEffect(UniqueNameListError),
     Song(UniqueNameListError),
-    InstrumentOrSample(UniqueNameListError),
 }
 
 #[derive(Debug)]
@@ -140,6 +140,7 @@ pub enum ValueError {
 
     CannotConvertPitchFrequency(PlayPitchFrequency, u32),
     CannotConvertPitchFrequencySample,
+    CannotConvertPitchFrequencyNoPitches,
     CannotConvertPitchFrequencyUnknownInstrument,
 
     PxPanOutOfRange(i32),
@@ -373,7 +374,7 @@ pub enum BytecodeError {
         transpose: RangeInclusive<i8>,
         inst_range: RangeInclusive<Note>,
     },
-    SubroutineInstrumentHintSampleMismatch,
+    SubroutineInstrumentHintNoTuning,
     SubroutineInstrumentHintNoInstrumentSet,
 
     MissingEndLoopInAsmBlock,
@@ -673,7 +674,7 @@ pub enum ChannelError {
     InstrumentHintAlreadySet,
     InstrumentHintOnlyAllowedInSubroutines,
     InstrumentHintInstrumentAlreadySet,
-    CannotSetInstrumentHintForSample,
+    CannotSetInstrumentHintNoTuning,
     CannotSetInstrumentHintForUnknown,
 
     // Bytecode assembler errors
@@ -850,7 +851,7 @@ impl Display for ProjectFileError {
         match self {
             Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
             Self::Sample(e) => fmt_unique_name_list_error(f, e, "sample"),
-            Self::InstrumentOrSample(e) => fmt_unique_name_list_error(f, e, "instrument or sample"),
+            Self::BrrSample(e) => fmt_unique_name_list_error(f, e, "brr sample"),
             Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
             Self::Song(e) => fmt_unique_name_list_error(f, e, "song"),
         }
@@ -1005,6 +1006,12 @@ impl Display for ValueError {
             }
             Self::CannotConvertPitchFrequencySample => {
                 write!(f, "cannot convert frequency to VxPITCH: @ is a sample")
+            }
+            Self::CannotConvertPitchFrequencyNoPitches => {
+                write!(
+                    f,
+                    "cannot convert frequency to VxPITCH: instrument has no tuning"
+                )
             }
             Self::CannotConvertPitchFrequencyUnknownInstrument => {
                 write!(f, "cannot convert frequency to VxPITCH: unknown instrument")
@@ -1577,9 +1584,9 @@ impl Display for BytecodeError {
             } => {
                 write!(f, "subroutine instrument hint frequency ({sub_freq}) does not match current instrument ({inst_freq})")
             }
-            Self::SubroutineInstrumentHintSampleMismatch => write!(
+            Self::SubroutineInstrumentHintNoTuning => write!(
                 f,
-                "subroutine has an instrument hint and the current instrument is a sample"
+                "subroutine has an instrument hint the current instrument has no tuning (ie, cannot play notes)"
             ),
             Self::SubroutineInstrumentHintNoInstrumentSet => write!(
                 f,
@@ -2106,8 +2113,8 @@ impl Display for ChannelError {
             Self::InstrumentHintInstrumentAlreadySet => {
                 write!(f, "cannot set instrument hint: instrument already set")
             }
-            Self::CannotSetInstrumentHintForSample => {
-                write!(f, "cannot set instrument hint: not an instrument")
+            Self::CannotSetInstrumentHintNoTuning => {
+                write!(f, "cannot set instrument hint: instrument has no tuning")
             }
             Self::CannotSetInstrumentHintForUnknown => {
                 write!(f, "cannot set instrument hint: unknown instrument")

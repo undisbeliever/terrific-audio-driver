@@ -884,7 +884,7 @@ fn calc_sfx_data_size(
 }
 
 struct SongDependencies {
-    inst_map: project::UniqueNamesList<project::InstrumentOrSample>,
+    inst_map: project::UniqueNamesList<project::BrrSample>,
     combined_samples: SampleAndInstrumentData,
     common_data_no_sfx_size: usize,
     sfx_data_size: usize,

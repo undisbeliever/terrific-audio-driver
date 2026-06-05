@@ -12,7 +12,7 @@ use crate::pitch_table::{
     PitchTable, SamplePitches,
 };
 use crate::project::{
-    self, Instrument, InstrumentNoteRange, InstrumentOrSample, Sample, UniqueNamesProjectFile,
+    self, BrrSamplePitches, Instrument, InstrumentNoteRange, Sample, UniqueNamesProjectFile,
 };
 
 use brr::{
@@ -193,7 +193,7 @@ pub fn compile_brr_sample(
 
         if !input.ignore_gaussian_overflow
             && s.as_ref()
-                .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+                .is_ok_and(|b| b.test_for_gaussian_overflow_glitch_autoloop())
         {
             s = Err(BrrError::GaussianOverflowDetected);
         }
@@ -455,19 +455,22 @@ pub fn instrument_note_range(inst: &Instrument) -> RangeInclusive<Note> {
     }
 }
 
-pub fn sample_note_range(sample: &Sample) -> RangeInclusive<Note> {
-    let last = sample
-        .sample_rates
-        .len()
-        .saturating_sub(1)
-        .clamp(0, LAST_NOTE_ID.into());
-
-    Note::from_note_id_usize(0).unwrap()..=Note::from_note_id_usize(last).unwrap()
-}
-
-pub fn note_range(s: &InstrumentOrSample) -> RangeInclusive<Note> {
-    match s {
-        InstrumentOrSample::Instrument(inst) => instrument_note_range(inst),
-        InstrumentOrSample::Sample(sample) => sample_note_range(sample),
+pub fn note_range(s: &project::BrrSample) -> RangeInclusive<Note> {
+    match &s.pitches {
+        Some(BrrSamplePitches::Octaves {
+            tuning: _,
+            first,
+            last,
+        }) => Note::first_note_for_octave(*first)..=Note::last_note_for_octave(*last),
+        Some(BrrSamplePitches::Notes {
+            tuning: _,
+            first,
+            last,
+        }) => *first..=*last,
+        Some(BrrSamplePitches::SampleRates(sr)) => {
+            let last = sr.len().saturating_sub(1).clamp(0, LAST_NOTE_ID.into());
+            Note::from_note_id_usize(0).unwrap()..=Note::from_note_id_usize(last).unwrap()
+        }
+        None => Note::MAX..=Note::MIN,
     }
 }

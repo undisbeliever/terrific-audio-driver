@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
-use crate::command_compiler;
 use crate::command_compiler::analysis::{
     analyse_sound_effect_commands, blank_subroutine_analysis_array,
 };
@@ -26,12 +25,11 @@ use crate::file_pos::{blank_file_pos, split_lines};
 use crate::identifier::{ChannelId, Name};
 use crate::mml::{self, CommandTickTracker, CursorTracker, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
-use crate::project::{
-    DefaultSfxFlags, InstrumentOrSample, UniqueNamesList, UniqueSoundEffectExportOrder,
-};
+use crate::project::{DefaultSfxFlags, UniqueNamesList, UniqueSoundEffectExportOrder};
 use crate::sfx_file::SoundEffectsFile;
 use crate::subroutines::{CompiledSubroutines, SubroutineNameMap, SubroutineState};
 use crate::time::{TickClock, TickCounter};
+use crate::{command_compiler, project};
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -179,7 +177,7 @@ impl CursorTrackerGetter for CompiledSoundEffect {
 
 fn parse_bytecode_asm_sound_effect<'a>(
     sfx: &'a str,
-    data_instruments: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     sfx_subroutines: &CompiledSfxSubroutines,
 ) -> Result<SoundEffectCommands<'a>, SoundEffectErrorList> {
     let mut errors = Vec::new();
@@ -215,7 +213,7 @@ fn parse_bytecode_asm_sound_effect<'a>(
 
 pub fn compile_sound_effect(
     sfx: &SoundEffectText,
-    data_instruments: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     pitch_table: &PitchTable,
     sfx_subroutines: &CompiledSfxSubroutines,
     flags: SfxFlags,
@@ -254,7 +252,7 @@ pub fn compile_sound_effect(
 
 pub fn compile_sfx_subroutines(
     subroutines: &SfxSubroutinesMml,
-    data_instruments: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
     let s = mml::parse_sfx_subroutines(&subroutines.0, data_instruments)?;
@@ -296,7 +294,7 @@ pub fn compile_sfx_subroutines(
 
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::BrrSample>,
     pitch_table: &PitchTable,
 ) -> Result<(CompiledSfxSubroutines, HashMap<Name, CompiledSoundEffect>), SoundEffectsFileError> {
     let subroutines = match compile_sfx_subroutines(&sfx_file.subroutines, inst_map, pitch_table) {
@@ -585,7 +583,7 @@ pub struct SoundEffectInput {
 
 pub fn compile_sound_effect_input(
     input: &SoundEffectInput,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    inst_map: &UniqueNamesList<project::BrrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSfxSubroutines,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {

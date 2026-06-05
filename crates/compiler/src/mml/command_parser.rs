@@ -89,7 +89,7 @@ mod parser {
         default_length: CommandTicks,
         keyoff_enabled: bool,
 
-        data_instruments: &'b UniqueNamesList<project::InstrumentOrSample>,
+        data_instruments: &'b UniqueNamesList<project::BrrSample>,
         instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
         subroutines: &'b dyn SubroutineNameMap,
 
@@ -103,7 +103,7 @@ mod parser {
         pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
-            data_instruments: &'b UniqueNamesList<project::InstrumentOrSample>,
+            data_instruments: &'b UniqueNamesList<project::BrrSample>,
             instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
             subroutines: &'b dyn SubroutineNameMap,
             settings: &'b GlobalSettings,
@@ -175,7 +175,7 @@ mod parser {
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<project::InstrumentOrSample> {
+        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<project::BrrSample> {
             self.data_instruments
         }
 
@@ -2651,7 +2651,7 @@ impl MaybeMergeableCommands {
 pub(crate) fn parse_mml_tokens<'a>(
     channel: ChannelId,
     tokens: MmlTokens<'a>,
-    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     instruments_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,

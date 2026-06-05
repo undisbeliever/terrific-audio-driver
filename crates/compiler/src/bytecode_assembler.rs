@@ -26,7 +26,7 @@ use crate::{
     bytecode::State,
     command_compiler::analysis::TransposeStartRange,
     pitch_table::PitchTable,
-    project::{InstrumentOrSample, UniqueNamesList},
+    project::{BrrSample, UniqueNamesList},
     subroutines::{CompiledSubroutines, SubroutineNameMap},
     time::TickCounter,
 };
@@ -615,7 +615,7 @@ pub struct BytecodeAssembler<'a> {
 #[cfg(feature = "test")]
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
-        inst_map: &'a UniqueNamesList<InstrumentOrSample>,
+        inst_map: &'a UniqueNamesList<BrrSample>,
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,

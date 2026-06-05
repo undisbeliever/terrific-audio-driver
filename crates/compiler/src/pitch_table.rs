@@ -13,8 +13,7 @@ use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
-use crate::project::BrrSample;
-use crate::project::{BrrSamplePitches, Instrument, InstrumentOrSample, UniqueNamesList};
+use crate::project::{BrrSample, BrrSamplePitches, SampleTuning, UniqueNamesList};
 use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
 
@@ -294,8 +293,7 @@ fn sort_pitches_vec(
 }
 
 fn inst_pitch_vec(
-    // ::TODO change to UniqueNamesList<BrrSamples>::
-    instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
+    instruments_and_samples: &UniqueNamesList<BrrSample>,
 ) -> Result<SortedPitches, PitchTableError> {
     let mut instruments = Vec::with_capacity(instruments_and_samples.len());
     let mut samples = Vec::with_capacity(instruments_and_samples.len());
@@ -303,14 +301,7 @@ fn inst_pitch_vec(
     let mut errors = Vec::new();
 
     for (i, s) in instruments_and_samples.list().iter().enumerate() {
-        // Convert old project data to new format to test pitch table converter
-        // ::TODO remove::
-        let s = match s {
-            InstrumentOrSample::Instrument(i) => i.clone().into(),
-            InstrumentOrSample::Sample(s) => s.clone().into(),
-        };
-
-        match brr_sample_pitches(&s) {
+        match brr_sample_pitches(s) {
             Ok(SamplePitches::Notes(n)) => instruments.push((i, n)),
             Ok(SamplePitches::SampleRates(sr)) => samples.push((i, sr)),
             Err(e) => errors.push((i, s.name.clone(), e)),
@@ -469,7 +460,7 @@ pub(crate) fn merge_pitch_vec(
 }
 
 pub fn build_pitch_table(
-    instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
+    instruments_and_samples: &UniqueNamesList<BrrSample>,
 ) -> Result<PitchTable, PitchTableError> {
     let sorted_pitches = inst_pitch_vec(instruments_and_samples)?;
 
@@ -593,13 +584,17 @@ u16_value_newtype!(
 );
 
 impl PlayPitchFrequency {
-    pub fn to_vxpitch(
-        self,
-        instrument: Option<&InstrumentOrSample>,
-    ) -> Result<PlayPitchPitch, ValueError> {
-        match instrument {
-            Some(InstrumentOrSample::Instrument(i)) => {
-                let pitch = f64::from(self.as_u16()) / i.freq * f64::from(PITCH_REGISTER_FP_SCALE);
+    pub fn to_vxpitch(self, sample: Option<&BrrSample>) -> Result<PlayPitchPitch, ValueError> {
+        let p = match sample {
+            Some(s) => &s.pitches,
+            None => return Err(ValueError::CannotConvertPitchFrequencyUnknownInstrument),
+        };
+
+        match p {
+            Some(BrrSamplePitches::Notes { tuning, .. })
+            | Some(BrrSamplePitches::Octaves { tuning, .. }) => {
+                let freq = tuning.frequency();
+                let pitch = f64::from(self.as_u16()) / freq * f64::from(PITCH_REGISTER_FP_SCALE);
                 let pitch = pitch.round() as u32;
 
                 match PlayPitchPitch::try_from(pitch) {
@@ -607,10 +602,10 @@ impl PlayPitchFrequency {
                     Err(_) => Err(ValueError::CannotConvertPitchFrequency(self, pitch)),
                 }
             }
-            Some(InstrumentOrSample::Sample(_)) => {
+            Some(BrrSamplePitches::SampleRates(_)) => {
                 Err(ValueError::CannotConvertPitchFrequencySample)
             }
-            None => Err(ValueError::CannotConvertPitchFrequencyUnknownInstrument),
+            None => Err(ValueError::CannotConvertPitchFrequencyNoPitches),
         }
     }
 }
@@ -628,8 +623,8 @@ impl InstrumentHintFreq {
         Self(f as u32)
     }
 
-    pub fn from_instrument(inst: &Instrument) -> Self {
-        Self::from_freq(inst.freq)
+    pub fn from_tuning(tuning: &SampleTuning) -> Self {
+        Self::from_freq(tuning.frequency())
     }
 }
 

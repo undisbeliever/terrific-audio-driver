@@ -15,14 +15,10 @@ const SUB_2: ChannelId = ChannelId::Subroutine(1);
 fn compile(mml: &str) -> SongData {
     let env = Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap());
 
-    let instruments_and_samples = project::validate_instrument_and_sample_names(
-        [
-            dummy_instrument("sine", 500.0, 1, 6, env),
-            dummy_instrument("square", 500.0, 1, 6, env),
-        ]
-        .iter(),
-        [].iter(),
-    )
+    let instruments_and_samples = project::validate_brr_sample_names(vec![
+        dummy_instrument("sine", 500.0, 1, 6, env),
+        dummy_instrument("square", 500.0, 1, 6, env),
+    ])
     .unwrap();
 
     let pitch_table = build_pitch_table(&instruments_and_samples).unwrap();

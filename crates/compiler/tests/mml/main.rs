@@ -45,7 +45,7 @@ use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
 };
-use compiler::project::{SampleNumber, UniqueNamesList};
+use compiler::project::UniqueNamesList;
 use compiler::songs::SongData;
 use compiler::subroutines::{CompiledSubroutines, Subroutine, SubroutineNameMap, SubroutineState};
 use compiler::{bytecode_assembler, opcodes, project};
@@ -650,7 +650,7 @@ fn assemble_channel_bytecode(
 }
 
 struct DummyData {
-    instruments_and_samples: UniqueNamesList<project::InstrumentOrSample>,
+    instruments_and_samples: UniqueNamesList<project::BrrSample>,
     pitch_table: PitchTable,
 }
 
@@ -658,7 +658,7 @@ fn dummy_data() -> DummyData {
     const SF: f64 = SAMPLE_FREQ;
 
     #[rustfmt::skip]
-    let instruments_and_samples = project::validate_instrument_and_sample_names([
+    let instruments_and_samples = project::validate_brr_sample_names(vec![
         dummy_instrument("dummy_instrument", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("dummy_instrument_2", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
@@ -672,20 +672,8 @@ fn dummy_data() -> DummyData {
         dummy_instrument("f2000_o3_o5", 2000.0, 3, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f3000_o4", 3000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_note_instrument("f1000_d5_g5", 3000.0, "d5", "g5", Envelope::Gain(Gain::new(0))),
-    ].iter(),
-        [
-            project::Sample{
-                name: "sample".parse().unwrap(),
-                source: Default::default(),
-                loop_setting: project::LoopSetting::None,
-                evaluator: Default::default(),
-                ignore_gaussian_overflow: false,
-                sample_rates: vec![32000, 16000, 18000],
-                envelope: Envelope::Gain(EXAMPLE_GAIN),
-                comment: None,
-            },
-        ].iter(),
-    ).unwrap();
+        dummy_sample("sample", vec![32000, 16000, 18000], Envelope::Gain(EXAMPLE_GAIN)),
+    ]).unwrap();
 
     let pitch_table = build_pitch_table(&instruments_and_samples).unwrap();
 
@@ -695,26 +683,35 @@ fn dummy_data() -> DummyData {
     }
 }
 
+fn dummy_sample(name: &str, sample_rates: Vec<u32>, envelope: Envelope) -> project::BrrSample {
+    project::BrrSample {
+        name: Name::try_from(name.to_owned()).unwrap(),
+        source: project::BrrSampleSource::BrrFile(Default::default()),
+        ignore_gaussian_overflow: false,
+        pitches: Some(project::BrrSamplePitches::SampleRates(sample_rates)),
+        envelope,
+        comment: Default::default(),
+    }
+}
+
 fn dummy_instrument(
     name: &str,
     freq: f64,
     first_octave: u32,
     last_octave: u32,
     envelope: Envelope,
-) -> project::Instrument {
-    project::Instrument {
+) -> project::BrrSample {
+    project::BrrSample {
         name: Name::try_from(name.to_owned()).unwrap(),
-        source: Default::default(),
-        freq,
-        loop_setting: project::LoopSetting::LoopWithFilter(SampleNumber(0)),
-        evaluator: Default::default(),
+        source: project::BrrSampleSource::BrrFile(Default::default()),
         ignore_gaussian_overflow: false,
-        note_range: project::InstrumentNoteRange::Octave {
+        pitches: Some(project::BrrSamplePitches::Octaves {
+            tuning: project::SampleTuning::Frequency(freq),
             first: Octave::try_new(first_octave).unwrap(),
             last: Octave::try_new(last_octave).unwrap(),
-        },
+        }),
         envelope,
-        comment: None,
+        comment: Default::default(),
     }
 }
 
@@ -724,20 +721,18 @@ fn dummy_note_instrument(
     first_note: &str,
     last_note: &str,
     envelope: Envelope,
-) -> project::Instrument {
-    project::Instrument {
+) -> project::BrrSample {
+    project::BrrSample {
         name: Name::try_from(name.to_owned()).unwrap(),
-        source: Default::default(),
-        freq,
-        loop_setting: project::LoopSetting::LoopWithFilter(SampleNumber(0)),
-        evaluator: Default::default(),
+        source: project::BrrSampleSource::BrrFile(Default::default()),
         ignore_gaussian_overflow: false,
-        note_range: project::InstrumentNoteRange::Note {
+        pitches: Some(project::BrrSamplePitches::Notes {
+            tuning: project::SampleTuning::Frequency(freq),
             first: Note::parse_bytecode_argument(first_note).unwrap(),
             last: Note::parse_bytecode_argument(last_note).unwrap(),
-        },
+        }),
         envelope,
-        comment: None,
+        comment: Default::default(),
     }
 }
 
