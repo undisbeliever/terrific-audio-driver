@@ -37,6 +37,19 @@ fn note_range(first: &str, last: &str) -> InstrumentNoteRange {
     }
 }
 
+fn test_json(json: &str, expected: Project) {
+    let p = serde_json::from_str::<Project>(json).unwrap();
+    assert_eq!(p, expected);
+
+    let s = serde_json::to_string(&p).unwrap();
+
+    assert_eq!(
+        serde_json::from_str::<Project>(&s).unwrap(),
+        expected,
+        "serialised JSON assert error"
+    );
+}
+
 // Testing TAD backwards compatibility with version 0.0.2
 // (the oldest version with a example)
 #[test]
@@ -227,7 +240,7 @@ fn version_0_0_2_example_project() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 // The version that added samples
@@ -463,7 +476,7 @@ fn version_0_0_4() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 #[test]
@@ -515,7 +528,7 @@ fn version_0_0_10_sfx_priority() {
         songs: vec![],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 #[test]
@@ -557,7 +570,7 @@ fn version_0_0_10_all_sfx_flags_set() {
         songs: vec![],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 // Changes since 0.0.10 (I think)
@@ -953,5 +966,5 @@ fn version_0_3_0() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
