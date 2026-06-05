@@ -104,7 +104,7 @@ pub(crate) fn brr_sample_pitches(input: &BrrSample) -> Result<SamplePitches, Pit
                 Err(PitchError::FirstNoteGreaterThanLastNote)
             }
         }
-        Some(BrrSamplePitches::SampleRates(sr)) => sample_pitches(sr),
+        Some(BrrSamplePitches::SampleRates { sample_rates }) => sample_pitches(sample_rates),
         None => Err(PitchError::NoNotes),
     }
 }
@@ -602,7 +602,7 @@ impl PlayPitchFrequency {
                     Err(_) => Err(ValueError::CannotConvertPitchFrequency(self, pitch)),
                 }
             }
-            Some(BrrSamplePitches::SampleRates(_)) => {
+            Some(BrrSamplePitches::SampleRates { .. }) => {
                 Err(ValueError::CannotConvertPitchFrequencySample)
             }
             None => Err(ValueError::CannotConvertPitchFrequencyNoPitches),

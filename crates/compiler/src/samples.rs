@@ -427,8 +427,11 @@ pub fn note_range(s: &project::BrrSample) -> RangeInclusive<Note> {
             first,
             last,
         }) => *first..=*last,
-        Some(BrrSamplePitches::SampleRates(sr)) => {
-            let last = sr.len().saturating_sub(1).clamp(0, LAST_NOTE_ID.into());
+        Some(BrrSamplePitches::SampleRates { sample_rates }) => {
+            let last = sample_rates
+                .len()
+                .saturating_sub(1)
+                .clamp(0, LAST_NOTE_ID.into());
             Note::from_note_id_usize(0).unwrap()..=Note::from_note_id_usize(last).unwrap()
         }
         None => Note::MAX..=Note::MIN,

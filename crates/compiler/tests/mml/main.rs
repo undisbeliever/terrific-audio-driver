@@ -688,7 +688,7 @@ fn dummy_sample(name: &str, sample_rates: Vec<u32>, envelope: Envelope) -> proje
         name: Name::try_from(name.to_owned()).unwrap(),
         source: project::BrrSampleSource::BrrFile(Default::default()),
         ignore_gaussian_overflow: false,
-        pitches: Some(project::BrrSamplePitches::SampleRates(sample_rates)),
+        pitches: Some(project::BrrSamplePitches::SampleRates { sample_rates }),
         envelope,
         comment: Default::default(),
     }

@@ -2150,7 +2150,7 @@ impl<'a> Bytecode<'a> {
                         Some((id, envelope, InstrumentHintFreq::from_tuning(tuning)));
                     Ok(())
                 }
-                Some(BrrSamplePitches::SampleRates(_)) | None => {
+                Some(BrrSamplePitches::SampleRates { .. }) | None => {
                     Err(ChannelError::CannotSetInstrumentHintNoTuning)
                 }
             },
@@ -2759,7 +2759,7 @@ impl<'a> Bytecode<'a> {
                                     );
                                 }
                             }
-                            Some(BrrSamplePitches::SampleRates(_)) | None => {
+                            Some(BrrSamplePitches::SampleRates { .. }) | None => {
                                 return Err(BytecodeError::SubroutineInstrumentHintNoTuning);
                             }
                         },

@@ -434,8 +434,8 @@ pub enum BrrSamplePitches {
         #[serde(rename = "last_note")]
         last: Note,
     },
-    #[serde(rename = "sample_rates")]
-    SampleRates(Vec<u32>),
+    #[serde(rename = "samples")]
+    SampleRates { sample_rates: Vec<u32> },
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
@@ -539,7 +539,9 @@ impl From<Sample> for BrrSample {
             name: value.name,
             source: convert_old_source(value.source, value.loop_setting, value.evaluator),
             ignore_gaussian_overflow: value.ignore_gaussian_overflow,
-            pitches: Some(BrrSamplePitches::SampleRates(value.sample_rates)),
+            pitches: Some(BrrSamplePitches::SampleRates {
+                sample_rates: value.sample_rates,
+            }),
             envelope: value.envelope,
             comment: value.comment.unwrap_or_default(),
         }
