@@ -13,11 +13,12 @@ use crate::pitch_table::{
     PitchTable, SamplePitches,
 };
 use crate::project::{
-    self, BrrSamplePitches, Instrument, InstrumentNoteRange, UniqueNamesProjectFile,
+    self, BrrEncoderSettings, BrrSamplePitches, Instrument, InstrumentNoteRange,
+    UniqueNamesProjectFile,
 };
 
 use brr::{
-    encode_brr, parse_brr_file, read_mono_pcm_wave_file, BrrFilter, BrrSample, MonoPcm16WaveFile,
+    self, parse_brr_file, read_mono_pcm_wave_file, BrrFilter, BrrSample, MonoPcm16WaveFile,
     ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
@@ -116,15 +117,10 @@ impl SampleFileCache {
     }
 }
 
-fn encode_wave_file(
-    s: &project::WaveSource,
-    cache: &mut SampleFileCache,
-) -> Result<BrrSample, BrrError> {
-    let wav = match cache.load_wav_file(&s.source) {
-        Ok(w) => w,
-        Err(e) => return Err(e.clone()),
-    };
-
+fn encode_brr_samples(
+    samples: &[i16],
+    s: &BrrEncoderSettings,
+) -> Result<BrrSample, brr::EncodeError> {
     let loop_filter = match s.loop_filter {
         None => None,
         Some(project::BrrLoopFilter::Reset) => Some(BrrFilter::Filter0),
@@ -141,16 +137,26 @@ fn encode_wave_file(
         (None, _) => None,
     };
 
-    match encode_brr(
-        &wav.samples,
+    brr::encode_brr(
+        samples,
         s.evaluator.to_evaluator(),
         loop_point,
         s.dupe_block_hack.map(|o| o.into()),
         loop_filter,
-    ) {
-        Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrEncodeError(s.source.to_path_string(), e)),
-    }
+    )
+}
+
+fn load_and_encode_wave_file(
+    s: &project::WaveSource,
+    cache: &mut SampleFileCache,
+) -> Result<BrrSample, BrrError> {
+    let wav = match cache.load_wav_file(&s.source) {
+        Ok(w) => w,
+        Err(e) => return Err(e.clone()),
+    };
+
+    encode_brr_samples(&wav.samples, &s.settings)
+        .map_err(|e| BrrError::BrrEncodeError(s.source.to_path_string(), e))
 }
 
 fn load_brr_file(
@@ -188,7 +194,7 @@ pub fn compile_brr_sample(
 ) -> Result<SampleData, SampleError> {
     let brr_sample = {
         let mut s = match &input.source {
-            project::BrrSampleSource::WaveFile(s) => encode_wave_file(s, cache),
+            project::BrrSampleSource::WaveFile(s) => load_and_encode_wave_file(s, cache),
             project::BrrSampleSource::BrrFile(s) => load_brr_file(s, cache),
         };
 

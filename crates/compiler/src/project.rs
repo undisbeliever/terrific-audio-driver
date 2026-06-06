@@ -350,9 +350,7 @@ pub enum BrrLoopFilter {
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
-pub struct WaveSource {
-    pub source: SourcePathBuf,
-
+pub struct BrrEncoderSettings {
     #[serde(default)]
     pub evaluator: BrrEvaluator,
 
@@ -367,6 +365,14 @@ pub struct WaveSource {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dupe_block_hack: Option<BlockNumber>,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
+pub struct WaveSource {
+    pub source: SourcePathBuf,
+
+    #[serde(flatten)]
+    pub settings: BrrEncoderSettings,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Default, Debug)]
@@ -510,10 +516,12 @@ fn convert_old_source(
 
             BrrSampleSource::WaveFile(WaveSource {
                 source,
-                evaluator,
-                loop_point,
-                loop_filter,
-                dupe_block_hack,
+                settings: BrrEncoderSettings {
+                    evaluator,
+                    loop_point,
+                    loop_filter,
+                    dupe_block_hack,
+                },
             })
         }
     }
