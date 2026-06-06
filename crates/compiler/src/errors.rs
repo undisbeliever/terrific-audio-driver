@@ -78,8 +78,6 @@ pub enum UniqueNameListError {
 
 #[derive(Debug)]
 pub enum ProjectFileError {
-    Instrument(UniqueNameListError),
-    Sample(UniqueNameListError),
     BrrSample(UniqueNameListError),
     SoundEffect(UniqueNameListError),
     Song(UniqueNameListError),
@@ -468,6 +466,7 @@ pub struct SampleError {
     pub pitch_error: Option<PitchError>,
 }
 
+// ::TODO remove::
 #[derive(Debug)]
 pub struct SampleAndInstrumentDataError {
     pub sample_errors: Vec<(usize, Name, SampleError)>,
@@ -843,8 +842,6 @@ fn fmt_unique_name_list_error(
 impl Display for ProjectFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
-            Self::Sample(e) => fmt_unique_name_list_error(f, e, "sample"),
             Self::BrrSample(e) => fmt_unique_name_list_error(f, e, "brr sample"),
             Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
             Self::Song(e) => fmt_unique_name_list_error(f, e, "song"),

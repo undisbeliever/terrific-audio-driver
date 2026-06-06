@@ -35,13 +35,7 @@ impl NameGetter for project::Song {
     }
 }
 
-impl NameGetter for project::Instrument {
-    fn name(&self) -> &Name {
-        &self.name
-    }
-}
-
-impl NameGetter for project::Sample {
+impl NameGetter for project::BrrSample {
     fn name(&self) -> &Name {
         &self.name
     }
@@ -69,13 +63,7 @@ impl NameSetter for project::Song {
     }
 }
 
-impl NameSetter for project::Instrument {
-    fn set_name(&mut self, name: Name) {
-        self.name = name;
-    }
-}
-
-impl NameSetter for project::Sample {
+impl NameSetter for project::BrrSample {
     fn set_name(&mut self, name: Name) {
         self.name = name;
     }

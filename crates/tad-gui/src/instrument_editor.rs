@@ -4,18 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{InstrumentOutput, ItemId, PlaySampleArgs};
+use crate::compiler_thread::{ItemId, PlaySampleArgs};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
-use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
-use crate::sample_widgets::DEFAULT_ENVELOPE;
-use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
 use compiler::errors::ValueError;
-use compiler::notes::{Note, Octave, PitchSemitoneIndex, STARTING_OCTAVE};
-use compiler::path::SourcePathBuf;
-use compiler::project::{self, Instrument, LoopSetting};
+use compiler::notes::{Note, Octave, PitchSemitoneIndex};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -26,69 +21,6 @@ use fltk::enums::{Align, Color};
 use fltk::group::Group;
 use fltk::misc::Spinner;
 use fltk::prelude::*;
-
-fn blank_instrument() -> Instrument {
-    Instrument {
-        name: "name".parse().unwrap(),
-        source: SourcePathBuf::default(),
-        freq: 500.0,
-        loop_setting: LoopSetting::None,
-        evaluator: Default::default(),
-        ignore_gaussian_overflow: false,
-        note_range: project::InstrumentNoteRange::Octave {
-            first: STARTING_OCTAVE,
-            last: STARTING_OCTAVE,
-        },
-        envelope: DEFAULT_ENVELOPE,
-        comment: None,
-    }
-}
-
-pub struct InstrumentMapping;
-
-impl TableMapping for InstrumentMapping {
-    type DataType = project::Instrument;
-    type RowType = RowWithStatus<SimpleRow<1>>;
-
-    const CAN_CLONE: bool = true;
-    const CAN_EDIT: bool = false;
-
-    fn type_name() -> &'static str {
-        "instrument"
-    }
-
-    fn headers() -> Vec<String> {
-        vec!["Instruments".to_owned()]
-    }
-
-    fn add_clicked() -> GuiMessage {
-        GuiMessage::Instrument(ListMessage::Add(blank_instrument()))
-    }
-
-    fn to_message(lm: ListMessage<project::Instrument>) -> GuiMessage {
-        GuiMessage::Instrument(lm)
-    }
-
-    fn new_row(i: &Instrument) -> Self::RowType {
-        RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
-    }
-
-    fn edit_row(r: &mut Self::RowType, i: &Instrument) -> bool {
-        r.columns.edit_column(0, i.name.as_str())
-    }
-
-    fn user_changes_selection() -> Option<GuiMessage> {
-        Some(GuiMessage::UserChangedSelectedInstrument)
-    }
-}
-
-impl TableCompilerOutput for InstrumentMapping {
-    type CompilerOutputType = InstrumentOutput;
-
-    fn set_row_state(r: &mut Self::RowType, co: &Option<InstrumentOutput>) -> bool {
-        r.set_status_optional_result(co)
-    }
-}
 
 pub struct TestInstrumentWidget {
     selected_id: Option<ItemId>,

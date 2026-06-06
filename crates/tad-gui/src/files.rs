@@ -538,13 +538,15 @@ pub fn add_song_to_pf_dialog(
 fn open_sample_dialog(
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-    source: &SourcePathBuf,
+    source: Option<&SourcePathBuf>,
 ) -> Option<SourcePathBuf> {
-    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(source)) {
+    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, source) {
         let new_source = p.source_path;
 
         // Remove the previous and new files from sample cache to ensure any file changes are loaded
-        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(source.clone()));
+        if let Some(s) = source {
+            let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(s.clone()));
+        }
         let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(new_source.clone()));
 
         // The sample might be used by more than one instrument.
@@ -554,7 +556,7 @@ fn open_sample_dialog(
             new_source.clone(),
         ));
 
-        if source != &new_source {
+        if source != Some(&new_source) {
             Some(new_source)
         } else {
             None
@@ -564,43 +566,20 @@ fn open_sample_dialog(
     }
 }
 
-pub fn open_instrument_sample_dialog(
-    sender: &fltk::app::Sender<GuiMessage>,
-    compiler_sender: &mpsc::Sender<ToCompiler>,
-    pd: &ProjectData,
-    id: ItemId,
-) {
-    let inst = match pd.instruments().get_id(id) {
-        Some((_, inst)) => inst,
-        None => return,
-    };
-
-    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &inst.source) {
-        let new_inst = project::Instrument {
-            source: new_source,
-            ..inst.clone()
-        };
-        sender.send(GuiMessage::EditInstrument(id, new_inst));
-    }
-}
-
 pub fn open_sample_sample_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     id: ItemId,
 ) {
-    let sample = match pd.samples().get_id(id) {
+    let sample = match pd.brr_samples.get_id(id) {
         Some((_, s)) => s,
         None => return,
     };
 
-    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &sample.source) {
-        let new_sample = project::Sample {
-            source: new_source,
-            ..sample.clone()
-        };
-        sender.send(GuiMessage::EditSample(id, new_sample));
+    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, sample.source_path()) {
+        // ::TODO implement::
+        let _ = (new_source, sender);
     }
 }
 

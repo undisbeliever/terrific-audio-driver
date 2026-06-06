@@ -442,24 +442,9 @@ impl SampleAnalyserDialog {
         Self { state }
     }
 
-    pub fn show_for_instrument(&mut self, id: ItemId, inst: &project::Instrument) {
-        self.state.borrow_mut().show(
-            InstrumentOrSampleId::Instrument(id),
-            inst.source.clone(),
-            inst.freq,
-            inst.loop_setting.clone(),
-            inst.evaluator,
-        );
-    }
-
-    pub fn show_for_sample(&mut self, id: ItemId, s: &project::Sample) {
-        self.state.borrow_mut().show(
-            InstrumentOrSampleId::Sample(id),
-            s.source.clone(),
-            0.0,
-            s.loop_setting.clone(),
-            s.evaluator,
-        );
+    pub fn show(&mut self, id: ItemId, s: &project::BrrSample) {
+        // ::TODO implement::
+        let _ = (id, s);
     }
 
     pub fn analysis_from_compiler_thread(&mut self, r: Result<SampleAnalysis, BrrError>) {

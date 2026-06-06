@@ -4,15 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CadOutput, InstrumentAndSampleNames, InstrumentOutput, SampleOutput};
+use crate::compiler_thread::{CadOutput, InstrumentAndSampleNames, SampleOutput};
 use crate::helpers::ch_units_to_width;
-use crate::list_editor::{LaVec, ListAction};
-use crate::InstrumentsAndSamplesData;
+use crate::list_editor::{LaVec, ListAction, ListWithCompilerOutput};
 
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::{addresses, COMMON_DATA_HEADER_SIZE};
 use compiler::identifier::Name;
-use compiler::project::{Instrument, Sample};
+use compiler::project;
 use compiler::songs::{SongAramSize, BLANK_SONG_ARAM_SIZE};
 use fltk::table::TableContext;
 
@@ -43,7 +42,6 @@ pub struct SampleSizesWidget {
     brr_sample_names: Arc<InstrumentAndSampleNames>,
 
     // Used when the Common Audio Data cannot be compiled
-    no_cad_instruments: LaVec<(Name, String)>,
     no_cad_samples: LaVec<(Name, String)>,
 }
 
@@ -111,7 +109,7 @@ fn largest_song_string(largest_song: &SongAramSize) -> String {
 impl SampleSizesWidget {
     pub fn new(
         parent: &mut Flex,
-        instruments_and_samples: &InstrumentsAndSamplesData,
+        brr_samples: &ListWithCompilerOutput<project::BrrSample, SampleOutput>,
     ) -> Rc<RefCell<SampleSizesWidget>> {
         let graph_height = ch_units_to_width(parent, 10);
 
@@ -134,9 +132,6 @@ impl SampleSizesWidget {
             }
         });
 
-        let instruments = instruments_and_samples.list1();
-        let samples = instruments_and_samples.list2();
-
         let state = Rc::new(RefCell::new(SampleSizesWidget {
             font: table.label_font(),
             font_size: table.label_size(),
@@ -150,14 +145,8 @@ impl SampleSizesWidget {
             brr_sample_names: Arc::default(),
             brr_sizes: Vec::new(),
 
-            no_cad_instruments: LaVec::from_vec(
-                instruments
-                    .item_iter()
-                    .map(|i| (i.name.clone(), String::new()))
-                    .collect(),
-            ),
             no_cad_samples: LaVec::from_vec(
-                samples
+                brr_samples
                     .item_iter()
                     .map(|s| (s.name.clone(), String::new()))
                     .collect(),
@@ -240,7 +229,7 @@ impl SampleSizesWidget {
         let n_sample_rows = if self.graph_data.is_some() {
             self.brr_sizes.len()
         } else {
-            self.no_cad_instruments.len() + self.no_cad_samples.len()
+            self.no_cad_samples.len()
         };
 
         let n_rows = n_sample_rows + N_STAT_ROWS;
@@ -309,17 +298,7 @@ impl SampleSizesWidget {
         self.graph_widget.redraw();
     }
 
-    pub fn instrument_edited(&mut self, action: &ListAction<Instrument>) {
-        self.no_cad_instruments.process_map(
-            action,
-            |inst| (inst.name.clone(), String::new()),
-            |d, inst| *d = (inst.name.clone(), String::new()),
-        );
-
-        self.update_table_size();
-    }
-
-    pub fn sample_edited(&mut self, action: &ListAction<Sample>) {
+    pub fn sample_edited(&mut self, action: &ListAction<project::BrrSample>) {
         self.no_cad_samples.process_map(
             action,
             |sample| (sample.name.clone(), String::new()),
@@ -327,21 +306,6 @@ impl SampleSizesWidget {
         );
 
         self.update_table_size();
-    }
-
-    pub fn instrument_compiled(
-        &mut self,
-        index: usize,
-        compiler_output: &Option<InstrumentOutput>,
-    ) {
-        if let Some(d) = self.no_cad_instruments.get_mut(index) {
-            match compiler_output {
-                Some(Ok(i)) => d.1 = usize_string(i.0),
-                Some(Err(_)) => "ERROR".clone_into(&mut d.1),
-                None => d.1.clear(),
-            }
-            self.table.redraw()
-        }
     }
 
     pub fn sample_compiled(&mut self, index: usize, compiler_output: &Option<SampleOutput>) {
@@ -517,24 +481,16 @@ impl SampleSizesWidget {
     fn get_sample_name(&self, i: usize) -> Option<&Name> {
         if self.graph_data.is_some() {
             self.brr_sample_names.get(i)
-        } else if i < self.no_cad_instruments.len() {
-            self.no_cad_instruments.get(i).map(|d| &d.0)
         } else {
-            self.no_cad_samples
-                .get(i - self.no_cad_instruments.len())
-                .map(|d| &d.0)
+            self.no_cad_samples.get(i).map(|d| &d.0)
         }
     }
 
     fn get_sample_size(&self, i: usize) -> Option<&String> {
         if self.graph_data.is_some() {
             self.brr_sizes.get(i)
-        } else if i < self.no_cad_instruments.len() {
-            self.no_cad_instruments.get(i).map(|d| &d.1)
         } else {
-            self.no_cad_samples
-                .get(i - self.no_cad_instruments.len())
-                .map(|d| &d.1)
+            self.no_cad_samples.get(i).map(|d| &d.1)
         }
     }
 }

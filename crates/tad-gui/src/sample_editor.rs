@@ -4,17 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{ItemId, PlaySampleArgs, SampleOutput};
+use crate::compiler_thread::{ItemId, PlaySampleArgs};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
-use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
-use crate::sample_widgets::DEFAULT_ENVELOPE;
-use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
 use compiler::notes::Note;
-use compiler::path::SourcePathBuf;
-use compiler::project::{self, LoopSetting, Sample};
+use compiler::project::Sample;
 use fltk::group::Group;
 use fltk::misc::Spinner;
 
@@ -24,65 +20,6 @@ use std::rc::Rc;
 use fltk::app;
 use fltk::button::Button;
 use fltk::prelude::*;
-
-fn blank_sample() -> project::Sample {
-    project::Sample {
-        name: "name".parse().unwrap(),
-        source: SourcePathBuf::default(),
-        loop_setting: LoopSetting::None,
-        evaluator: Default::default(),
-        ignore_gaussian_overflow: false,
-        sample_rates: Vec::new(),
-        envelope: DEFAULT_ENVELOPE,
-        comment: None,
-    }
-}
-
-pub struct SampleMapping;
-
-impl TableMapping for SampleMapping {
-    type DataType = project::Sample;
-    type RowType = RowWithStatus<SimpleRow<1>>;
-
-    const CAN_CLONE: bool = true;
-    const CAN_EDIT: bool = false;
-
-    fn type_name() -> &'static str {
-        "sample"
-    }
-
-    fn headers() -> Vec<String> {
-        vec!["Samples".to_owned()]
-    }
-
-    fn add_clicked() -> GuiMessage {
-        GuiMessage::Sample(ListMessage::Add(blank_sample()))
-    }
-
-    fn to_message(lm: ListMessage<project::Sample>) -> GuiMessage {
-        GuiMessage::Sample(lm)
-    }
-
-    fn new_row(i: &project::Sample) -> Self::RowType {
-        RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
-    }
-
-    fn edit_row(r: &mut Self::RowType, i: &project::Sample) -> bool {
-        r.columns.edit_column(0, i.name.as_str())
-    }
-
-    fn user_changes_selection() -> Option<GuiMessage> {
-        Some(GuiMessage::UserChangedSelectedSample)
-    }
-}
-
-impl TableCompilerOutput for SampleMapping {
-    type CompilerOutputType = SampleOutput;
-
-    fn set_row_state(r: &mut Self::RowType, co: &Option<SampleOutput>) -> bool {
-        r.set_status_optional_result(co)
-    }
-}
 
 pub struct TestSampleWidget {
     selected_id: Option<ItemId>,

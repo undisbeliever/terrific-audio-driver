@@ -4,22 +4,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{
-    CadOutput, CombineSamplesError, InstrumentOutput, ItemId, SampleOutput,
-};
+use crate::compiler_thread::{CadOutput, CombineSamplesError, ItemId, SampleOutput};
+use crate::helpers::*;
 use crate::list_editor::{
-    tables_for_list_pair, ListAction, ListEditorTable, ListWithCompilerOutput,
-    ListWithCompilerOutputEditor,
+    ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
+    TableCompilerOutput, TableMapping,
 };
 use crate::sample_sizes_widget::SampleSizesWidget;
+use crate::sample_widgets::DEFAULT_ENVELOPE;
+use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
-use crate::{helpers::*, InstrumentsAndSamplesData};
 
-use crate::instrument_editor::InstrumentMapping;
-use crate::sample_editor::SampleMapping;
-
-use compiler::project::{self, Instrument};
+use compiler::project;
 use compiler::songs::SongAramSize;
 use fltk::button::Button;
 
@@ -31,6 +28,63 @@ use fltk::enums::Color;
 use fltk::group::{Flex, Wizard};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
+
+fn blank_sample() -> project::BrrSample {
+    project::BrrSample {
+        name: "name".parse().unwrap(),
+        source: project::BrrSampleSource::WaveFile(Default::default()),
+        ignore_gaussian_overflow: Default::default(),
+        pitches: None,
+        envelope: DEFAULT_ENVELOPE,
+        comment: String::new(),
+    }
+}
+
+pub struct SampleMapping;
+
+impl TableMapping for SampleMapping {
+    type DataType = project::BrrSample;
+    type RowType = RowWithStatus<SimpleRow<1>>;
+
+    const CAN_CLONE: bool = true;
+    const CAN_EDIT: bool = false;
+
+    fn type_name() -> &'static str {
+        "sample"
+    }
+
+    fn headers() -> Vec<String> {
+        vec!["Samples".to_owned()]
+    }
+
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::BrrSample(ListMessage::Add(blank_sample()))
+    }
+
+    fn to_message(lm: ListMessage<project::BrrSample>) -> GuiMessage {
+        GuiMessage::BrrSample(lm)
+    }
+
+    fn new_row(i: &project::BrrSample) -> Self::RowType {
+        RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
+    }
+
+    fn edit_row(r: &mut Self::RowType, i: &project::BrrSample) -> bool {
+        r.columns.edit_column(0, i.name.as_str())
+    }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangedSelectedSample)
+    }
+}
+
+impl TableCompilerOutput for SampleMapping {
+    type CompilerOutputType = SampleOutput;
+
+    fn set_row_state(r: &mut Self::RowType, co: &Option<SampleOutput>) -> bool {
+        r.set_status_optional_result(co)
+    }
+}
 
 #[derive(PartialEq)]
 enum SelectedEditor {
@@ -44,8 +98,7 @@ pub struct SamplesTab {
     cad_output: CadOutput,
 
     sample_sizes_button: Button,
-    inst_table: ListEditorTable<InstrumentMapping>,
-    sample_table: ListEditorTable<SampleMapping>,
+    table: ListEditorTable<SampleMapping>,
 
     editor_wizard: Wizard,
 
@@ -72,7 +125,7 @@ impl Tab for SamplesTab {
 
 impl SamplesTab {
     pub fn new(
-        instruments_and_samples: &InstrumentsAndSamplesData,
+        brr_samples: &ListWithCompilerOutput<project::BrrSample, SampleOutput>,
         sender: app::Sender<GuiMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
@@ -86,8 +139,7 @@ impl SamplesTab {
         sample_sizes_button.set_tooltip("Show sample sizes");
         sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
-        let (inst_table, sample_table) =
-            tables_for_list_pair(&mut sidebar, sender, instruments_and_samples);
+        let table = ListEditorTable::new_with_data(&mut sidebar, brr_samples, sender);
 
         sidebar.end();
 
@@ -97,8 +149,7 @@ impl SamplesTab {
 
         let mut sample_sizes_group = Flex::default().column().size_of_parent();
         sample_sizes_group.set_margin(margin);
-        let sample_sizes_widget =
-            SampleSizesWidget::new(&mut sample_sizes_group, instruments_and_samples);
+        let sample_sizes_widget = SampleSizesWidget::new(&mut sample_sizes_group, brr_samples);
         sample_sizes_group.end();
 
         editor_wizard.end();
@@ -127,8 +178,7 @@ impl SamplesTab {
             sample_sizes_button,
             sample_sizes_group,
             sample_sizes_widget,
-            inst_table,
-            sample_table,
+            table,
             editor_wizard,
             console,
             console_buffer,
@@ -146,11 +196,7 @@ impl SamplesTab {
             CadOutput::Err(e) => {
                 self.sample_sizes_button.set_label_color(Color::Red);
                 match e {
-                    CombineSamplesError::IndividualErrors {
-                        n_instrument_errors,
-                        n_sample_errors,
-                    } => {
-                        let n_errors = n_instrument_errors + n_sample_errors;
+                    &CombineSamplesError::IndividualErrors(n_errors) => {
                         if n_errors == 1 {
                             self.sample_sizes_button.set_label("1 error");
                         } else {
@@ -191,8 +237,7 @@ impl SamplesTab {
     }
 
     pub fn show_sample_sizes_widget(&mut self) {
-        self.inst_table.clear_selected_row();
-        self.sample_table.clear_selected_row();
+        self.table.clear_selected_row();
 
         if !matches!(self.selected_editor, SelectedEditor::CombinedSamplesResult) {
             self.selected_editor = SelectedEditor::CombinedSamplesResult;
@@ -224,59 +269,18 @@ impl SamplesTab {
     }
 }
 
-impl ListWithCompilerOutputEditor<Instrument, InstrumentOutput> for SamplesTab {
-    type TableMapping = InstrumentMapping;
-
-    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
-        &mut self.inst_table
-    }
-
-    fn list_edited(&mut self, action: &ListAction<Instrument>) {
-        self.sample_sizes_widget
-            .borrow_mut()
-            .instrument_edited(action);
-    }
-
-    fn item_edited(&mut self, _id: ItemId, _value: &Instrument) {}
-
-    fn set_compiler_output(
-        &mut self,
-        index: usize,
-        _id: ItemId,
-        compiler_output: &Option<InstrumentOutput>,
-    ) {
-        self.sample_sizes_widget
-            .borrow_mut()
-            .instrument_compiled(index, compiler_output);
-    }
-
-    fn selected_item_changed(
-        &mut self,
-        instruments: &ListWithCompilerOutput<Instrument, InstrumentOutput>,
-    ) {
-        match instruments.get_selected_row(&self.inst_table) {
-            Some(_) => {
-                self.sample_table.clear_selected_row();
-            }
-            None => {
-                self.show_sample_sizes_widget();
-            }
-        }
-    }
-}
-
-impl ListWithCompilerOutputEditor<project::Sample, SampleOutput> for SamplesTab {
+impl ListWithCompilerOutputEditor<project::BrrSample, SampleOutput> for SamplesTab {
     type TableMapping = SampleMapping;
 
     fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
-        &mut self.sample_table
+        &mut self.table
     }
 
-    fn list_edited(&mut self, action: &ListAction<project::Sample>) {
+    fn list_edited(&mut self, action: &ListAction<project::BrrSample>) {
         self.sample_sizes_widget.borrow_mut().sample_edited(action);
     }
 
-    fn item_edited(&mut self, _id: ItemId, _value: &project::Sample) {}
+    fn item_edited(&mut self, _id: ItemId, _value: &project::BrrSample) {}
 
     fn set_compiler_output(
         &mut self,
@@ -291,12 +295,10 @@ impl ListWithCompilerOutputEditor<project::Sample, SampleOutput> for SamplesTab 
 
     fn selected_item_changed(
         &mut self,
-        samples: &ListWithCompilerOutput<project::Sample, SampleOutput>,
+        samples: &ListWithCompilerOutput<project::BrrSample, SampleOutput>,
     ) {
-        match samples.get_selected_row(&self.sample_table) {
-            Some(_) => {
-                self.inst_table.clear_selected_row();
-            }
+        match samples.get_selected_row(&self.table) {
+            Some(_) => {}
             None => {
                 self.show_sample_sizes_widget();
             }

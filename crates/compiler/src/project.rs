@@ -50,6 +50,7 @@ impl From<BlockNumber> for brr::BlockNumber {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(tag = "loop", content = "loop_setting")]
 // ::TODO move and/or rename::
+// ::TODO remove `pub`::
 pub enum LoopSetting {
     /// This setting depends on the source file:
     ///     * wav files - The sample does not loop
@@ -131,9 +132,7 @@ impl LoopSetting {
             Self::DupeBlockHackFilter3(_) => "dupe_block_hack_filter_3)",
         }
     }
-}
 
-impl LoopSetting {
     /// Returns true if the argument is loop point in samples
     pub fn samples_argument(&self) -> bool {
         match self {
@@ -224,6 +223,7 @@ impl<'de> Deserialize<'de> for InstrumentNoteRange {
 }
 
 // ::TODO move and/or rename::
+// ::TODO remove `pub`::
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
@@ -259,6 +259,7 @@ impl Instrument {
 }
 
 // ::TODO move and/or rename::
+// ::TODO remove `pub`::
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Sample {
     pub name: Name,
@@ -457,6 +458,15 @@ pub struct BrrSample {
     pub comment: String,
 }
 
+impl BrrSample {
+    pub fn source_path(&self) -> Option<&SourcePathBuf> {
+        match &self.source {
+            BrrSampleSource::WaveFile(s) => Some(&s.source),
+            BrrSampleSource::BrrFile(s) => Some(&s.source),
+        }
+    }
+}
+
 fn convert_old_source(
     source: SourcePathBuf,
     loop_setting: LoopSetting,
@@ -588,30 +598,72 @@ impl Serialize for About {
     }
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Default, Debug, PartialEq)]
 pub struct Project {
-    #[serde(default, rename = "_about")]
+    #[serde(rename = "_about")]
     pub about: About,
 
-    pub instruments: Vec<Instrument>,
+    pub brr_samples: Vec<BrrSample>,
 
-    #[serde(default)]
-    pub samples: Vec<Sample>,
-
-    #[serde(default)]
     pub default_sfx_flags: DefaultSfxFlags,
 
-    #[serde(default)]
     pub high_priority_sound_effects: Vec<Name>,
-    #[serde(default)]
     pub sound_effects: Vec<Name>,
-    #[serde(default)]
     pub low_priority_sound_effects: Vec<Name>,
 
     pub sound_effect_file: Option<SourcePathBuf>,
 
-    #[serde(default)]
     pub songs: Vec<Song>,
+}
+
+impl<'de> Deserialize<'de> for Project {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // P is used to convert the old instruments and samples formats to BrrSamples
+
+        #[derive(Deserialize)]
+        pub struct P {
+            #[serde(default, rename = "_about")]
+            about: About,
+            #[serde(default)]
+            instruments: Vec<Instrument>,
+            #[serde(default)]
+            brr_samples: Vec<BrrSample>,
+            #[serde(default)]
+            samples: Vec<Sample>,
+            #[serde(default)]
+            default_sfx_flags: DefaultSfxFlags,
+            #[serde(default)]
+            high_priority_sound_effects: Vec<Name>,
+            #[serde(default)]
+            sound_effects: Vec<Name>,
+            #[serde(default)]
+            low_priority_sound_effects: Vec<Name>,
+            #[serde(default)]
+            sound_effect_file: Option<SourcePathBuf>,
+            #[serde(default)]
+            songs: Vec<Song>,
+        }
+
+        let p = <P>::deserialize(deserializer)?;
+
+        let mut brr_samples = p.brr_samples;
+        brr_samples.extend(p.instruments.into_iter().map(|i| i.into()));
+        brr_samples.extend(p.samples.into_iter().map(|s| s.into()));
+
+        Ok(Project {
+            about: p.about,
+            brr_samples,
+            default_sfx_flags: p.default_sfx_flags,
+            high_priority_sound_effects: p.high_priority_sound_effects,
+            sound_effects: p.sound_effects,
+            low_priority_sound_effects: p.low_priority_sound_effects,
+            sound_effect_file: p.sound_effect_file,
+            songs: p.songs,
+        })
+    }
 }
 
 pub struct ProjectFile {
@@ -737,9 +789,6 @@ pub struct UniqueNamesProjectFile {
     pub file_name: String,
     pub parent_path: ParentPathBuf,
 
-    pub instruments: UniqueNamesList<Instrument>,
-    pub samples: UniqueNamesList<Sample>,
-
     pub brr_samples: UniqueNamesList<BrrSample>,
 
     pub default_sfx_flags: DefaultSfxFlags,
@@ -824,17 +873,6 @@ pub fn validate_brr_sample_names(
     }
 }
 
-// ::TODO remove::
-pub fn validate_instrument_and_sample_names<'a>(
-    instruments: impl Iterator<Item = &'a Instrument>,
-    samples: impl Iterator<Item = &'a Sample>,
-) -> Result<UniqueNamesList<BrrSample>, ProjectFileErrors> {
-    let instruments = instruments.cloned().map(BrrSample::from);
-    let samples = samples.cloned().map(BrrSample::from);
-
-    validate_brr_sample_names(instruments.chain(samples).collect())
-}
-
 pub fn validate_sfx_export_order(
     high_priority_sound_effects: Vec<Name>,
     sound_effects: Vec<Name>,
@@ -871,18 +909,11 @@ pub fn validate_project_file_names(
 ) -> Result<UniqueNamesProjectFile, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let instruments = validate_list_names(
-        pf.contents.instruments,
+    let brr_samples = validate_list_names(
+        pf.contents.brr_samples,
         false,
         MAX_INSTRUMENTS_AND_SAMPLES,
-        |e| errors.push(ProjectFileError::Instrument(e)),
-    );
-
-    let samples = validate_list_names(
-        pf.contents.samples,
-        false,
-        MAX_INSTRUMENTS_AND_SAMPLES,
-        |e| errors.push(ProjectFileError::Sample(e)),
+        |e| errors.push(ProjectFileError::BrrSample(e)),
     );
 
     let sfx_export_order = match validate_sfx_export_order(
@@ -901,27 +932,12 @@ pub fn validate_project_file_names(
         errors.push(ProjectFileError::Song(e))
     });
 
-    let brr_samples = if errors.is_empty() {
-        match validate_instrument_and_sample_names(instruments.list().iter(), samples.list().iter())
-        {
-            Ok(instruments) => Some(instruments),
-            Err(e) => {
-                errors.extend(e.0);
-                None
-            }
-        }
-    } else {
-        None
-    };
-
     if errors.is_empty() {
         Ok(UniqueNamesProjectFile {
             path: pf.path,
             file_name: pf.file_name,
             parent_path: pf.parent_path,
-            instruments,
-            samples,
-            brr_samples: brr_samples.unwrap(),
+            brr_samples,
             sfx_export_order: sfx_export_order.unwrap(),
             default_sfx_flags: pf.contents.default_sfx_flags,
             sound_effect_file: pf.contents.sound_effect_file,
