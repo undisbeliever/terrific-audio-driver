@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::notes::Note;
+use compiler::project::{BlockNumber, SampleNumber};
 use compiler::{envelope::Adsr, envelope::Gain, identifier::Name, notes::Octave};
 
 use fltk::button::CheckButton;
@@ -163,7 +164,7 @@ impl InputHelper for f64 {
 }
 
 impl InputHelper for Octave {
-    type Widget = IntInput;
+    type Widget = Input;
 
     fn parse(s: String) -> Option<Self> {
         s.parse::<u32>().ok()?.try_into().ok()
@@ -219,6 +220,30 @@ impl InputHelper for Gain {
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
         w.set_value(&value.to_gui_string())
+    }
+}
+
+impl InputHelper for SampleNumber {
+    type Widget = IntInput;
+
+    fn parse(s: String) -> Option<Self> {
+        s.parse::<usize>().ok().map(Self)
+    }
+
+    fn set_widget_value(w: &mut Self::Widget, value: &Self) {
+        w.set_value(&value.0.to_string())
+    }
+}
+
+impl InputHelper for BlockNumber {
+    type Widget = IntInput;
+
+    fn parse(s: String) -> Option<Self> {
+        s.parse::<usize>().ok().map(Self)
+    }
+
+    fn set_widget_value(w: &mut Self::Widget, value: &Self) {
+        w.set_value(&value.0.to_string())
     }
 }
 

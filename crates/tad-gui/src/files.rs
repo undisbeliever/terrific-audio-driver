@@ -535,7 +535,7 @@ pub fn add_song_to_pf_dialog(
     }
 }
 
-fn open_sample_dialog(
+fn sample_file_dialog(
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     source: Option<&SourcePathBuf>,
@@ -566,20 +566,19 @@ fn open_sample_dialog(
     }
 }
 
-pub fn open_sample_sample_dialog(
+pub fn open_sample_file_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     id: ItemId,
 ) {
-    let sample = match pd.brr_samples.get_id(id) {
-        Some((_, s)) => s,
-        None => return,
-    };
+    if let Some((_, s)) = pd.brr_samples.get_id(id) {
+        if let Some(new_source) = sample_file_dialog(compiler_sender, pd, s.source_path()) {
+            let mut s = s.clone();
+            s.set_source_path(new_source);
 
-    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, sample.source_path()) {
-        // ::TODO implement::
-        let _ = (new_source, sender);
+            sender.send(GuiMessage::EditBrrSample(id, s));
+        }
     }
 }
 

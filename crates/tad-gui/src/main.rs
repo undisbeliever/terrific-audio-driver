@@ -78,7 +78,7 @@ use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput, SfxToCompiler, ShortSongError};
 use driver_state_window::DriverStateWindow;
 use files::{
-    new_project_dialog, open_project_dialog, open_sample_sample_dialog, song_name_from_path,
+    new_project_dialog, open_project_dialog, open_sample_file_dialog, song_name_from_path,
 };
 use fltk::dialog;
 use fltk::prelude::*;
@@ -167,7 +167,7 @@ pub enum GuiMessage {
         evaluator: project::BrrEvaluator,
     },
 
-    OpenSampleSampleDialog(ItemId),
+    OpenSampleFileDialog(ItemId),
 
     OpenSongTab(usize),
 
@@ -737,8 +737,8 @@ impl Project {
             GuiMessage::ShowSampleSizes => {
                 self.samples_tab.show_sample_sizes_widget();
             }
-            GuiMessage::OpenSampleSampleDialog(id) => {
-                open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, id);
+            GuiMessage::OpenSampleFileDialog(id) => {
+                open_sample_file_dialog(&self.sender, &self.compiler_sender, &self.data, id);
             }
 
             GuiMessage::OpenAnalyseSampleDialog(id) => {

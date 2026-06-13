@@ -12,7 +12,7 @@ use crate::identifier::Name;
 use crate::notes::{Note, Octave};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::SPC_SAMPLE_RATE;
-use crate::samples::BRR_EXTENSION;
+use crate::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use crate::textfile::load_text_file_with_limit_path;
 
 use std::collections::HashMap;
@@ -393,6 +393,33 @@ pub enum BrrSampleSource {
     BrrFile(BrrSource),
 }
 
+impl BrrSampleSource {
+    pub fn to_wave_source(&self) -> WaveSource {
+        match self {
+            BrrSampleSource::WaveFile(s) => s.clone(),
+            BrrSampleSource::BrrFile(s) => WaveSource {
+                source: s.source.clone(),
+                settings: BrrEncoderSettings {
+                    evaluator: Default::default(),
+                    loop_point: s.loop_point,
+                    loop_filter: Default::default(),
+                    dupe_block_hack: Default::default(),
+                },
+            },
+        }
+    }
+
+    pub fn to_brr_source(&self) -> BrrSource {
+        match self {
+            BrrSampleSource::BrrFile(s) => s.clone(),
+            BrrSampleSource::WaveFile(s) => BrrSource {
+                source: s.source.clone(),
+                loop_point: s.settings.loop_point,
+            },
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub enum SampleTuning {
     #[serde(rename = "frequency")]
@@ -469,6 +496,33 @@ impl BrrSample {
         match &self.source {
             BrrSampleSource::WaveFile(s) => Some(&s.source),
             BrrSampleSource::BrrFile(s) => Some(&s.source),
+        }
+    }
+
+    pub fn set_source_path(&mut self, path: SourcePathBuf) {
+        match path.extension() {
+            Some(WAV_EXTENSION) => match &mut self.source {
+                BrrSampleSource::WaveFile(s) => s.source = path,
+                _ => {
+                    self.source = BrrSampleSource::WaveFile(WaveSource {
+                        source: path,
+                        ..self.source.to_wave_source()
+                    });
+                }
+            },
+            Some(BRR_EXTENSION) => match &mut self.source {
+                BrrSampleSource::BrrFile(s) => s.source = path,
+                _ => {
+                    self.source = BrrSampleSource::BrrFile(BrrSource {
+                        source: path,
+                        ..self.source.to_brr_source()
+                    });
+                }
+            },
+            _ => match &mut self.source {
+                BrrSampleSource::WaveFile(s) => s.source = path,
+                BrrSampleSource::BrrFile(s) => s.source = path,
+            },
         }
     }
 }
