@@ -55,7 +55,7 @@ use crate::list_editor::{ListMessage, ListWithCompilerOutput};
 use crate::menu::{EditAction, Menu};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
-use crate::samples_tab::SamplesTab;
+use crate::samples_tab::{sample_with_new_tuning_frequency, SamplesTab};
 use crate::sfx_export_order::SfxId;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
@@ -87,7 +87,6 @@ use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
 use list_editor::ListWithCompilerOutputEditor;
 use monitor_timer::MonitorTimer;
-use sample_analyser::SampleAnalyserDialog;
 use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
 use sound_effects_tab::MAX_SFX_FILE_SOUND_EFFECTS;
@@ -132,6 +131,7 @@ pub enum GuiMessage {
 
     BrrSample(ListMessage<project::BrrSample>),
     EditBrrSample(ItemId, project::BrrSample),
+    SetSampleTuningFrequency(ItemId, f64),
     UserChangedSelectedSample,
 
     NewMmlFile,
@@ -157,15 +157,6 @@ pub enum GuiMessage {
     SetProjectSongName(usize, Name),
 
     ShowSampleSizes,
-
-    OpenAnalyseSampleDialog(ItemId),
-
-    CommitSampleAnalyserChanges {
-        id: InstrumentOrSampleId,
-        freq: f64,
-        loop_setting: project::LoopSetting,
-        evaluator: project::BrrEvaluator,
-    },
 
     OpenSampleFileDialog(ItemId),
 
@@ -252,8 +243,6 @@ struct Project {
     audio_monitor: AudioMonitor,
     audio_monitor_timer: MonitorTimer,
 
-    sample_analyser_dialog: SampleAnalyserDialog,
-
     tab_manager: TabManager,
     sfx_tab_selected: bool,
 
@@ -336,17 +325,16 @@ impl Project {
             tab_manager: TabManager::new(tabs, menu),
             sfx_tab_selected: false,
 
-            sample_analyser_dialog: SampleAnalyserDialog::new(
-                sender,
-                compiler_sender.clone(),
-                audio_sender.clone(),
-            ),
-
             sfx_window: SfxWindow::new(sender),
             driver_state_window: DriverStateWindow::new(sender, audio_monitor.clone()),
 
             project_tab: ProjectTab::new(&data, sender),
-            samples_tab: SamplesTab::new(&data.brr_samples, sender),
+            samples_tab: SamplesTab::new(
+                &data.brr_samples,
+                sender,
+                compiler_sender.clone(),
+                audio_sender.clone(),
+            ),
             sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
@@ -447,6 +435,12 @@ impl Project {
                 }
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+                }
+            }
+            GuiMessage::SetSampleTuningFrequency(id, frequency) => {
+                if let Some((_, s)) = self.data.brr_samples.get_id(id) {
+                    let s = sample_with_new_tuning_frequency(s, frequency);
+                    self.sender.send(GuiMessage::EditBrrSample(id, s));
                 }
             }
 
@@ -741,21 +735,6 @@ impl Project {
                 open_sample_file_dialog(&self.sender, &self.compiler_sender, &self.data, id);
             }
 
-            GuiMessage::OpenAnalyseSampleDialog(id) => {
-                if let Some((_, s)) = self.data.brr_samples.get_id(id) {
-                    self.sample_analyser_dialog.show(id, s);
-                }
-            }
-            GuiMessage::CommitSampleAnalyserChanges {
-                id,
-                freq,
-                loop_setting,
-                evaluator,
-            } => {
-                // ::TODO implement::
-                let _ = (id, freq, loop_setting, evaluator);
-            }
-
             GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.get(index) {
                     self.sender
@@ -891,8 +870,8 @@ impl Project {
                 }
             },
 
-            CompilerOutput::SampleAnalysis(r) => {
-                self.sample_analyser_dialog.analysis_from_compiler_thread(r)
+            CompilerOutput::SampleAnalysis(id, a) => {
+                self.samples_tab.analysis_from_compiler_thread(id, a);
             }
         }
     }

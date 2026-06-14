@@ -4,12 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CadOutput, CombineSamplesError, ItemId, SampleOutput};
+use crate::audio_thread::AudioMessage;
+use crate::compiler_thread::{CadOutput, CombineSamplesError, ItemId, SampleOutput, ToCompiler};
 use crate::helpers::*;
 use crate::list_editor::{
     ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
     TableCompilerOutput, TableMapping,
 };
+use crate::sample_analyser::{SampleAnalyserWidget, SampleAnalysis};
 use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::sample_widgets::{BrrEvaluatorChoice, DEFAULT_ADSR, DEFAULT_ENVELOPE, DEFAULT_GAIN};
 use crate::tables::{RowWithStatus, SimpleRow};
@@ -18,6 +20,7 @@ use crate::GuiMessage;
 
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::notes::Note;
+use compiler::pitch_table::default_octaves_for_tuning_frequency;
 use compiler::project::{
     self, BrrEncoderSettings, BrrLoopFilter, BrrSample, BrrSamplePitches, BrrSampleSource,
     BrrSource, SampleNumber, SampleTuning, WaveSource,
@@ -31,6 +34,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::rc::Rc;
+use std::sync::mpsc;
 
 use fltk::{
     app,
@@ -145,6 +149,8 @@ impl SamplesTab {
     pub fn new(
         brr_samples: &ListWithCompilerOutput<project::BrrSample, SampleOutput>,
         sender: app::Sender<GuiMessage>,
+        compiler_sender: mpsc::Sender<ToCompiler>,
+        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
         let margin = ch_units_to_width(&group, 1) / 2;
@@ -170,7 +176,7 @@ impl SamplesTab {
         let sample_sizes_widget = SampleSizesWidget::new(&mut sample_sizes_group, brr_samples);
         sample_sizes_group.end();
 
-        let sample_editor = BrrSampleEditor::new(sender);
+        let sample_editor = BrrSampleEditor::new(sender, compiler_sender, audio_sender);
 
         editor_wizard.end();
 
@@ -322,6 +328,17 @@ impl SamplesTab {
                 self.console.scroll(0, 0);
             }
         }
+    }
+
+    pub fn analysis_from_compiler_thread(
+        &mut self,
+        sample_id: ItemId,
+        analysis: Option<SampleAnalysis>,
+    ) {
+        self.sample_editor
+            .borrow_mut()
+            .sample_analyser
+            .analysis_from_compiler_thread(sample_id, analysis);
     }
 }
 
@@ -1058,10 +1075,16 @@ struct BrrSampleEditor {
 
     comment_buffer: TextBuffer,
     comment: TextEditor,
+
+    sample_analyser: SampleAnalyserWidget,
 }
 
 impl BrrSampleEditor {
-    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
+    fn new(
+        sender: app::Sender<GuiMessage>,
+        compiler_sender: mpsc::Sender<ToCompiler>,
+        audio_sender: mpsc::Sender<AudioMessage>,
+    ) -> Rc<RefCell<Self>> {
         let scroll = Scroll::default()
             .with_type(ScrollType::Vertical)
             .size_of_parent();
@@ -1077,10 +1100,13 @@ impl BrrSampleEditor {
         let c4 = ch_units_to_width(&scroll, 65);
         let c5 = ch_units_to_width(&scroll, 66);
 
+        // ::TODO shrink::
+        let analyser_width = ch_units_to_width(&scroll, 90);
+
         let outer_w = c5 - c1;
         let inner_w = c4 - c1;
 
-        let scrollgroup = Group::default().with_size(c5, r * 22 + s);
+        let scrollgroup = Group::default().with_size(analyser_width, r * 35 + s);
 
         let name = Input::new(c1, 0, outer_w, h, "Name: ");
 
@@ -1270,6 +1296,16 @@ impl BrrSampleEditor {
         comment.set_tab_nav(true);
         comment.wrap_mode(WrapMode::AtBounds, 0);
 
+        let sample_analyser = SampleAnalyserWidget::new(
+            0,
+            22 * r,
+            analyser_width,
+            13 * r,
+            sender,
+            compiler_sender,
+            audio_sender,
+        );
+
         scrollgroup.end();
 
         scroll.end();
@@ -1287,6 +1323,8 @@ impl BrrSampleEditor {
             envelope,
             comment_buffer,
             comment,
+
+            sample_analyser,
         }));
 
         {
@@ -1407,6 +1445,8 @@ impl BrrSampleEditor {
         self.envelope.clear();
         self.comment_buffer.set_text("");
 
+        self.sample_analyser.clear_and_deactivate();
+
         self.scrollgroup.deactivate();
     }
 
@@ -1421,6 +1461,8 @@ impl BrrSampleEditor {
         self.envelope.update(&data.envelope);
 
         self.comment_buffer.set_text(&data.comment);
+
+        self.sample_analyser.selected_sample_edited(id, data);
 
         self.scrollgroup.activate();
     }
@@ -1513,5 +1555,42 @@ impl BrrSampleEditor {
             };
             self.sender.send(GuiMessage::EditBrrSample(*id, new_data));
         }
+    }
+}
+
+pub fn sample_with_new_tuning_frequency(sample: &project::BrrSample, frequency: f64) -> BrrSample {
+    let pitches = match sample.pitches {
+        Some(BrrSamplePitches::Octaves {
+            tuning: _,
+            first,
+            last,
+        }) => BrrSamplePitches::Octaves {
+            tuning: SampleTuning::Frequency(frequency),
+            first,
+            last,
+        },
+        Some(BrrSamplePitches::Notes {
+            tuning: _,
+            first,
+            last,
+        }) => BrrSamplePitches::Notes {
+            tuning: SampleTuning::Frequency(frequency),
+            first,
+            last,
+        },
+        Some(BrrSamplePitches::SampleRates { .. }) | None => {
+            let range = default_octaves_for_tuning_frequency(frequency);
+
+            BrrSamplePitches::Octaves {
+                tuning: SampleTuning::Frequency(frequency),
+                first: *range.start(),
+                last: *range.end(),
+            }
+        }
+    };
+
+    BrrSample {
+        pitches: Some(pitches),
+        ..sample.clone()
     }
 }

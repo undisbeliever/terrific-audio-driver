@@ -12,6 +12,8 @@ use crate::bytecode::PlayPitchPitch;
 use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
+use crate::notes::Octave;
+use crate::notes::STARTING_OCTAVE;
 use crate::notes::{self, Note};
 use crate::project::{BrrSample, BrrSamplePitches, SampleTuning, UniqueNamesList};
 use crate::value_newtypes::u16_value_newtype;
@@ -29,6 +31,7 @@ const MICROSEMITONES_PER_OCTAVE: i32 = MICROSEMITONE_SCALE * SEMITONES_PER_OCTAV
 const FIRST_SEMITONE: i32 = Note::MIN.note_id() as i32;
 const LAST_SEMITONE: i32 = Note::MAX.note_id() as i32;
 
+const A4_C0_SEMITONE_OFFSET: i32 = 57;
 const A4_C0_MICROSEMITONE_OFFSET: i32 = 57 * MICROSEMITONE_SCALE;
 const A4_FREQ: u32 = 440;
 
@@ -257,6 +260,25 @@ pub(crate) fn maximize_pitch_note_range(pitch: &SamplePitches) -> Option<(Sample
     };
 
     Some((SamplePitches::Notes(new_pitch), max_note))
+}
+
+pub fn default_octaves_for_tuning_frequency(freq: f64) -> RangeInclusive<Octave> {
+    if (MIN_SAMPLE_FREQ..=MAX_SAMPLE_FREQ).contains(&freq) {
+        const SPO: u32 = SEMITONES_PER_OCTAVE as u32;
+
+        let max = freq * (PITCH_REGISTER_MAX as f64 / PITCH_REGISTER_FP_SCALE as f64);
+
+        let max_semitones = (f64::log2(max / F64_A4_FREQ) * (SEMITONES_PER_OCTAVE as f64)
+            + A4_C0_SEMITONE_OFFSET as f64) as u32;
+
+        let max = Octave::try_new((max_semitones - SPO + 1) / SPO).unwrap_or(Octave::MAX);
+
+        let min = Octave::try_new(max.as_u8().saturating_sub(4).into()).unwrap();
+
+        min..=max
+    } else {
+        STARTING_OCTAVE..=STARTING_OCTAVE
+    }
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.

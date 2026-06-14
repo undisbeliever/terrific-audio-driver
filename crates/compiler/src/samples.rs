@@ -186,6 +186,10 @@ impl SampleData {
     pub fn sample_size(&self) -> usize {
         self.brr_sample.brr_data().len()
     }
+
+    pub fn sample_data(&self) -> &BrrSample {
+        &self.brr_sample
+    }
 }
 
 pub fn compile_brr_sample(

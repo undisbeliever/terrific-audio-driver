@@ -6,7 +6,7 @@
 
 use crate::audio_thread::{AudioMessage, AudioThreadSongInterpreter, MusicChannelsMask, SiCad};
 use crate::names::NameGetter;
-use crate::sample_analyser::{FftSettings, SampleAnalysis};
+use crate::sample_analyser::{self, FftSettings, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
@@ -24,15 +24,15 @@ use compiler::common_audio_data::{
 use compiler::driver_constants::{self, COMMON_DATA_BYTES_PER_SOUND_EFFECT};
 use compiler::envelope::Envelope;
 use compiler::errors::{
-    self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
+    self, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
 use compiler::identifier::{ChannelId, Name};
 use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
-use compiler::project::{self, BrrEvaluator};
-use compiler::project::{DefaultSfxFlags, LoopSetting};
+use compiler::project::DefaultSfxFlags;
+use compiler::project::{self};
 use compiler::samples::{
     combine_samples, compile_brr_sample, create_test_instrument_data, CompiledDataList,
     SampleAndInstrumentData, SampleData, SampleFileCache,
@@ -126,7 +126,7 @@ pub enum ToCompiler {
 
     BrrSample(ItemChanged<project::BrrSample>),
 
-    AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator, FftSettings),
+    SampleAnalyserSettingsChanged(FftSettings),
 
     // Updates sfx_data_size and rechecks song sizes.
     // (sent when the user deselects the sound effects tab in the GUI)
@@ -201,7 +201,7 @@ pub enum CompilerOutput {
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Box<[u8]>), SpcFileError>),
 
-    SampleAnalysis(Result<SampleAnalysis, BrrError>),
+    SampleAnalysis(ItemId, Option<SampleAnalysis>),
 
     SongCursorDriverState(CursorDriverState),
 }
@@ -481,6 +481,12 @@ where
         self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
+    fn get_input_and_output_for_id(&self, id: &ItemId) -> Option<(&ItemT, &OutT)> {
+        self.map
+            .get(id)
+            .and_then(|i: &usize| self.items.get(*i).zip(self.output.get(*i)))
+    }
+
     fn name_map(&self) -> &HashMap<Name, usize> {
         &self.name_map
     }
@@ -654,6 +660,7 @@ impl Sender {
 
 fn create_sample_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
+    fft_settings: &'a FftSettings,
     sender: &'a Sender,
 ) -> impl (FnMut(ItemId, &project::BrrSample) -> Option<SampleData>) + 'a {
     |id, sample| match compile_brr_sample(sample, sample_file_cache) {
@@ -662,10 +669,20 @@ fn create_sample_compiler<'a>(
                 id,
                 Ok(SampleSize(s.sample_size())),
             ));
+
+            if fft_settings.selected_sample_id() == Some(id) {
+                analyse_sample(id, sample, &s, sample_file_cache, fft_settings, sender);
+            }
+
             Some(s)
         }
         Err(e) => {
             sender.send(CompilerOutput::BrrSample(id, Err(e)));
+
+            if fft_settings.selected_sample_id() == Some(id) {
+                // ::TODO read brr from SampleError::
+                sender.send(CompilerOutput::SampleAnalysis(id, None));
+            }
             None
         }
     }
@@ -1344,48 +1361,54 @@ fn calculate_tick_song_driver_state(
     ));
 }
 
-#[expect(unused_variables)]
 fn analyse_sample(
-    cache: &mut SampleFileCache,
-    source: SourcePathBuf,
-    loop_setting: LoopSetting,
-    evaluator: BrrEvaluator,
-    fft_settings: FftSettings,
-) -> Result<SampleAnalysis, BrrError> {
-    // ::TODO implement::
-    // Temporally disabled until the GUI is updated to the new project format::
-    Err(BrrError::UnknownFileType(source.to_path_string()))
-
-    /*
-    let brr_sample = Arc::new(encode_or_load_brr_file(
-        &source,
-        cache,
-        &loop_setting,
-        evaluator,
-    )?);
-
-    let wav_sample = match source.extension() {
-        Some(WAV_EXTENSION) => match cache.load_wav_file(&source) {
-            Ok(w) => Some(w),
-            Err(e) => return Err(e.clone()),
-        },
-        _ => None,
+    id: ItemId,
+    input: &project::BrrSample,
+    sample_data: &SampleData,
+    sample_file_cache: &mut SampleFileCache,
+    fft_settings: &FftSettings,
+    sender: &Sender,
+) {
+    let w = match &input.source {
+        project::BrrSampleSource::WaveFile(s) => {
+            sample_file_cache.load_wav_file(&s.source).as_ref().ok()
+        }
+        project::BrrSampleSource::BrrFile(_) => None,
     };
 
-    Ok(sample_analyser::analyse_sample(
-        brr_sample,
-        wav_sample,
-        fft_settings,
-    ))
-    */
+    let s = sample_analyser::analyse_sample(sample_data.sample_data(), w, fft_settings);
+    sender.send(CompilerOutput::SampleAnalysis(id, Some(s)));
+}
+
+fn analyse_selected_sample(
+    fft_settings: &FftSettings,
+    brr_samples: &CList<project::BrrSample, Option<SampleData>>,
+    sample_file_cache: &mut SampleFileCache,
+    sender: &Sender,
+) {
+    if let Some(id) = fft_settings.selected_sample_id() {
+        match brr_samples.get_input_and_output_for_id(&id) {
+            Some((item, Some(out))) => {
+                analyse_sample(id, item, out, sample_file_cache, fft_settings, sender);
+            }
+            Some((_item, None)) => {
+                // ::TODO read brr from sample error::
+                sender.send(CompilerOutput::SampleAnalysis(id, None));
+            }
+            None => {
+                sender.send(CompilerOutput::SampleAnalysis(id, None));
+            }
+        }
+    }
 }
 
 fn compile_all_samples(
     samples: &mut CList<project::BrrSample, Option<SampleData>>,
     sample_file_cache: &mut SampleFileCache,
+    fft_settings: &FftSettings,
     sender: &Sender,
 ) {
-    let c = create_sample_compiler(sample_file_cache, sender);
+    let c = create_sample_compiler(sample_file_cache, fft_settings, sender);
     samples.recompile_all(c);
 }
 
@@ -1415,6 +1438,8 @@ fn bg_thread(
     let mut sfx_subroutines = None;
     let mut sound_effects = CList::new();
     let mut songs = SongCompiler::new(parent_path.clone());
+
+    let mut fft_settings = FftSettings::default();
 
     let mut sample_file_cache = SampleFileCache::new(parent_path);
 
@@ -1446,7 +1471,12 @@ fn bg_thread(
                 sfx_export_order = Arc::new(sfx_eo.clone());
                 sample_names = instrument_and_sample_names(&brr_samples);
 
-                compile_all_samples(&mut brr_samples, &mut sample_file_cache, &sender);
+                compile_all_samples(
+                    &mut brr_samples,
+                    &mut sample_file_cache,
+                    &fft_settings,
+                    &sender,
+                );
 
                 pending_combine_samples = true;
                 pending_compile_all_songs = true;
@@ -1461,7 +1491,12 @@ fn bg_thread(
 
             ToCompiler::ClearSampleCacheAndRebuild => {
                 sample_file_cache.clear_cache();
-                compile_all_samples(&mut brr_samples, &mut sample_file_cache, &sender);
+                compile_all_samples(
+                    &mut brr_samples,
+                    &mut sample_file_cache,
+                    &fft_settings,
+                    &sender,
+                );
 
                 pending_combine_samples = true;
             }
@@ -1485,7 +1520,7 @@ fn bg_thread(
             ToCompiler::BrrSample(m) => {
                 let name_changed = brr_samples.item_changes_name(&m);
 
-                let c = create_sample_compiler(&mut sample_file_cache, &sender);
+                let c = create_sample_compiler(&mut sample_file_cache, &fft_settings, &sender);
                 brr_samples.process_message(m, c);
 
                 if name_changed {
@@ -1495,7 +1530,7 @@ fn bg_thread(
                 pending_combine_samples = true;
             }
             ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
-                let c = create_sample_compiler(&mut sample_file_cache, &sender);
+                let c = create_sample_compiler(&mut sample_file_cache, &fft_settings, &sender);
                 brr_samples.recompile_all_if(c, |inst| inst.source_path() == Some(&source_path));
 
                 song_dependencies = None;
@@ -1649,15 +1684,14 @@ fn bg_thread(
                 sample_file_cache.remove_path(&source_path);
             }
 
-            ToCompiler::AnalyseSample(source_path, loop_setting, evaluator, fft_settings) => {
-                let r = analyse_sample(
+            ToCompiler::SampleAnalyserSettingsChanged(new_settings) => {
+                fft_settings = new_settings;
+                analyse_selected_sample(
+                    &fft_settings,
+                    &brr_samples,
                     &mut sample_file_cache,
-                    source_path,
-                    loop_setting,
-                    evaluator,
-                    fft_settings,
+                    &sender,
                 );
-                sender.send(CompilerOutput::SampleAnalysis(r));
             }
         }
 
