@@ -344,7 +344,7 @@ impl SampleAnalyserDialog {
             s.spectrum.draw({
                 let state = state.clone();
                 move |_| {
-                    state.borrow().draw_waveform();
+                    state.borrow_mut().draw_spectrum();
                 }
             });
             s.spectrum.handle({
@@ -355,7 +355,7 @@ impl SampleAnalyserDialog {
             s.waveform.draw({
                 let state = state.clone();
                 move |_| {
-                    state.borrow_mut().draw_spectrum();
+                    state.borrow().draw_waveform();
                 }
             });
             s.waveform.handle({
