@@ -240,6 +240,7 @@ impl SampleAnalyserWidget {
         play_button.set_tooltip("Play BRR sample at 32000Hz");
 
         b_group.end();
+        group.fixed(&b_group, line_height);
 
         group.end();
 

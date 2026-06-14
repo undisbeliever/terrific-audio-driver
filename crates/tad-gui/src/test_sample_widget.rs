@@ -4,14 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{ItemId, PlaySampleArgs};
+use crate::compiler_thread::{ItemId, PlaySampleArgs, SampleOutput};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
 use crate::GuiMessage;
 
 use compiler::errors::ValueError;
 use compiler::notes::{Note, Octave, PitchSemitoneIndex};
-use compiler::project::Sample;
+use compiler::project::{BrrSample, BrrSamplePitches};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,11 +19,11 @@ use std::rc::Rc;
 use fltk::app;
 use fltk::button::Button;
 use fltk::enums::{Align, Color};
-use fltk::group::Group;
+use fltk::group::{Flex, Group, Wizard};
 use fltk::misc::Spinner;
 use fltk::prelude::*;
 
-pub struct TestInstrumentWidget {
+struct TestInstrumentWidget {
     selected_id: Option<ItemId>,
 
     sender: app::Sender<GuiMessage>,
@@ -35,7 +35,6 @@ pub struct TestInstrumentWidget {
     envelope: EnvelopeWidget,
 }
 
-#[expect(dead_code)]
 impl TestInstrumentWidget {
     const KEYS: [(i32, &'static str); 12] = [
         (0, "C"),
@@ -52,8 +51,8 @@ impl TestInstrumentWidget {
         (12, "B"),
     ];
 
-    pub fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
-        let mut group = Group::default();
+    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
+        let mut group = Group::default().size_of_parent();
         group.make_resizable(false);
 
         let line_height = ch_units_to_width(&group, 3);
@@ -169,21 +168,17 @@ impl TestInstrumentWidget {
         out
     }
 
-    pub fn widget(&self) -> &Group {
-        &self.group
-    }
-
-    pub fn clear_selected(&mut self) {
+    fn clear_selected(&mut self) {
         self.selected_id = None;
         self.group.deactivate();
     }
 
-    pub fn set_selected(&mut self, id: ItemId) {
+    fn set_selected(&mut self, id: ItemId) {
         self.selected_id = Some(id);
         self.group.activate();
     }
 
-    pub fn set_active(&mut self, active: bool) {
+    fn set_active(&mut self, active: bool) {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
@@ -207,7 +202,7 @@ impl TestInstrumentWidget {
     }
 }
 
-pub struct TestSampleWidget {
+struct TestSampleWidget {
     selected_id: Option<ItemId>,
 
     sender: app::Sender<GuiMessage>,
@@ -220,16 +215,15 @@ pub struct TestSampleWidget {
     envelope: EnvelopeWidget,
 }
 
-#[expect(dead_code)]
 impl TestSampleWidget {
-    pub fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
+    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
         let mut group = Group::default();
         group.make_resizable(false);
 
         let button_size = ch_units_to_width(&group, 5);
 
         let options_x = 6 * button_size;
-        let options_y = button_size;
+        let options_y = 0;
         let options_width = ch_units_to_width(&group, 30);
         let line_height = ch_units_to_width(&group, 3);
 
@@ -238,7 +232,7 @@ impl TestSampleWidget {
         let buttons = std::array::from_fn(|i| {
             let i = i32::try_from(i).unwrap();
             let x = (i % 4 + 1) * button_size;
-            let y = (i / 4 + 1) * button_size;
+            let y = (i / 4) * button_size;
 
             let mut b = Button::new(x, y, button_size, button_size, None);
             b.set_label(&format!("{}", i));
@@ -283,29 +277,22 @@ impl TestSampleWidget {
         out
     }
 
-    pub fn clear_selected(&mut self) {
+    fn clear_selected(&mut self) {
         self.selected_id = None;
         self.group.deactivate();
     }
 
-    pub fn set_selected(&mut self, id: ItemId, data: &Sample) {
+    fn set_selected(&mut self, id: ItemId, n_sample_rates: usize) {
         self.selected_id = Some(id);
         self.group.activate();
-        self.update_buttons(data);
+        self.update_buttons(n_sample_rates);
     }
 
-    pub fn set_active(&mut self, active: bool) {
+    fn set_active(&mut self, active: bool) {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
-    pub fn item_edited(&mut self, id: ItemId, data: &Sample) {
-        if self.selected_id == Some(id) {
-            self.update_buttons(data);
-        }
-    }
-
-    fn update_buttons(&mut self, data: &Sample) {
-        let n_sample_rates = data.sample_rates.len();
+    fn update_buttons(&mut self, n_sample_rates: usize) {
         for (i, b) in self.buttons.iter_mut().enumerate() {
             b.set_active(i < n_sample_rates);
         }
@@ -324,5 +311,70 @@ impl TestSampleWidget {
                 ))
             }
         }
+    }
+}
+
+pub struct TestBrrSampleWidget {
+    wizard: Wizard,
+    notes: Rc<RefCell<TestInstrumentWidget>>,
+    sample_rates: Rc<RefCell<TestSampleWidget>>,
+}
+
+impl TestBrrSampleWidget {
+    // Must be placed inside Pack or Flex for the widget to be in the right place
+    pub fn new(parent: &mut Flex, sender: app::Sender<GuiMessage>) -> Self {
+        let width = ch_units_to_width(parent, 50);
+        let height = ch_units_to_width(parent, 5 * 3);
+
+        let mut wizard = Wizard::new(0, 0, width, height, None);
+        wizard.set_frame(fltk::enums::FrameType::NoBox);
+
+        let notes = TestInstrumentWidget::new(sender);
+        let sample_rates = TestSampleWidget::new(sender);
+
+        wizard.end();
+
+        parent.fixed(&wizard, height);
+
+        Self {
+            wizard,
+            notes,
+            sample_rates,
+        }
+    }
+
+    pub fn clear_selected(&mut self) {
+        self.notes.borrow_mut().clear_selected();
+        self.sample_rates.borrow_mut().clear_selected();
+        self.wizard.deactivate();
+    }
+
+    pub fn item_edited(&mut self, id: ItemId, data: &BrrSample) {
+        match &data.pitches {
+            Some(BrrSamplePitches::Octaves { .. }) | Some(BrrSamplePitches::Notes { .. }) => {
+                let mut w = self.notes.borrow_mut();
+                w.set_selected(id);
+                self.wizard.set_current_widget(&w.group);
+                self.wizard.activate();
+            }
+            Some(BrrSamplePitches::SampleRates { sample_rates }) => {
+                let mut w = self.sample_rates.borrow_mut();
+                w.set_selected(id, sample_rates.len());
+                self.wizard.set_current_widget(&w.group);
+                self.wizard.activate();
+            }
+            None => {
+                let w = self.notes.borrow();
+                self.wizard.set_current_widget(&w.group);
+                self.wizard.deactivate();
+            }
+        }
+    }
+
+    pub fn compiler_output_changed(&mut self, compiler_output: Option<&SampleOutput>) {
+        let a = compiler_output.is_some_and(|co| co.is_ok());
+
+        self.notes.borrow_mut().set_active(a);
+        self.sample_rates.borrow_mut().set_active(a);
     }
 }

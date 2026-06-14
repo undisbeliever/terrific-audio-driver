@@ -16,6 +16,7 @@ use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::sample_widgets::{BrrEvaluatorChoice, DEFAULT_ADSR, DEFAULT_ENVELOPE, DEFAULT_GAIN};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
+use crate::test_sample_widget::TestBrrSampleWidget;
 use crate::GuiMessage;
 
 use compiler::envelope::{Adsr, Envelope, Gain};
@@ -371,6 +372,10 @@ impl ListWithCompilerOutputEditor<project::BrrSample, SampleOutput> for SamplesT
             .sample_compiled(index, compiler_output);
 
         if self.sample_editor.borrow().is_id_selected(id) {
+            self.sample_editor
+                .borrow_mut()
+                .selected_compiler_output_changed(compiler_output.as_ref());
+
             self.update_compiler_output(compiler_output);
         }
     }
@@ -381,9 +386,12 @@ impl ListWithCompilerOutputEditor<project::BrrSample, SampleOutput> for SamplesT
     ) {
         match samples.get_selected_row(&self.table) {
             Some((item_id, s, co)) => {
-                self.sample_editor
-                    .borrow_mut()
-                    .set_data_and_update_widget(item_id, s);
+                {
+                    let mut e = self.sample_editor.borrow_mut();
+
+                    e.set_data_and_update_widget(item_id, s);
+                    e.selected_compiler_output_changed(co.as_ref());
+                }
 
                 self.show_sample_editor();
 
@@ -1077,6 +1085,7 @@ struct BrrSampleEditor {
     comment: TextEditor,
 
     sample_analyser: SampleAnalyserWidget,
+    test_sample_widget: TestBrrSampleWidget,
 }
 
 impl BrrSampleEditor {
@@ -1106,7 +1115,7 @@ impl BrrSampleEditor {
         let outer_w = c5 - c1;
         let inner_w = c4 - c1;
 
-        let scrollgroup = Group::default().with_size(analyser_width, r * 35 + s);
+        let scrollgroup = Group::default().with_size(analyser_width, r * 40 + s);
 
         let name = Input::new(c1, 0, outer_w, h, "Name: ");
 
@@ -1296,6 +1305,8 @@ impl BrrSampleEditor {
         comment.set_tab_nav(true);
         comment.wrap_mode(WrapMode::AtBounds, 0);
 
+        let mut flex = Flex::new(0, 22 * r, analyser_width, 18 * r, None).column();
+
         let sample_analyser = SampleAnalyserWidget::new(
             0,
             22 * r,
@@ -1305,6 +1316,10 @@ impl BrrSampleEditor {
             compiler_sender,
             audio_sender,
         );
+
+        let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
+
+        flex.end();
 
         scrollgroup.end();
 
@@ -1325,6 +1340,7 @@ impl BrrSampleEditor {
             comment,
 
             sample_analyser,
+            test_sample_widget,
         }));
 
         {
@@ -1446,6 +1462,7 @@ impl BrrSampleEditor {
         self.comment_buffer.set_text("");
 
         self.sample_analyser.clear_and_deactivate();
+        self.test_sample_widget.clear_selected();
 
         self.scrollgroup.deactivate();
     }
@@ -1464,7 +1481,13 @@ impl BrrSampleEditor {
 
         self.sample_analyser.selected_sample_edited(id, data);
 
+        self.test_sample_widget.item_edited(id, data);
+
         self.scrollgroup.activate();
+    }
+
+    fn selected_compiler_output_changed(&mut self, co: Option<&SampleOutput>) {
+        self.test_sample_widget.compiler_output_changed(co);
     }
 
     fn read_or_reset(&mut self, edit_type: Option<EditTuningField>) -> Option<BrrSample> {
