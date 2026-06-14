@@ -698,6 +698,7 @@ impl BrrSampleSourceEditor {
         self.wav_settings.disable(false);
         self.wav_settings.group.show();
 
+        self.brr_settings.disable(false);
         self.brr_settings.group.hide();
     }
 
