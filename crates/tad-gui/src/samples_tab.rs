@@ -13,7 +13,6 @@ use crate::list_editor::{
 };
 use crate::sample_analyser::{SampleAnalyserWidget, SampleAnalysis};
 use crate::sample_sizes_widget::SampleSizesWidget;
-use crate::sample_widgets::{BrrEvaluatorChoice, DEFAULT_ADSR, DEFAULT_ENVELOPE, DEFAULT_GAIN};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::test_sample_widget::TestBrrSampleWidget;
@@ -23,8 +22,8 @@ use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::notes::Note;
 use compiler::pitch_table::default_octaves_for_tuning_frequency;
 use compiler::project::{
-    self, BrrEncoderSettings, BrrLoopFilter, BrrSample, BrrSamplePitches, BrrSampleSource,
-    BrrSource, SampleNumber, SampleTuning, WaveSource,
+    self, BrrEncoderSettings, BrrEvaluator, BrrLoopFilter, BrrSample, BrrSamplePitches,
+    BrrSampleSource, BrrSource, SampleNumber, SampleTuning, WaveSource,
 };
 use compiler::songs::SongAramSize;
 use fltk::enums::Event;
@@ -48,6 +47,14 @@ use fltk::{
     prelude::*,
     text::{TextBuffer, TextDisplay, TextEditor, WrapMode},
 };
+
+const DEFAULT_ADSR: Adsr = match Adsr::try_new(12, 2, 2, 15) {
+    Ok(a) => a,
+    Err(_) => panic!("Invalid ADSR"),
+};
+const DEFAULT_GAIN: Gain = Gain::new(127);
+
+const DEFAULT_ENVELOPE: Envelope = Envelope::Adsr(DEFAULT_ADSR);
 
 fn blank_sample() -> project::BrrSample {
     project::BrrSample {
@@ -456,6 +463,59 @@ impl LoopFilterChoice {
             Self::Filter1 => BrrLoopFilter::Filter1,
             Self::Filter2 => BrrLoopFilter::Filter2,
             Self::Filter3 => BrrLoopFilter::Filter3,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum BrrEvaluatorChoice {
+    Default = 0,
+    SquaredError = 1,
+    SquaredErrorAvoidGaussianOverflow = 2,
+}
+impl BrrEvaluatorChoice {
+    const _DEFAULT_MATCHES: () = assert!(matches!(
+        brr::DEFAULT_EVALUATOR,
+        brr::Evaluator::SquaredErrorAvoidGaussianOverflow
+    ));
+
+    const CHOICES: &'static str = concat![
+        "&Default (avoid Gaussian overflow)",
+        "|&Squared Error",
+        "|&Avoid Gaussian Overflow (Squared Error)",
+    ];
+
+    fn read_widget(c: &Choice) -> Self {
+        match c.value() {
+            0 => Self::Default,
+            1 => Self::SquaredError,
+            2 => Self::SquaredErrorAvoidGaussianOverflow,
+
+            _ => Self::Default,
+        }
+    }
+
+    fn to_i32(self) -> i32 {
+        self as i32
+    }
+
+    fn to_data(self) -> BrrEvaluator {
+        match self {
+            Self::Default => BrrEvaluator::Default,
+            Self::SquaredError => BrrEvaluator::SquaredError,
+            Self::SquaredErrorAvoidGaussianOverflow => {
+                BrrEvaluator::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+
+    fn from_data(e: BrrEvaluator) -> Self {
+        match e {
+            BrrEvaluator::Default => Self::Default,
+            BrrEvaluator::SquaredError => Self::SquaredError,
+            BrrEvaluator::SquaredErrorAvoidGaussianOverflow => {
+                Self::SquaredErrorAvoidGaussianOverflow
+            }
         }
     }
 }
