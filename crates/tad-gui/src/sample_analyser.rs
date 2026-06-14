@@ -555,14 +555,6 @@ impl State {
         }
     }
 
-    fn set_freq(&mut self, f: f64) {
-        let f = f.round();
-
-        self.freq = f;
-
-        self.spectrum.redraw();
-    }
-
     fn use_peak_clicked(&mut self) {
         if let Some(a) = &self.analysis {
             if let Ok(s) = &a.spectrum {

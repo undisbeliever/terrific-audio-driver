@@ -7,8 +7,6 @@
 #![forbid(unsafe_code)]
 // Do not open a console window on Windows
 #![windows_subsystem = "windows"]
-// ::TODO remove unused code::
-#![expect(dead_code)]
 
 mod audio_thread;
 mod compiler_thread;
@@ -26,7 +24,6 @@ mod monitor_timer;
 mod names;
 mod sample_analyser;
 mod sample_sizes_widget;
-mod sample_widgets;
 mod sfx_export_order;
 mod sfx_window;
 mod symbols;

@@ -101,45 +101,6 @@ where
     (DeduplicatedNameVec(out), n_fixed)
 }
 
-/// A two different lists that share names
-pub struct TwoDeduplicatedNameVecs<T, U>(DeduplicatedNameVec<T>, DeduplicatedNameVec<U>);
-
-impl<T, U> TwoDeduplicatedNameVecs<T, U> {
-    pub fn into_tuple(self) -> (DeduplicatedNameVec<T>, DeduplicatedNameVec<U>) {
-        (self.0, self.1)
-    }
-}
-
-pub fn deduplicate_two_name_vecs<T, U>(
-    list1: Vec<T>,
-    list2: Vec<U>,
-) -> (TwoDeduplicatedNameVecs<T, U>, usize)
-where
-    T: NameGetter + NameSetter,
-    U: NameGetter + NameSetter,
-{
-    let (out1, n_fixed) = deduplicate_names(list1);
-    let iter1 = out1.0.iter().map(NameGetter::name);
-
-    let mut n_fixed = n_fixed;
-    let mut out2 = Vec::with_capacity(list2.len());
-
-    for mut e in list2.into_iter() {
-        let iter = iter1.clone().chain(out2.iter().map(NameGetter::name));
-
-        if let Some(new_name) = deduplicate_name_iter(e.name(), iter, None) {
-            e.set_name(new_name);
-            n_fixed += 1;
-        }
-        out2.push(e);
-    }
-
-    (
-        TwoDeduplicatedNameVecs(out1, DeduplicatedNameVec(out2)),
-        n_fixed,
-    )
-}
-
 pub fn deduplicate_item_name<T>(name: &Name, list: &[T], index: Option<usize>) -> Option<Name>
 where
     T: NameGetter,

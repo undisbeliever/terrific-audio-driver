@@ -11,7 +11,7 @@ use compiler::{envelope::Adsr, envelope::Gain, identifier::Name, notes::Octave};
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Event, Key};
 use fltk::frame::Frame;
-use fltk::group::{Flex, Group};
+use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::prelude::{GroupExt, InputExt, WidgetExt};
 
@@ -310,10 +310,6 @@ impl InputForm {
         }
     }
 
-    pub fn row_height(&self) -> i32 {
-        self.row_height
-    }
-
     /// returns (Flex, form height)
     pub fn end(self) -> (Flex, i32) {
         let form_height = self.row_height * self.n_rows + self.group.pad() * (self.n_rows - 1);
@@ -368,123 +364,5 @@ impl InputForm {
         self.n_rows += 1;
 
         w
-    }
-
-    pub fn add_three_inputs<T, U, V>(
-        &mut self,
-        text: &str,
-        ch_units1: i32,
-        ch_units2: i32,
-    ) -> (T, U, V)
-    where
-        T: WidgetExt + Default,
-        U: WidgetExt + Default,
-        V: WidgetExt + Default,
-    {
-        let w1_width = ch_units_to_width(&self.group, ch_units1);
-        let w2_width = ch_units_to_width(&self.group, ch_units2);
-
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let l = label(text);
-        r.fixed(&l, self.left_column_width);
-
-        let w1 = T::default();
-        r.fixed(&w1, w1_width);
-
-        let w2 = U::default();
-        r.fixed(&w2, w2_width);
-
-        let w3 = V::default();
-
-        r.end();
-
-        self.n_rows += 1;
-
-        (w1, w2, w3)
-    }
-
-    pub fn add_two_inputs_right<T, U>(&mut self, text: &str, ch_units: i32) -> (T, U)
-    where
-        T: WidgetExt + Default,
-        U: WidgetExt + Default,
-    {
-        let w2_width = ch_units_to_width(&self.group, ch_units);
-
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let l = label(text);
-        r.fixed(&l, self.left_column_width);
-
-        let w1 = T::default();
-
-        let w2 = U::default();
-        r.fixed(&w2, w2_width);
-
-        r.end();
-
-        self.n_rows += 1;
-
-        (w1, w2)
-    }
-
-    pub fn flex_row(&mut self, text: &str) -> Flex {
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let l = label(text);
-        r.fixed(&l, self.left_column_width);
-
-        self.n_rows += 1;
-
-        r
-    }
-
-    pub fn add_group(&mut self, text: &str, n_rows: i32) -> InputFormGroup<'_> {
-        let h = self.row_height * n_rows + self.group.pad() * (n_rows - 1);
-
-        let mut group = Group::default().with_size(0, h);
-        group.make_resizable(false);
-
-        self.group.fixed(&group, h);
-
-        label(text)
-            .with_pos(0, 0)
-            .with_size(self.left_column_width, self.row_height);
-
-        self.n_rows += n_rows;
-
-        InputFormGroup { form: self, group }
-    }
-}
-
-pub struct InputFormGroup<'a> {
-    form: &'a mut InputForm,
-    group: Group,
-}
-
-impl InputFormGroup<'_> {
-    pub fn end(self) -> Group {
-        self.group.end();
-
-        self.group
-    }
-
-    pub fn pad(&self) -> i32 {
-        self.form.group.pad()
-    }
-
-    pub fn left_column_width(&self) -> i32 {
-        self.form.left_column_width
-    }
-
-    pub fn row_height(&self) -> i32 {
-        self.form.row_height
-    }
-
-    pub fn ch_width(&self, ch: i32) -> i32 {
-        ch_units_to_width(&self.group, ch)
     }
 }

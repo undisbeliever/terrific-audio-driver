@@ -1133,6 +1133,7 @@ struct BrrSampleEditor {
     sender: app::Sender<GuiMessage>,
     data: Option<(ItemId, BrrSample)>,
 
+    #[expect(dead_code)]
     scroll: Scroll,
     scrollgroup: Group,
 

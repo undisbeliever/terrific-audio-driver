@@ -6,9 +6,7 @@
 
 use crate::compiler_thread::{self, ItemChanged, ItemId};
 use crate::helpers::ch_units_to_width;
-use crate::names::{
-    deduplicate_name_iter, DeduplicatedNameVec, NameGetter, NameSetter, TwoDeduplicatedNameVecs,
-};
+use crate::names::{deduplicate_name_iter, DeduplicatedNameVec, NameGetter, NameSetter};
 use crate::GuiMessage;
 use crate::{sfx_export_order, tables};
 
@@ -39,25 +37,6 @@ pub enum ListMessage<T> {
 
     // Only adds the item if the list does not contain ItemId.
     AddWithItemId(ItemId, T),
-}
-
-impl<T> ListMessage<T> {
-    fn may_resize_list(&self) -> bool {
-        match self {
-            Self::ItemEdited(..) => false,
-
-            Self::Add(..)
-            | Self::AddMultiple(..)
-            | Self::AddWithItemId(..)
-            | Self::Clone(..)
-            | Self::Remove(..) => true,
-
-            Self::MoveToTop(..)
-            | Self::MoveUp(..)
-            | Self::MoveDown(..)
-            | Self::MoveToBottom(..) => false,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -616,124 +595,6 @@ where
     }
 }
 
-pub struct ListPairWithCompilerOutputs<T1, O1, T2, O2>
-where
-    T1: Clone + PartialEq<T1> + NameGetter + NameSetter,
-    O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameGetter + NameSetter,
-    O2: CompilerOutput,
-{
-    list1: ListWithCompilerOutput<T1, O1>,
-    list2: ListWithCompilerOutput<T2, O2>,
-}
-
-impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
-where
-    T1: Clone + PartialEq<T1> + NameGetter + NameSetter + std::fmt::Debug,
-    O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameGetter + NameSetter + std::fmt::Debug,
-    O2: CompilerOutput,
-{
-    pub fn new(lists: TwoDeduplicatedNameVecs<T1, T2>, max_size: usize) -> Self {
-        let (list1, list2) = lists.into_tuple();
-
-        let list1 = ListWithCompilerOutput::new(list1, max_size);
-        let list2 = ListWithCompilerOutput::new(list2, max_size);
-
-        Self { list1, list2 }
-    }
-
-    pub fn list1(&self) -> &ListWithCompilerOutput<T1, O1> {
-        &self.list1
-    }
-
-    pub fn list2(&self) -> &ListWithCompilerOutput<T2, O2> {
-        &self.list2
-    }
-
-    #[must_use]
-    pub fn process1<Editor>(
-        &mut self,
-        m: ListMessage<T1>,
-        editor: &mut Editor,
-    ) -> (bool, Option<ItemChanged<T1>>)
-    where
-        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
-    {
-        let may_resize_list = m.may_resize_list();
-
-        let out = self.list1.process_(&self.list2, m, editor);
-
-        if may_resize_list {
-            // Assumes list1 and list2 have the same max_size
-            ListWithCompilerOutputEditor::<T2, O2>::table_mut(editor)
-                .set_max_size(self.list1.max_size.saturating_sub(self.list1.len()));
-        }
-
-        out
-    }
-
-    #[must_use]
-    pub fn process2<Editor>(
-        &mut self,
-        m: ListMessage<T2>,
-        editor: &mut Editor,
-    ) -> (bool, Option<ItemChanged<T2>>)
-    where
-        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
-    {
-        let may_resize_list = m.may_resize_list();
-
-        let out = self.list2.process_(&self.list1, m, editor);
-
-        if may_resize_list {
-            // Assumes list1 and list2 have the same max_size
-            ListWithCompilerOutputEditor::<T1, O1>::table_mut(editor)
-                .set_max_size(self.list2.max_size.saturating_sub(self.list2.len()));
-        }
-
-        out
-    }
-
-    #[must_use]
-    pub fn edit_item1(
-        &mut self,
-        id: ItemId,
-        new_value: T1,
-        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
-    ) -> (bool, Option<ItemChanged<T1>>) {
-        self.list1.edit_item_(&self.list2, id, new_value, editor)
-    }
-
-    #[must_use]
-    pub fn edit_item2(
-        &mut self,
-        id: ItemId,
-        new_value: T2,
-        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
-    ) -> (bool, Option<ItemChanged<T2>>) {
-        self.list2.edit_item_(&self.list1, id, new_value, editor)
-    }
-
-    pub fn set_compiler_output1(
-        &mut self,
-        id: ItemId,
-        co: O1,
-        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
-    ) {
-        self.list1.set_compiler_output(id, co, editor)
-    }
-
-    pub fn set_compiler_output2(
-        &mut self,
-        id: ItemId,
-        co: O2,
-        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
-    ) {
-        self.list2.set_compiler_output(id, co, editor)
-    }
-}
-
 pub enum TableAction {
     None,
     OpenEditor,
@@ -1204,31 +1065,4 @@ where
     pub fn sfx_eo_edited(&mut self, action: &ListAction<Name>) {
         self.list_edited(action);
     }
-}
-
-pub fn tables_for_list_pair<M1, M2>(
-    parent: &mut Flex,
-    sender: fltk::app::Sender<GuiMessage>,
-    data: &ListPairWithCompilerOutputs<
-        M1::DataType,
-        M1::CompilerOutputType,
-        M2::DataType,
-        M2::CompilerOutputType,
-    >,
-) -> (ListEditorTable<M1>, ListEditorTable<M2>)
-where
-    M1: TableMapping + TableCompilerOutput,
-    M2: TableMapping + TableCompilerOutput,
-{
-    // Assumes list1 and list2 have the same max_size
-    let max_size_1 = data.list1.max_size.saturating_sub(data.list2.len());
-    let max_size_2 = data.list2.max_size.saturating_sub(data.list1.len());
-
-    let mut table1 = ListEditorTable::new_with_data(parent, data.list1(), sender);
-    let mut table2 = ListEditorTable::new_with_data(parent, data.list2(), sender);
-
-    table1.set_max_size(max_size_1);
-    table2.set_max_size(max_size_2);
-
-    (table1, table2)
 }
