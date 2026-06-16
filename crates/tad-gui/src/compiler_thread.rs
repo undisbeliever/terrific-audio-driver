@@ -255,7 +255,7 @@ pub enum SampleState {
     #[default]
     NotCompiled,
     Ok(SampleData),
-    BrrDataOnly(brr::BrrSample),
+    BrrDataOnly(Arc<brr::BrrSample>),
     Error,
 }
 
@@ -278,6 +278,14 @@ impl SampleState {
         match self {
             SampleState::Ok(s) => Some(s.sample_data()),
             SampleState::BrrDataOnly(b) => Some(b),
+            SampleState::NotCompiled | SampleState::Error => None,
+        }
+    }
+
+    fn share_brr_data(&self) -> Option<Arc<brr::BrrSample>> {
+        match self {
+            SampleState::Ok(s) => Some(s.share_sample_data()),
+            SampleState::BrrDataOnly(b) => Some(Arc::clone(b)),
             SampleState::NotCompiled | SampleState::Error => None,
         }
     }
@@ -1726,8 +1734,8 @@ fn bg_thread(
             }
             ToCompiler::PlaySampleAt32Khz(id) => {
                 if let Some(s) = brr_samples.get_output_for_id(&id) {
-                    if let Some(s) = s.brr_data() {
-                        sender.send_audio(AudioMessage::PlayBrrSampleAt32Khz(s.clone().into()));
+                    if let Some(s) = s.share_brr_data() {
+                        sender.send_audio(AudioMessage::PlayBrrSampleAt32Khz(s));
                     }
                 }
             }

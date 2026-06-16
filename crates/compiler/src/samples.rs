@@ -25,7 +25,7 @@ use brr::{
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
-use std::ops::RangeInclusive;
+use std::ops::{Deref, RangeInclusive};
 use std::sync::Arc;
 
 // A blank project has 61211 bytes of free space (2025)
@@ -149,34 +149,35 @@ fn encode_brr_samples(
 fn load_and_encode_wave_file(
     s: &project::WaveSource,
     cache: &mut SampleFileCache,
-) -> Result<BrrSample, BrrError> {
+) -> Result<Arc<BrrSample>, BrrError> {
     let wav = match cache.load_wav_file(&s.source) {
         Ok(w) => w,
         Err(e) => return Err(e.clone()),
     };
 
     encode_brr_samples(&wav.samples, &s.settings)
+        .map(Arc::new)
         .map_err(|e| BrrError::BrrEncodeError(s.source.to_path_string(), e))
 }
 
 fn load_brr_file(
     s: &project::BrrSource,
     cache: &mut SampleFileCache,
-) -> Result<BrrSample, BrrError> {
+) -> Result<Arc<BrrSample>, BrrError> {
     let brr = match cache.load_brr_file(&s.source) {
         Ok(b) => b,
         Err(e) => return Err(e.clone()),
     };
 
     match brr.clone().into_brr_sample(s.loop_point.map(|l| l.into())) {
-        Ok(b) => Ok(b),
+        Ok(b) => Ok(b.into()),
         Err(e) => Err(BrrError::BrrParseError(s.source.to_path_string(), e)),
     }
 }
 
 #[derive(Clone)]
 pub struct SampleData {
-    brr_sample: BrrSample,
+    brr_sample: Arc<BrrSample>,
     pitch: SamplePitches,
     adsr1: u8,
     adsr2_or_gain: u8,
@@ -190,12 +191,17 @@ impl SampleData {
     pub fn sample_data(&self) -> &BrrSample {
         &self.brr_sample
     }
+
+    pub fn share_sample_data(&self) -> Arc<BrrSample> {
+        Arc::clone(&self.brr_sample)
+    }
 }
 
+// ::TODO When recompiling a sample, skip compiling brr::BrrSample if sample.source is unchanged::
 pub fn compile_brr_sample(
     input: &project::BrrSample,
     cache: &mut SampleFileCache,
-) -> Result<SampleData, (Option<brr::BrrSample>, SampleError)> {
+) -> Result<SampleData, (Option<Arc<brr::BrrSample>>, SampleError)> {
     let brr_sample = {
         let mut s = match &input.source {
             project::BrrSampleSource::WaveFile(s) => load_and_encode_wave_file(s, cache),
@@ -303,7 +309,7 @@ fn build_brr_directroy(
     for s in samples.data_iter() {
         let brr = &s.brr_sample;
 
-        match sample_map.get(&brr) {
+        match sample_map.get(brr.deref()) {
             None => {
                 let start = brr_data.len();
                 let loop_point = start + usize::from(brr.loop_offset().unwrap_or(0));
