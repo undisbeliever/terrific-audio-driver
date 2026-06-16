@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::helpers::{ch_units_to_width, input_height, label_packed};
 use crate::GuiMessage;
@@ -17,7 +16,7 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 
 extern crate fltk;
 use fltk::app;
@@ -123,7 +122,6 @@ pub struct SampleAnalyserWidget {
 struct State {
     sender: app::Sender<GuiMessage>,
     compiler_sender: mpsc::Sender<ToCompiler>,
-    audio_sender: mpsc::Sender<AudioMessage>,
 
     item_id: Option<ItemId>,
 
@@ -165,7 +163,6 @@ impl SampleAnalyserWidget {
         height: i32,
         sender: app::Sender<GuiMessage>,
         compiler_sender: mpsc::Sender<ToCompiler>,
-        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
         let mut group = Flex::new(x, y, width, height, None).column();
 
@@ -247,7 +244,6 @@ impl SampleAnalyserWidget {
         let state = Rc::new(RefCell::from(State {
             sender,
             compiler_sender,
-            audio_sender,
 
             item_id: None,
             freq: 0.0,
@@ -727,7 +723,7 @@ impl State {
         // Do not show the padding if the sample does not loop
         let n_samples = match analysis.loop_point_samples {
             Some(_) => samples.len(),
-            None => analysis.n_samples,
+            None => analysis.n_input_samples,
         };
 
         let samples_default_zoom = Self::waveform_samples_default_zoom(analysis);
@@ -765,7 +761,7 @@ impl State {
         // Draw loop points
         if let Some(lp) = analysis.loop_point_samples {
             if lp < n_samples {
-                let loop_size = analysis.brr_sample.n_samples() - lp;
+                let loop_size = analysis.n_brr_samples - lp;
 
                 draw::set_draw_color(WAVEFORM_LOOP_POINT_COLOR);
                 for i in (lp..samples.len()).step_by(loop_size) {
@@ -801,9 +797,9 @@ impl State {
         match analysis.loop_point_samples {
             Some(_) => min(
                 analysis.decoded_samples_f32.len(),
-                max(analysis.n_samples * 2, MIN_WAVEFORM_WIDTH),
+                max(analysis.n_input_samples * 2, MIN_WAVEFORM_WIDTH),
             ),
-            None => analysis.n_samples,
+            None => analysis.n_input_samples,
         }
     }
 
@@ -844,10 +840,8 @@ impl State {
     }
 
     fn play_button_clicked(&self) {
-        if let Some(a) = &self.analysis {
-            let _ = self
-                .audio_sender
-                .send(AudioMessage::PlayBrrSampleAt32Khz(a.brr_sample.clone()));
+        if let Some(id) = self.item_id {
+            let _ = self.compiler_sender.send(ToCompiler::PlaySampleAt32Khz(id));
         }
     }
 }
@@ -876,10 +870,11 @@ impl Default for FftSettings {
 }
 
 pub struct SampleAnalysis {
-    brr_sample: Arc<BrrSample>,
-    n_samples: usize,
-    decoded_samples_f32: Vec<f32>,
+    n_input_samples: usize,
+    n_brr_samples: usize,
     loop_point_samples: Option<usize>,
+
+    decoded_samples_f32: Vec<f32>,
 
     fft_range: Range<usize>,
     spectrum: Result<FrequencySpectrum, String>,
@@ -901,7 +896,7 @@ pub fn analyse_sample(
 
     let fft_size = fft.size.value();
 
-    let n_samples = match wav_sample {
+    let n_input_samples = match wav_sample {
         Some(w) => w.samples.len(),
         None => brr_sample.n_samples(),
     };
@@ -941,10 +936,9 @@ pub fn analyse_sample(
     .map_err(|e| format!("ERROR: {:?}", e));
 
     SampleAnalysis {
+        n_input_samples,
+        n_brr_samples: brr_sample.n_samples(),
         loop_point_samples: brr_sample.loop_point_samples(),
-        n_samples,
-        // ::TODO remove::
-        brr_sample: Arc::new(brr_sample.clone()),
         decoded_samples_f32,
         fft_range,
         spectrum,

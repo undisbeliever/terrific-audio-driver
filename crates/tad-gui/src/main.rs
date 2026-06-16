@@ -325,12 +325,7 @@ impl Project {
             driver_state_window: DriverStateWindow::new(sender, audio_monitor.clone()),
 
             project_tab: ProjectTab::new(&data, sender),
-            samples_tab: SamplesTab::new(
-                &data.brr_samples,
-                sender,
-                compiler_sender.clone(),
-                audio_sender.clone(),
-            ),
+            samples_tab: SamplesTab::new(&data.brr_samples, sender, compiler_sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),

@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{CadOutput, CombineSamplesError, ItemId, SampleOutput, ToCompiler};
 use crate::helpers::*;
 use crate::list_editor::{
@@ -158,7 +157,6 @@ impl SamplesTab {
         brr_samples: &ListWithCompilerOutput<project::BrrSample, SampleOutput>,
         sender: app::Sender<GuiMessage>,
         compiler_sender: mpsc::Sender<ToCompiler>,
-        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
         let margin = ch_units_to_width(&group, 1) / 2;
@@ -184,7 +182,7 @@ impl SamplesTab {
         let sample_sizes_widget = SampleSizesWidget::new(&mut sample_sizes_group, brr_samples);
         sample_sizes_group.end();
 
-        let sample_editor = BrrSampleEditor::new(sender, compiler_sender, audio_sender);
+        let sample_editor = BrrSampleEditor::new(sender, compiler_sender);
 
         editor_wizard.end();
 
@@ -1154,7 +1152,6 @@ impl BrrSampleEditor {
     fn new(
         sender: app::Sender<GuiMessage>,
         compiler_sender: mpsc::Sender<ToCompiler>,
-        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Rc<RefCell<Self>> {
         let scroll = Scroll::default()
             .with_type(ScrollType::Vertical)
@@ -1369,15 +1366,8 @@ impl BrrSampleEditor {
 
         let mut flex = Flex::new(0, 22 * r, analyser_width, 18 * r, None).column();
 
-        let sample_analyser = SampleAnalyserWidget::new(
-            0,
-            22 * r,
-            analyser_width,
-            13 * r,
-            sender,
-            compiler_sender,
-            audio_sender,
-        );
+        let sample_analyser =
+            SampleAnalyserWidget::new(0, 22 * r, analyser_width, 13 * r, sender, compiler_sender);
 
         let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
 

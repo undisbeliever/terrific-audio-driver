@@ -153,6 +153,7 @@ pub enum ToCompiler {
     CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
+    PlaySampleAt32Khz(ItemId),
 
     ExportSongToSpcFile(ItemId),
 
@@ -1721,6 +1722,13 @@ fn bg_thread(
             ToCompiler::PlaySample(id, args) => {
                 if let Some((c_data, s_data)) = build_play_sample_data(&brr_samples, id, args) {
                     sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
+                }
+            }
+            ToCompiler::PlaySampleAt32Khz(id) => {
+                if let Some(s) = brr_samples.get_output_for_id(&id) {
+                    if let Some(s) = s.brr_data() {
+                        sender.send_audio(AudioMessage::PlayBrrSampleAt32Khz(s.clone().into()));
+                    }
                 }
             }
 
