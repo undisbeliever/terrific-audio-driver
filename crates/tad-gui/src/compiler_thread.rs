@@ -757,6 +757,20 @@ fn build_play_instrument_data(
     Some((common_audio_data, song_data))
 }
 
+struct OneSample<'a>(&'a SampleData);
+
+impl CompiledDataList for OneSample<'_> {
+    type Item = SampleData;
+
+    fn expected_len(&self) -> usize {
+        1
+    }
+
+    fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
+        std::iter::once(self.0)
+    }
+}
+
 fn build_play_sample_data(
     samples: &CList<project::BrrSample, SampleState>,
     id: ItemId,
@@ -764,7 +778,7 @@ fn build_play_sample_data(
 ) -> Option<(Box<CommonAudioData>, SongData)> {
     let sample = samples.get_output_for_id(&id).and_then(|s| s.data())?;
 
-    let sample_data = combine_samples([sample.clone()].as_slice()).ok()?;
+    let sample_data = combine_samples(&OneSample(sample)).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
