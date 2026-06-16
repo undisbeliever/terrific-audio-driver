@@ -195,7 +195,7 @@ impl SampleData {
 pub fn compile_brr_sample(
     input: &project::BrrSample,
     cache: &mut SampleFileCache,
-) -> Result<SampleData, SampleError> {
+) -> Result<SampleData, (Option<brr::BrrSample>, SampleError)> {
     let brr_sample = {
         let mut s = match &input.source {
             project::BrrSampleSource::WaveFile(s) => load_and_encode_wave_file(s, cache),
@@ -222,10 +222,20 @@ pub fn compile_brr_sample(
             adsr1: envelope.0,
             adsr2_or_gain: envelope.1,
         }),
-        (b, p) => Err(SampleError {
-            brr_error: b.err(),
-            pitch_error: p.err(),
-        }),
+        (Ok(b), p) => Err((
+            Some(b),
+            SampleError {
+                brr_error: None,
+                pitch_error: p.err(),
+            },
+        )),
+        (Err(be), p) => Err((
+            None,
+            SampleError {
+                brr_error: Some(be),
+                pitch_error: p.err(),
+            },
+        )),
     }
 }
 
@@ -259,7 +269,7 @@ fn compile_samples(
     for (i, s) in project.brr_samples.list().iter().enumerate() {
         match compile_brr_sample(s, &mut cache) {
             Ok(b) => out.push(b),
-            Err(e) => errors.push((i, s.name.clone(), e)),
+            Err((_, e)) => errors.push((i, s.name.clone(), e)),
         }
     }
 
