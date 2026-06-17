@@ -1522,7 +1522,7 @@ impl BrrSampleEditor {
                             let x = editor_group.x() + editor_width;
                             let y = editor_group.y();
 
-                            let w = if h <= editor_height {
+                            let w = if sh <= editor_height {
                                 sw - scrollbar_width
                             } else {
                                 sw
