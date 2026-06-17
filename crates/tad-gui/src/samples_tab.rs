@@ -1168,8 +1168,7 @@ impl BrrSampleEditor {
         let c4 = ch_units_to_width(&scroll, 65);
         let c5 = ch_units_to_width(&scroll, 66);
 
-        // ::TODO shrink::
-        let analyser_width = ch_units_to_width(&scroll, 90);
+        let analyser_width = c5 + c0;
 
         let outer_w = c5 - c1;
         let inner_w = c4 - c1;
@@ -1365,9 +1364,11 @@ impl BrrSampleEditor {
         comment.wrap_mode(WrapMode::AtBounds, 0);
 
         let mut flex = Flex::new(0, 22 * r, analyser_width, 18 * r, None).column();
+        flex.set_margin(c0);
+        flex.set_pad(c0 / 2);
 
         let sample_analyser =
-            SampleAnalyserWidget::new(0, 22 * r, analyser_width, 13 * r, sender, compiler_sender);
+            SampleAnalyserWidget::new(&mut flex, analyser_width - c0 * 2, sender, compiler_sender);
 
         let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
 

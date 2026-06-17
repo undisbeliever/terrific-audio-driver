@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{ItemId, ToCompiler};
-use crate::helpers::{ch_units_to_width, input_height, label_packed};
+use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
 
 use brr::{BrrSample, MonoPcm16WaveFile};
@@ -23,7 +23,7 @@ use fltk::app;
 use fltk::button::Button;
 use fltk::draw;
 use fltk::enums::{Align, Color, Event, Font, FrameType};
-use fltk::group::{Flex, Group, Pack, PackType};
+use fltk::group::{Flex, Group};
 use fltk::menu::Choice;
 use fltk::output::Output;
 use fltk::prelude::{GroupExt, InputExt, MenuExt, ValuatorExt, WidgetBase, WidgetExt};
@@ -77,11 +77,11 @@ fn read_spectrum_range_choice(c: &Choice) -> f64 {
     }
 }
 
-const DEFAULT_FFT_SIZE_VALUE: i32 = 4;
-
 const FFT_SIZE_CHOICES: &str = "256|512|1024|2048|4096|8192|16384|32768";
 const _: () = assert!(MIN_SPECTRUM_SAMPLES == 256);
 const _: () = assert!(MAX_SPECTRUM_SAMPLES == 32768);
+
+const DEFAULT_FFT_SIZE_VALUE: i32 = 4;
 
 #[derive(Debug)]
 struct FftSize {
@@ -115,7 +115,6 @@ enum WaveformMoveEvent {
 }
 
 pub struct SampleAnalyserWidget {
-    group: Flex,
     state: Rc<RefCell<State>>,
 }
 
@@ -139,7 +138,12 @@ struct State {
     spectrum: Widget,
     waveform: Widget,
 
-    spectrum_stats_group: Pack,
+    first_group: Group,
+    play_button: Button,
+    fft_offset: HorSlider,
+    fft_size_choice: Choice,
+
+    spectrum_stats_group: Group,
     spectrum_range_choice: Choice,
     peak_freq: Output,
     cursor_freq: Output,
@@ -148,98 +152,71 @@ struct State {
     use_peak: Button,
     use_cursor: Button,
     use_cursor_peak: Button,
-
-    fft_offset: HorSlider,
-    fft_size_choice: Choice,
-
-    play_button: Button,
 }
 
 impl SampleAnalyserWidget {
     pub fn new(
-        x: i32,
-        y: i32,
+        parent: &mut Flex,
         width: i32,
-        height: i32,
         sender: app::Sender<GuiMessage>,
         compiler_sender: mpsc::Sender<ToCompiler>,
     ) -> Self {
-        let mut group = Flex::new(x, y, width, height, None).column();
+        let line_height = input_height(parent);
 
-        let margin = ch_units_to_width(&group, 1);
-        group.set_pad(margin);
-        group.set_margin(margin);
+        let output_w = ch_units_to_width(parent, 10);
+        let use_w = ch_units_to_width(parent, 4);
 
-        let line_height = input_height(&group);
-        let ch = |ch_units| ch_units_to_width(&group, ch_units);
+        let play_w = use_w;
+        let fftsize_w = output_w;
+        let srange_w = output_w + use_w;
 
-        let spectrum = Widget::default();
+        let pad = parent.pad();
 
-        let mut spectrum_stats_group = Pack::default();
-        spectrum_stats_group.set_type(PackType::Horizontal);
-        spectrum_stats_group.set_spacing(margin / 2);
-
-        let use_width = ch(4);
-        let stats_width = ch(10);
-        let button_width = ch(10);
-
-        let spectrum_range_choice = Choice::default().with_size(ch(15), line_height);
-
-        label_packed("Peak:");
-        let peak_freq = Output::default().with_size(stats_width, line_height);
-        let use_peak = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        label_packed(" Cursor:");
-        let cursor_freq = Output::default().with_size(stats_width, line_height);
-        let use_cursor = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        label_packed(" Cursor (peak):");
-        let cursor_peak_freq = Output::default().with_size(stats_width, line_height);
-        let use_cursor_peak = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        spectrum_stats_group.end();
-        group.fixed(&spectrum_stats_group, line_height);
+        let col_width = width / 3;
+        let cx = |c| pad + c * col_width;
 
         let waveform = Widget::default();
 
-        let mut fft_group = Flex::default().row();
-        group.fixed(&fft_group, line_height);
+        let first_group = Group::new(pad, 0, width, line_height, None);
 
-        let fft_offset_label = label_packed("FFT offset");
-        fft_group.fixed(&fft_offset_label, fft_offset_label.width());
+        let mut play_button = Button::new(pad, 0, play_w, line_height, "@>");
+        play_button.set_tooltip("Play BRR sample at 32000Hz");
 
-        let fft_offset = HorSlider::default();
+        let offset_x = pad + play_w + pad;
+        let mut fft_offset =
+            HorSlider::new(offset_x, 0, col_width - play_w - pad, line_height, None);
+        fft_offset.set_tooltip("FFT range");
 
-        let fft_size_label = label_packed("Max size");
-        fft_group.fixed(&fft_size_label, fft_size_label.width());
-
-        let mut fft_size_choice = Choice::default().with_size(stats_width, line_height);
+        let mut fft_size_choice =
+            Choice::new(cx(2) - fftsize_w, 0, fftsize_w, line_height, "FFT size: ");
         fft_size_choice.add_choice(FFT_SIZE_CHOICES);
         fft_size_choice.set_value(DEFAULT_FFT_SIZE_VALUE);
         fft_size_choice.set_tooltip("Maximum FFT size");
-        fft_group.fixed(&fft_size_choice, stats_width);
 
-        fft_group.end();
+        let spectrum_range_choice =
+            Choice::new(cx(3) - srange_w, 0, srange_w, line_height, "Range: ");
 
-        let mut b_group = Group::default();
-        b_group.set_size(button_width + margin, line_height);
-        b_group.make_resizable(false);
+        first_group.end();
+        parent.fixed(&first_group, line_height);
 
-        let _empty_space = Widget::default();
+        let spectrum = Widget::default();
 
-        let mut play_button = Button::new(0, 0, button_width, line_height, "@>");
-        play_button.set_tooltip("Play BRR sample at 32000Hz");
+        let spectrum_stats_group = Group::new(pad, 0, width, line_height, None);
 
-        b_group.end();
-        group.fixed(&b_group, line_height);
+        let freq_stats = |c, label| {
+            let bx = cx(c + 1) - use_w;
+            let ox = bx - output_w;
+            (
+                Output::new(ox, 0, output_w, line_height, label),
+                Button::new(bx, 0, use_w, line_height, "Use"),
+            )
+        };
+        let (peak_freq, use_peak) = freq_stats(0, "Peak:");
+        let (cursor_freq, use_cursor) = freq_stats(1, "Cursor:");
+        let (cursor_peak_freq, use_cursor_peak) = freq_stats(2, "C Peak:");
 
-        group.end();
+        spectrum_stats_group.end();
+        parent.fixed(&spectrum_stats_group, line_height);
 
         let state = Rc::new(RefCell::from(State {
             sender,
@@ -258,6 +235,11 @@ impl SampleAnalyserWidget {
             spectrum,
             waveform,
 
+            first_group,
+            play_button,
+            fft_offset,
+            fft_size_choice,
+
             spectrum_stats_group,
             spectrum_range_choice,
             peak_freq,
@@ -267,11 +249,6 @@ impl SampleAnalyserWidget {
             use_peak,
             use_cursor,
             use_cursor_peak,
-
-            fft_offset,
-            fft_size_choice,
-
-            play_button,
         }));
 
         {
@@ -320,7 +297,7 @@ impl SampleAnalyserWidget {
             });
 
             s.spectrum_range_choice.add_choice(SPECTRUM_RANGE_CHOICES);
-            s.spectrum_range_choice.set_value(1);
+            s.spectrum_range_choice.set_value(2);
             s.spectrum_range_choice.set_callback({
                 let state = state.clone();
                 move |_| {
@@ -350,17 +327,15 @@ impl SampleAnalyserWidget {
             s.spectrum_range_changed();
         }
 
-        Self { group, state }
+        Self { state }
     }
 
     pub fn clear_and_deactivate(&mut self) {
         self.state.borrow_mut().clear();
-        self.group.deactivate();
     }
 
     pub fn selected_sample_edited(&mut self, id: ItemId, data: &project::BrrSample) {
         self.state.borrow_mut().selected_sample_edited(id, data);
-        self.group.activate();
     }
 
     pub fn analysis_from_compiler_thread(
@@ -441,8 +416,6 @@ impl State {
 
             self.clear_spectrum_values();
 
-            self.play_button.deactivate();
-
             self.send_analyse_sample_message();
         }
 
@@ -494,7 +467,9 @@ impl State {
                     self.fft_offset.set_value(pos as f64);
                 }
 
-                self.play_button.activate();
+                self.first_group.activate();
+                self.waveform.activate();
+                self.spectrum.activate();
             }
             None => {
                 self.clear_spectrum_values();
@@ -503,7 +478,9 @@ impl State {
 
                 self.fft_offset.set_range(0.0, 0.0);
 
-                self.play_button.deactivate();
+                self.first_group.deactivate();
+                self.waveform.deactivate();
+                self.spectrum.deactivate();
             }
         }
         self.analysis = analysis;
