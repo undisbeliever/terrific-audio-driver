@@ -177,7 +177,6 @@ pub enum GuiMessage {
     PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffectCommand(SfxId, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
-    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseAudio,
     PauseResumeAudio(ItemId),
@@ -547,11 +546,6 @@ impl Project {
                 let _ = self
                     .compiler_sender
                     .send(ToCompiler::PlaySfxUsingSfxBuffer(id, pan));
-            }
-            GuiMessage::PlayInstrument(id, args) => {
-                let _ = self
-                    .compiler_sender
-                    .send(ToCompiler::PlayInstrument(id, args));
             }
             GuiMessage::PlaySample(id, args) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));

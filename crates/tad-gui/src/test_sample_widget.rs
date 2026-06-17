@@ -52,14 +52,14 @@ struct EnvelopeWidgetState {
     gain: Spinner,
 }
 
-pub struct EnvelopeWidget {
+struct EnvelopeWidget {
     #[allow(dead_code)]
     group: Group,
     state: Rc<RefCell<EnvelopeWidgetState>>,
 }
 
 impl EnvelopeWidget {
-    pub fn new(x: i32, y: i32, widget_width: i32) -> Self {
+    fn new(x: i32, y: i32, widget_width: i32) -> Self {
         let mut group = Group::new(x, y, widget_width, 0, None);
         group.make_resizable(false);
 
@@ -168,7 +168,7 @@ impl EnvelopeWidget {
         Self { group, state }
     }
 
-    pub fn get_envelope(&self) -> Result<Option<Envelope>, ValueError> {
+    fn get_envelope(&self) -> Result<Option<Envelope>, ValueError> {
         self.state.borrow().get_envelope()
     }
 }
@@ -240,19 +240,11 @@ impl EnvelopeWidgetState {
     }
 }
 
-struct TestInstrumentWidget {
-    selected_id: Option<ItemId>,
-
-    sender: app::Sender<GuiMessage>,
-
+struct PianoButtons {
     group: Group,
-
-    octave: Spinner,
-    note_length: Spinner,
-    envelope: EnvelopeWidget,
 }
 
-impl TestInstrumentWidget {
+impl PianoButtons {
     const KEYS: [(i32, &'static str); 12] = [
         (0, "C"),
         (1, ""),
@@ -268,27 +260,20 @@ impl TestInstrumentWidget {
         (12, "B"),
     ];
 
-    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
-        let mut group = Group::default().size_of_parent();
+    fn new(
+        x: i32,
+        key_width: i32,
+        group_width: i32,
+        group_height: i32,
+        settings: &Rc<RefCell<TestBrrSampleSettings>>,
+    ) -> Self {
+        let mut group = Group::new(x, 0, group_width, group_height, None);
         group.make_resizable(false);
 
-        let line_height = ch_units_to_width(&group, 3);
+        let key_height = group_height / 2;
 
-        let widget_width = ch_units_to_width(&group, 66);
-        let widget_height = line_height * 6;
-
-        group.set_size(widget_width, widget_height);
-
-        let key_width = ch_units_to_width(&group, 5);
-        let key_height = line_height * 5 / 2;
-        let key_group_width = key_width * 7;
-
-        let key_group = Group::new(0, 0, key_group_width, key_height * 2, None);
-
-        let mut key_buttons: Vec<Button> = Vec::with_capacity(Self::KEYS.len());
-
-        for (x, label) in Self::KEYS {
-            let x = x * key_width / 2;
+        for (i, (col, label)) in Self::KEYS.iter().enumerate() {
+            let x = x + col * key_width / 2;
             let y = i32::from(!label.is_empty()) * key_height;
 
             let mut b = Button::new(x, y, key_width, key_height, None);
@@ -299,30 +284,121 @@ impl TestInstrumentWidget {
             } else {
                 b.set_color(Color::Foreground);
             }
-            key_buttons.push(b);
+
+            b.set_callback({
+                let s = settings.clone();
+                let i = u8::try_from(i).unwrap();
+                let pitch = PitchSemitoneIndex::try_from(i).unwrap();
+                move |_| {
+                    s.borrow().send_play_pitch_message(pitch);
+                }
+            });
         }
 
-        key_group.end();
+        group.end();
 
-        let options_width = ch_units_to_width(&group, 30);
-        let options_x = widget_width - options_width;
-        let options_group = Group::new(options_x, 0, options_width, line_height * 7, None);
+        Self { group }
+    }
+}
 
-        let pos = |row, n_cols, col| -> (i32, i32, i32, i32) {
-            assert!(col < n_cols);
+struct SampleRateButtons {
+    group: Group,
+    buttons: [Button; 12],
+}
 
-            let spacing = (options_width - 2) / n_cols;
-            let w = spacing - 2;
-            let h = line_height;
-            let x = options_x + spacing * col + 2;
-            let y = row * h;
+impl SampleRateButtons {
+    fn new(
+        group_width: i32,
+        button_size: i32,
+        settings: &Rc<RefCell<TestBrrSampleSettings>>,
+    ) -> Self {
+        let mut group = Group::new(0, 0, group_width, button_size * 3, None);
+        group.make_resizable(false);
 
-            (x, y, w, h)
-        };
+        let x = (group_width - button_size * 4) / 2;
 
-        let spinner =
-            |row, n_cols, col, label: &'static str, tooltip: &str, min: u8, max: u8, value: u8| {
-                let (x, y, w, h) = pos(row, n_cols, col);
+        let buttons = std::array::from_fn(|i| {
+            let n = i32::try_from(i).unwrap();
+            let x = (n % 4) * button_size + x;
+            let y = (n / 4) * button_size;
+
+            let mut b = Button::new(x, y, button_size, button_size, None);
+            b.set_label(&format!("{}", n));
+
+            b.set_callback({
+                let s = settings.clone();
+                let note = Note::from_note_id_usize(i).unwrap();
+                move |_| {
+                    s.borrow().send_play_note_message(note);
+                }
+            });
+
+            b
+        });
+
+        Self { group, buttons }
+    }
+
+    fn update_buttons(&mut self, n_sample_rates: usize) {
+        for (i, b) in self.buttons.iter_mut().enumerate() {
+            b.set_active(i < n_sample_rates);
+        }
+    }
+}
+
+pub struct TestBrrSampleWidget {
+    group: Group,
+    wizard: Wizard,
+
+    piano: PianoButtons,
+    sample_rates: SampleRateButtons,
+
+    settings: Rc<RefCell<TestBrrSampleSettings>>,
+}
+
+struct TestBrrSampleSettings {
+    sender: app::Sender<GuiMessage>,
+
+    selected_id: Option<ItemId>,
+
+    octave: Spinner,
+    note_length: Spinner,
+    envelope: EnvelopeWidget,
+}
+
+impl TestBrrSampleWidget {
+    // Must be placed inside Pack or Flex for the widget to be in the right place
+    pub fn new(parent: &mut Flex, sender: app::Sender<GuiMessage>) -> Self {
+        let line_height = ch_units_to_width(parent, 3);
+
+        let width = ch_units_to_width(parent, 65);
+        let height = line_height * 5;
+
+        let button_size = ch_units_to_width(parent, 5);
+
+        let buttons_x = ch_units_to_width(parent, 1);
+        let options_x = button_size * 7 + buttons_x * 2;
+        let buttons_width = options_x - buttons_x;
+        let options_width = width - options_x;
+
+        let mut group = Group::new(0, 0, width, height, None);
+        group.make_resizable(false);
+
+        let settings = {
+            let spinner = |row,
+                           n_cols,
+                           col,
+                           label: &'static str,
+                           tooltip: &str,
+                           min: u8,
+                           max: u8,
+                           value: u8| {
+                let spacing = (options_width - 2) / n_cols;
+                let w = spacing - 2;
+                let h = line_height;
+                let x = options_x + spacing * col + 2;
+                let y = row * h;
+
                 let mut c = Spinner::new(x, y, w, h, Some(label));
                 if !tooltip.is_empty() {
                     c.set_tooltip(tooltip);
@@ -334,188 +410,99 @@ impl TestInstrumentWidget {
                 c
             };
 
-        let octave = spinner(
-            1,
-            2,
-            0,
-            "Octave",
-            "",
-            Octave::MIN.as_u8(),
-            Octave::MAX.as_u8(),
-            4,
-        );
-        let mut note_length = spinner(1, 2, 1, "Note Length", "", 2, 255, u8::MAX);
-        note_length.set_maximum(1000.0);
+            let octave = spinner(
+                1,
+                2,
+                0,
+                "Octave",
+                "",
+                Octave::MIN.as_u8(),
+                Octave::MAX.as_u8(),
+                4,
+            );
+            let mut note_length = spinner(1, 2, 1, "Note Length", "", 2, 255, 125);
+            note_length.set_maximum(1000.0);
 
-        let envelope = EnvelopeWidget::new(options_x, line_height * 3, options_width);
+            let envelope = EnvelopeWidget::new(options_x, line_height * 2, options_width);
 
-        options_group.end();
+            Rc::new(RefCell::new(TestBrrSampleSettings {
+                sender,
+                selected_id: None,
+                octave,
+                note_length,
+                envelope,
+            }))
+        };
+
+        let mut wizard = Wizard::new(0, 0, options_x, height, None);
+        wizard.set_frame(fltk::enums::FrameType::NoBox);
+
+        let piano = PianoButtons::new(buttons_x, button_size, buttons_width, height, &settings);
+        let sample_rates = SampleRateButtons::new(buttons_width, button_size, &settings);
+
+        wizard.end();
 
         group.end();
 
-        let out = Rc::from(RefCell::new(Self {
-            selected_id: None,
-            sender,
+        parent.fixed(&group, height);
+
+        Self {
             group,
-
-            octave,
-            note_length,
-            envelope,
-        }));
-
-        {
-            let mut widget = out.borrow_mut();
-
-            widget.clear_selected();
+            wizard,
+            piano,
+            sample_rates,
+            settings,
         }
-
-        for (i, button) in key_buttons.iter_mut().enumerate() {
-            button.set_callback({
-                let state = out.clone();
-                let i = u8::try_from(i).unwrap();
-                let pitch = PitchSemitoneIndex::try_from(i).unwrap();
-                move |_w| {
-                    if let Ok(s) = state.try_borrow() {
-                        let _ = s.on_key_pressed(pitch);
-                    }
-                }
-            });
-        }
-
-        out
     }
 
-    fn clear_selected(&mut self) {
-        self.selected_id = None;
+    pub fn clear_selected(&mut self) {
+        let mut s = self.settings.borrow_mut();
+
+        s.selected_id = None;
+
         self.group.deactivate();
     }
 
-    fn set_selected(&mut self, id: ItemId) {
-        self.selected_id = Some(id);
-        self.group.activate();
-    }
+    pub fn item_edited(&mut self, id: ItemId, data: &BrrSample) {
+        let mut s = self.settings.borrow_mut();
 
-    fn set_active(&mut self, active: bool) {
-        self.group.set_active(active && self.selected_id.is_some());
-    }
+        s.selected_id = Some(id);
 
-    fn on_key_pressed(&self, pitch: PitchSemitoneIndex) -> Result<(), ValueError> {
-        if let Some(id) = self.selected_id {
-            let envelope = self.envelope.get_envelope()?;
-            let octave = Octave::try_from(self.octave.value() as u32)?;
-            let note = Note::from_pitch_and_octave(pitch, octave)?;
-
-            self.sender.send(GuiMessage::PlayInstrument(
-                id,
-                PlaySampleArgs {
-                    note,
-                    note_length: self.note_length.value() as u16,
-                    envelope,
-                },
-            ));
+        match &data.pitches {
+            Some(BrrSamplePitches::Octaves { .. }) | Some(BrrSamplePitches::Notes { .. }) => {
+                s.octave.activate();
+                self.wizard.set_current_widget(&self.piano.group);
+            }
+            Some(BrrSamplePitches::SampleRates { sample_rates }) => {
+                s.octave.deactivate();
+                self.sample_rates.update_buttons(sample_rates.len());
+                self.wizard.set_current_widget(&self.sample_rates.group);
+            }
+            None => {
+                s.octave.deactivate();
+                self.wizard.set_current_widget(&self.piano.group);
+                self.group.deactivate();
+            }
         }
+    }
 
-        Ok(())
+    pub fn compiler_output_changed(&mut self, compiler_output: Option<&SampleOutput>) {
+        let a = compiler_output.is_some_and(|co| co.is_ok());
+
+        self.group.set_active(a);
     }
 }
 
-struct TestSampleWidget {
-    selected_id: Option<ItemId>,
-
-    sender: app::Sender<GuiMessage>,
-
-    group: Group,
-
-    buttons: [Button; 12],
-
-    note_length: Spinner,
-    envelope: EnvelopeWidget,
-}
-
-impl TestSampleWidget {
-    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
-        let mut group = Group::default();
-        group.make_resizable(false);
-
-        let button_size = ch_units_to_width(&group, 5);
-
-        let options_x = 6 * button_size;
-        let options_y = 0;
-        let options_width = ch_units_to_width(&group, 30);
-        let line_height = ch_units_to_width(&group, 3);
-
-        group.set_size(options_x + options_width, button_size * 4);
-
-        let buttons = std::array::from_fn(|i| {
-            let i = i32::try_from(i).unwrap();
-            let x = (i % 4 + 1) * button_size;
-            let y = (i / 4) * button_size;
-
-            let mut b = Button::new(x, y, button_size, button_size, None);
-            b.set_label(&format!("{}", i));
-
-            b
-        });
-
-        let mut note_length = Spinner::new(
-            options_x + options_width / 2,
-            options_y,
-            options_width / 2,
-            line_height,
-            "Note Length",
-        );
-        note_length.set_range(2.0, 1000.0);
-        note_length.set_value(125.0); // 1 second
-        note_length.set_step(1.0);
-
-        let envelope = EnvelopeWidget::new(options_x, options_y + line_height * 2, options_width);
-
-        let out = Rc::from(RefCell::new(Self {
-            selected_id: None,
-            sender,
-            group,
-            note_length,
-            buttons,
-            envelope,
-        }));
-
-        for (i, b) in out.borrow_mut().buttons.iter_mut().enumerate() {
-            b.set_callback({
-                let widget = out.clone();
-                let note = Note::from_note_id_usize(i).unwrap();
-                move |_| {
-                    if let Ok(w) = widget.try_borrow() {
-                        w.send_play_sample_message(note);
-                    }
-                }
-            })
-        }
-
-        out
-    }
-
-    fn clear_selected(&mut self) {
-        self.selected_id = None;
-        self.group.deactivate();
-    }
-
-    fn set_selected(&mut self, id: ItemId, n_sample_rates: usize) {
-        self.selected_id = Some(id);
-        self.group.activate();
-        self.update_buttons(n_sample_rates);
-    }
-
-    fn set_active(&mut self, active: bool) {
-        self.group.set_active(active && self.selected_id.is_some());
-    }
-
-    fn update_buttons(&mut self, n_sample_rates: usize) {
-        for (i, b) in self.buttons.iter_mut().enumerate() {
-            b.set_active(i < n_sample_rates);
+impl TestBrrSampleSettings {
+    fn send_play_pitch_message(&self, pitch: PitchSemitoneIndex) {
+        if let Ok(o) = Octave::try_from(self.octave.value() as u32) {
+            if let Ok(n) = Note::from_pitch_and_octave(pitch, o) {
+                self.send_play_note_message(n)
+            }
         }
     }
 
-    fn send_play_sample_message(&self, note: Note) {
+    fn send_play_note_message(&self, note: Note) {
         if let Some(id) = self.selected_id {
             if let Ok(envelope) = self.envelope.get_envelope() {
                 self.sender.send(GuiMessage::PlaySample(
@@ -528,70 +515,5 @@ impl TestSampleWidget {
                 ))
             }
         }
-    }
-}
-
-pub struct TestBrrSampleWidget {
-    wizard: Wizard,
-    notes: Rc<RefCell<TestInstrumentWidget>>,
-    sample_rates: Rc<RefCell<TestSampleWidget>>,
-}
-
-impl TestBrrSampleWidget {
-    // Must be placed inside Pack or Flex for the widget to be in the right place
-    pub fn new(parent: &mut Flex, sender: app::Sender<GuiMessage>) -> Self {
-        let width = ch_units_to_width(parent, 50);
-        let height = ch_units_to_width(parent, 5 * 3);
-
-        let mut wizard = Wizard::new(0, 0, width, height, None);
-        wizard.set_frame(fltk::enums::FrameType::NoBox);
-
-        let notes = TestInstrumentWidget::new(sender);
-        let sample_rates = TestSampleWidget::new(sender);
-
-        wizard.end();
-
-        parent.fixed(&wizard, height);
-
-        Self {
-            wizard,
-            notes,
-            sample_rates,
-        }
-    }
-
-    pub fn clear_selected(&mut self) {
-        self.notes.borrow_mut().clear_selected();
-        self.sample_rates.borrow_mut().clear_selected();
-        self.wizard.deactivate();
-    }
-
-    pub fn item_edited(&mut self, id: ItemId, data: &BrrSample) {
-        match &data.pitches {
-            Some(BrrSamplePitches::Octaves { .. }) | Some(BrrSamplePitches::Notes { .. }) => {
-                let mut w = self.notes.borrow_mut();
-                w.set_selected(id);
-                self.wizard.set_current_widget(&w.group);
-                self.wizard.activate();
-            }
-            Some(BrrSamplePitches::SampleRates { sample_rates }) => {
-                let mut w = self.sample_rates.borrow_mut();
-                w.set_selected(id, sample_rates.len());
-                self.wizard.set_current_widget(&w.group);
-                self.wizard.activate();
-            }
-            None => {
-                let w = self.notes.borrow();
-                self.wizard.set_current_widget(&w.group);
-                self.wizard.deactivate();
-            }
-        }
-    }
-
-    pub fn compiler_output_changed(&mut self, compiler_output: Option<&SampleOutput>) {
-        let a = compiler_output.is_some_and(|co| co.is_ok());
-
-        self.notes.borrow_mut().set_active(a);
-        self.sample_rates.borrow_mut().set_active(a);
     }
 }

@@ -151,7 +151,6 @@ pub enum ToCompiler {
 
     CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
     CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
-    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PlaySampleAt32Khz(ItemId),
 
@@ -743,7 +742,7 @@ fn create_sample_compiler<'a>(
     }
 }
 
-fn build_play_instrument_data(
+fn build_play_sample_data(
     samples: &CList<project::BrrSample, SampleState>,
     id: ItemId,
     args: PlaySampleArgs,
@@ -755,39 +754,6 @@ fn build_play_instrument_data(
     if args.note > max_note {
         return None;
     }
-
-    let blank_sfx = blank_compiled_sound_effects();
-    let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
-    let common_audio_data =
-        Box::new(build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?);
-    let song_data =
-        test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
-
-    Some((common_audio_data, song_data))
-}
-
-struct OneSample<'a>(&'a SampleData);
-
-impl CompiledDataList for OneSample<'_> {
-    type Item = SampleData;
-
-    fn expected_len(&self) -> usize {
-        1
-    }
-
-    fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
-        std::iter::once(self.0)
-    }
-}
-
-fn build_play_sample_data(
-    samples: &CList<project::BrrSample, SampleState>,
-    id: ItemId,
-    args: PlaySampleArgs,
-) -> Option<(Box<CommonAudioData>, SongData)> {
-    let sample = samples.get_output_for_id(&id).and_then(|s| s.data())?;
-
-    let sample_data = combine_samples(&OneSample(sample)).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
@@ -1720,11 +1686,6 @@ fn bg_thread(
                             ));
                         }
                     };
-                }
-            }
-            ToCompiler::PlayInstrument(id, args) => {
-                if let Some((c_data, s_data)) = build_play_instrument_data(&brr_samples, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
                 }
             }
             ToCompiler::PlaySample(id, args) => {

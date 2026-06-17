@@ -229,37 +229,40 @@ fn sample_pitches(sample_rates: &[u32]) -> Result<SamplePitches, PitchError> {
     }
 }
 
-/// Build a new `InstrumentPitch` that contains all octaves that can be played by the sample.
+/// Build a new `SamplePitches` that contains all notes a tuned sample can play.
+/// If the sample uses sample-rates, the returned value is unchanged.
 ///
 /// Used by the play-sample feature of the GUI.
 ///
-/// Returns: a new `InstrumentPitch` and the largest note that can be played with `pitch`.
-pub(crate) fn maximize_pitch_note_range(pitch: &SamplePitches) -> Option<(SamplePitches, Note)> {
-    let pitch = match pitch {
-        SamplePitches::Notes(p) => p,
-        SamplePitches::SampleRates(_) => return None,
-    };
+/// Returns: a new `SamplePitches` and the largest note that can be played with `pitch`.
+pub(crate) fn maximize_pitch_note_range(pitch: &SamplePitches) -> (SamplePitches, Note) {
+    match pitch {
+        SamplePitches::Notes(pitch) => {
+            let maximum_semitone_increment = maximum_semitone_increment(pitch.microsemitones);
 
-    let maximum_semitone_increment = maximum_semitone_increment(pitch.microsemitones);
+            let max_semitone = (pitch.semitones_above_c0 + maximum_semitone_increment)
+                .clamp(FIRST_SEMITONE, LAST_SEMITONE);
 
-    let max_semitone = (pitch.semitones_above_c0 + maximum_semitone_increment)
-        .clamp(FIRST_SEMITONE, LAST_SEMITONE);
+            let max_note = Note::from_note_id_u32(max_semitone.try_into().unwrap()).unwrap();
 
-    let max_note = Note::from_note_id_u32(max_semitone.try_into().unwrap()).unwrap();
+            let min_semitone_offset = FIRST_SEMITONE - pitch.semitones_above_c0;
+            let max_semitone_offset = max_semitone - pitch.semitones_above_c0;
 
-    let min_semitone_offset = FIRST_SEMITONE - pitch.semitones_above_c0;
-    let max_semitone_offset = max_semitone - pitch.semitones_above_c0;
+            let new_pitch = InstrumentPitch {
+                microsemitones: pitch.microsemitones,
+                semitones_above_c0: pitch.semitones_above_c0,
+                note_range: pitch.note_range.clone(),
 
-    let new_pitch = InstrumentPitch {
-        microsemitones: pitch.microsemitones,
-        semitones_above_c0: pitch.semitones_above_c0,
-        note_range: pitch.note_range.clone(),
+                min_semitone_offset,
+                max_semitone_offset,
+            };
 
-        min_semitone_offset,
-        max_semitone_offset,
-    };
-
-    Some((SamplePitches::Notes(new_pitch), max_note))
+            (SamplePitches::Notes(new_pitch), max_note)
+        }
+        SamplePitches::SampleRates(sr) => {
+            (SamplePitches::SampleRates(sr.clone()), *sr.note_range.end())
+        }
+    }
 }
 
 pub fn default_octaves_for_tuning_frequency(freq: f64) -> RangeInclusive<Octave> {

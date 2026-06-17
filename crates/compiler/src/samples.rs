@@ -361,7 +361,7 @@ impl SampleAndInstrumentData {
 ///
 /// Returns: sample data and the largest note that can be played by the sample.
 pub fn create_test_instrument_data(sample: &SampleData) -> Option<(SampleAndInstrumentData, Note)> {
-    let (pitch, max_note) = maximize_pitch_note_range(&sample.pitch)?;
+    let (pitch, max_note) = maximize_pitch_note_range(&sample.pitch);
 
     let samples = [SampleData {
         pitch,
