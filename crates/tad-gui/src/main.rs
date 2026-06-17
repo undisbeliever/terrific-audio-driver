@@ -12,7 +12,6 @@ mod audio_thread;
 mod compiler_thread;
 mod dialogs;
 mod driver_state_window;
-mod envelope_widget;
 mod files;
 mod help;
 mod helpers;
