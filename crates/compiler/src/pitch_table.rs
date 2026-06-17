@@ -251,7 +251,7 @@ pub(crate) fn maximize_pitch_note_range(pitch: &SamplePitches) -> (SamplePitches
             let new_pitch = InstrumentPitch {
                 microsemitones: pitch.microsemitones,
                 semitones_above_c0: pitch.semitones_above_c0,
-                note_range: pitch.note_range.clone(),
+                note_range: Note::MIN..=max_note,
 
                 min_semitone_offset,
                 max_semitone_offset,
