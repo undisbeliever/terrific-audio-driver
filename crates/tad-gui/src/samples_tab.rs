@@ -30,6 +30,7 @@ use fltk::input::{FloatInput, InputType};
 use fltk::output::Output;
 
 use std::cell::RefCell;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::rc::Rc;
@@ -1131,7 +1132,6 @@ struct BrrSampleEditor {
     sender: app::Sender<GuiMessage>,
     data: Option<(ItemId, BrrSample)>,
 
-    #[expect(dead_code)]
     scroll: Scroll,
     scrollgroup: Group,
 
@@ -1168,12 +1168,18 @@ impl BrrSampleEditor {
         let c4 = ch_units_to_width(&scroll, 65);
         let c5 = ch_units_to_width(&scroll, 66);
 
-        let analyser_width = c5 + c0;
-
         let outer_w = c5 - c1;
         let inner_w = c4 - c1;
 
-        let scrollgroup = Group::default().with_size(analyser_width, r * 40 + s);
+        let editor_width = c5 + c0;
+        let editor_height = 22 * r;
+
+        let flex_height = 18 * r;
+
+        let mut scrollgroup = Group::default().with_size(editor_width, r * 40 + s);
+        scrollgroup.make_resizable(false);
+
+        let editor_group = Group::new(0, 0, editor_width, editor_height, None);
 
         let name = Input::new(c1, 0, outer_w, h, "Name: ");
 
@@ -1363,12 +1369,14 @@ impl BrrSampleEditor {
         comment.set_tab_nav(true);
         comment.wrap_mode(WrapMode::AtBounds, 0);
 
-        let mut flex = Flex::new(0, 22 * r, analyser_width, 18 * r, None).column();
+        editor_group.end();
+
+        let mut flex = Flex::new(0, editor_height, editor_width, flex_height, None).column();
         flex.set_margin(c0);
         flex.set_pad(c0 / 2);
 
         let sample_analyser =
-            SampleAnalyserWidget::new(&mut flex, analyser_width - c0 * 2, sender, compiler_sender);
+            SampleAnalyserWidget::new(&mut flex, editor_width - c0 * 2, sender, compiler_sender);
 
         let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
 
@@ -1496,8 +1504,49 @@ impl BrrSampleEditor {
             };
             editor.envelope.adsr_rb.set_callback(cb.clone());
             editor.envelope.gain_rb.set_callback(cb.clone());
-        }
 
+            // Resize callback to move flex to the right of editor_group if the window is wide enough.
+            {
+                let mut scrollgroup = editor.scrollgroup.clone();
+                let mut flex = flex;
+                let editor_group = editor_group;
+
+                let scrollbar_width = editor.scroll.scrollbar().width();
+
+                let orig_flex_width = editor_width;
+                let original_scroll_height = scrollgroup.height();
+
+                editor.scroll.resize_callback({
+                    move |scroll, _x, _y, sw, sh| {
+                        if sw > orig_flex_width * 2 {
+                            let x = editor_group.x() + editor_width;
+                            let y = editor_group.y();
+
+                            let w = if h <= editor_height {
+                                sw - scrollbar_width
+                            } else {
+                                sw
+                            };
+                            let h = max(sh, editor_height);
+
+                            scrollgroup.set_size(w, h);
+                            flex.resize(x, y, w - editor_width, h);
+
+                            if scroll.yposition() + sh > editor_height {
+                                scroll.scroll_to(0, 0);
+                            }
+                        } else {
+                            let x = editor_group.x();
+                            let y = editor_group.y() + editor_height;
+                            let w = sw - scrollbar_width;
+
+                            scrollgroup.set_size(w, original_scroll_height);
+                            flex.resize(x, y, w, flex_height);
+                        }
+                    }
+                });
+            }
+        }
         out
     }
 
