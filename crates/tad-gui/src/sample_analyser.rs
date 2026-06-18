@@ -664,7 +664,7 @@ impl State {
         let x_scale = self.spectrum_x_scale;
         let y_scale = f64::from(-h) / f64::from(s.max().1.val());
 
-        if self.item_id.is_some() {
+        if self.item_id.is_some() && self.freq > 0.0 && self.freq < self.spectrum_max_freq {
             let freq_x = (self.freq * x_scale) as i32;
 
             draw::set_draw_color(SPECTRUM_INST_FREQ_COLOR);
