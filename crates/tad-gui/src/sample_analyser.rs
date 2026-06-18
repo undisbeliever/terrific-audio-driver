@@ -662,7 +662,7 @@ impl State {
         draw::draw_text2("Spectrum", x + 4, y + 4, w - 4, h - 4, Align::TopLeft);
 
         let x_scale = self.spectrum_x_scale;
-        let y_scale = f64::from(-h) / f64::from(s.max().1.val());
+        let y_scale = f64::from(-h) / f64::from(s.max().1.val()) * 0.975;
 
         if self.item_id.is_some() && self.freq > 0.0 && self.freq < self.spectrum_max_freq {
             let freq_x = (self.freq * x_scale) as i32;
