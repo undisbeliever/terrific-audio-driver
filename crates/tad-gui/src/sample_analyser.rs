@@ -381,15 +381,15 @@ impl SampleAnalyserWidget {
             Event::MouseWheel if app::event_inside_widget(widget) => {
                 let m = if app::event_dy() == app::MouseWheel::Up {
                     if app::is_event_ctrl() {
-                        WaveformMoveEvent::ZoomOut
-                    } else {
-                        WaveformMoveEvent::ScrollRight
-                    }
-                } else if app::event_dy() == app::MouseWheel::Down {
-                    if app::is_event_ctrl() {
                         WaveformMoveEvent::ZoomIn
                     } else {
                         WaveformMoveEvent::ScrollLeft
+                    }
+                } else if app::event_dy() == app::MouseWheel::Down {
+                    if app::is_event_ctrl() {
+                        WaveformMoveEvent::ZoomOut
+                    } else {
+                        WaveformMoveEvent::ScrollRight
                     }
                 } else {
                     // Unknown move wheel movement
