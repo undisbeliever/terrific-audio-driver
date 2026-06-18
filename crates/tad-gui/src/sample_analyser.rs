@@ -349,19 +349,27 @@ impl SampleAnalyserWidget {
     }
 
     fn handle_spectrum_event(ev: Event, state: &Rc<RefCell<State>>) -> bool {
+        // state can be borrowed by `selected_sample_edited()` or `clear_and_deactivate()`.
+
         match ev {
             Event::Enter => true,
             Event::Leave => {
-                state.borrow_mut().spectrum_leave_event();
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_leave_event();
+                }
                 true
             }
             Event::Move => {
-                state.borrow_mut().spectrum_move_event(app::event_x());
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_move_event(app::event_x());
+                }
                 true
             }
             Event::Push => true,
             Event::Released => {
-                state.borrow_mut().spectrum_release_event(app::event_x());
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_release_event(app::event_x());
+                }
                 true
             }
             _ => false,
@@ -387,7 +395,9 @@ impl SampleAnalyserWidget {
                     // Unknown move wheel movement
                     return true;
                 };
-                state.borrow_mut().waveform_move(m);
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.waveform_move(m);
+                }
                 true
             }
             _ => false,
