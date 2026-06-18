@@ -918,7 +918,7 @@ pub fn analyse_sample(
         &windowed_samples,
         BRR_SAMPLE_RATE,
         FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
-        Some(&scaling::divide_by_N_sqrt),
+        Some(&scaling::scale_20_times_log10),
     )
     .map_err(|e| format!("ERROR: {:?}", e));
 

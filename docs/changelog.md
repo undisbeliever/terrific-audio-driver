@@ -24,6 +24,7 @@ Project Changes:
 GUI changes:
  * The samples tab has been rewritten
  * The sample analyser window and samples tab have been merged
+ * The sample analyser spectrum is now uses logarithmic scaling
 
 MML Changes:
  * The MML compiler now merges `@` instrument and `A` ADSR envelope commands
