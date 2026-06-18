@@ -1375,10 +1375,10 @@ impl BrrSampleEditor {
         flex.set_margin(c0);
         flex.set_pad(c0 / 2);
 
+        let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
+
         let sample_analyser =
             SampleAnalyserWidget::new(&mut flex, editor_width - c0 * 2, sender, compiler_sender);
-
-        let test_sample_widget = TestBrrSampleWidget::new(&mut flex, sender);
 
         flex.end();
 
