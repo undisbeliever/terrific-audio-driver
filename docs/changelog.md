@@ -5,11 +5,25 @@ Terrific Audio Driver Changelog
 Next Release
 ============
 
+**BREAKING CHANGES:**:
+ * The `.terrificaudio` file format has changed.
+    * TAD will automatically convert `.terrificaudio` files to the new format.
+    * The new format is incompatible with TAD v0.3.0 and earlier.
+
+
 Audio driver changes:
  * The 256 pitch table entry limit has been removed.
    The pitch table offset is now 16-bit.
  * The instrument ID is now equal to the S-DSP `VxSRCN` BRR sample index.
 
+Project Changes:
+ * Instruments and samples have been merged to a new `BrrSample` data structure.
+    * Sample source, pitch-table and envelope data are now separate structs.
+    * TAD v0.4.0 projects are not compatible with 0.3.0 and below.
+
+GUI changes:
+ * The samples tab has been rewritten
+ * The sample analyser window and samples tab have been merged
 
 MML Changes:
  * The MML compiler now merges `@` instrument and `A` ADSR envelope commands
