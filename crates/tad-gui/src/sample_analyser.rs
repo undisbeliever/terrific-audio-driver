@@ -273,7 +273,7 @@ impl SampleAnalyserWidget {
             });
             s.waveform.handle({
                 let state = state.clone();
-                move |_, ev| Self::handle_waveform_event(ev, &state)
+                move |widget, ev| Self::handle_waveform_event(widget, ev, &state)
             });
 
             s.play_button.set_callback({
@@ -376,9 +376,9 @@ impl SampleAnalyserWidget {
         }
     }
 
-    fn handle_waveform_event(ev: Event, state: &Rc<RefCell<State>>) -> bool {
+    fn handle_waveform_event(widget: &Widget, ev: Event, state: &Rc<RefCell<State>>) -> bool {
         match ev {
-            Event::MouseWheel => {
+            Event::MouseWheel if app::event_inside_widget(widget) => {
                 let m = if app::event_dy() == app::MouseWheel::Up {
                     if app::is_event_ctrl() {
                         WaveformMoveEvent::ZoomOut
