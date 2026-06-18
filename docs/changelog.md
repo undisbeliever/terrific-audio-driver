@@ -23,6 +23,7 @@ Project Changes:
 
 GUI changes:
  * The samples tab has been rewritten
+ * The samples tab now automatically tunes the sample after opening the source file
  * The sample analyser window and samples tab have been merged
  * The sample analyser spectrum is now uses logarithmic scaling
 

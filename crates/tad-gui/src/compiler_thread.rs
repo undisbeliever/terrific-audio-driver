@@ -126,6 +126,7 @@ pub enum ToCompiler {
 
     BrrSample(ItemChanged<project::BrrSample>),
 
+    FindSampleTuning(ItemId),
     SampleAnalyserSettingsChanged(FftSettings),
 
     // Updates sfx_data_size and rechecks song sizes.
@@ -202,6 +203,7 @@ pub enum CompilerOutput {
     SpcFileResult(Result<(String, Box<[u8]>), SpcFileError>),
 
     SampleAnalysis(ItemId, Option<SampleAnalysis>),
+    SampleTuningFrequency(ItemId, f64),
 
     SongCursorDriverState(CursorDriverState),
 }
@@ -1391,6 +1393,37 @@ fn calculate_tick_song_driver_state(
     ));
 }
 
+fn find_freq_for_sample(
+    input: &project::BrrSample,
+    brr_sample_data: Option<&brr::BrrSample>,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    match &input.source {
+        project::BrrSampleSource::WaveFile(s) => sample_analyser::find_tuning_freq_for_wav(
+            sample_file_cache.load_wav_file(&s.source).as_ref().ok()?,
+            s.settings.loop_point,
+        ),
+
+        project::BrrSampleSource::BrrFile(s) => match brr_sample_data {
+            Some(b) => sample_analyser::find_tuning_freq_for_brr(b),
+            None => {
+                let b = sample_file_cache
+                    .load_brr_file(&s.source)
+                    .as_ref()
+                    .ok()?
+                    .clone();
+
+                let b = if !b.requires_loop_offset() {
+                    b.into_brr_sample(None).ok()?
+                } else {
+                    b.into_brr_sample(Some(brr::SampleNumber(0))).ok()?
+                };
+                sample_analyser::find_tuning_freq_for_brr(&b)
+            }
+        },
+    }
+}
+
 fn analyse_sample(
     id: ItemId,
     input: &project::BrrSample,
@@ -1708,6 +1741,16 @@ fn bg_thread(
 
             ToCompiler::RemoveFileFromSampleCache(source_path) => {
                 sample_file_cache.remove_path(&source_path);
+            }
+
+            ToCompiler::FindSampleTuning(id) => {
+                if let Some((input, out)) = brr_samples.get_input_and_output_for_id(&id) {
+                    if let Some(f) =
+                        find_freq_for_sample(input, out.brr_data(), &mut sample_file_cache)
+                    {
+                        sender.send(CompilerOutput::SampleTuningFrequency(id, f));
+                    }
+                }
             }
 
             ToCompiler::SampleAnalyserSettingsChanged(new_settings) => {

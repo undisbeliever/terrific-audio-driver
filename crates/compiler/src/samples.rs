@@ -85,7 +85,7 @@ impl SampleFileCache {
         self.wav_files.remove(source);
     }
 
-    fn load_brr_file(&mut self, source: &SourcePathBuf) -> &Result<ValidBrrFile, BrrError> {
+    pub fn load_brr_file(&mut self, source: &SourcePathBuf) -> &Result<ValidBrrFile, BrrError> {
         self.brr_files.entry(source.to_owned()).or_insert_with(|| {
             match read_file_limited(source, &self.parent_path, MAX_BRR_SAMPLE_LOAD) {
                 Ok(data) => match parse_brr_file(&data) {

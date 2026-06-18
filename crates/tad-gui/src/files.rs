@@ -556,11 +556,8 @@ fn sample_file_dialog(
             new_source.clone(),
         ));
 
-        if source != Some(&new_source) {
-            Some(new_source)
-        } else {
-            None
-        }
+        // Always send a `SetSampleFilename` message
+        Some(new_source)
     } else {
         None
     }
@@ -574,10 +571,7 @@ pub fn open_sample_file_dialog(
 ) {
     if let Some((_, s)) = pd.brr_samples.get_id(id) {
         if let Some(new_source) = sample_file_dialog(compiler_sender, pd, s.source_path()) {
-            let mut s = s.clone();
-            s.set_source_path(new_source);
-
-            sender.send(GuiMessage::EditBrrSample(id, s));
+            sender.send(GuiMessage::SetSampleFilename(id, new_source));
         }
     }
 }

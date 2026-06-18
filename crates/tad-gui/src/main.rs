@@ -126,6 +126,7 @@ pub enum GuiMessage {
 
     BrrSample(ListMessage<project::BrrSample>),
     EditBrrSample(ItemId, project::BrrSample),
+    SetSampleFilename(ItemId, SourcePathBuf),
     SetSampleTuningFrequency(ItemId, f64),
     UserChangedSelectedSample,
 
@@ -414,23 +415,23 @@ impl Project {
                 .samples_tab
                 .selected_item_changed(&self.data.brr_samples),
             GuiMessage::EditBrrSample(id, sample) => {
-                let (changed, c) =
-                    self.data
-                        .brr_samples
-                        .edit_item(id, sample, &mut self.samples_tab);
+                self.edit_brr_sample(id, sample);
+            }
+            GuiMessage::SetSampleFilename(id, new_source) => {
+                if let Some((_, s)) = self.data.brr_samples.get_id(id) {
+                    let untuned_sample = s.pitches.is_none();
 
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
-                }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+                    let mut s = s.clone();
+                    s.set_source_path(new_source);
+                    self.edit_brr_sample(id, s);
+
+                    if untuned_sample {
+                        let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                    }
                 }
             }
             GuiMessage::SetSampleTuningFrequency(id, frequency) => {
-                if let Some((_, s)) = self.data.brr_samples.get_id(id) {
-                    let s = sample_with_new_tuning_frequency(s, frequency);
-                    self.sender.send(GuiMessage::EditBrrSample(id, s));
-                }
+                self.set_sample_tuning_frequency(id, frequency);
             }
 
             GuiMessage::SfxSubroutinesChanged(mml) => {
@@ -857,6 +858,10 @@ impl Project {
             CompilerOutput::SampleAnalysis(id, a) => {
                 self.samples_tab.analysis_from_compiler_thread(id, a);
             }
+
+            CompilerOutput::SampleTuningFrequency(id, frequency) => {
+                self.set_sample_tuning_frequency(id, frequency);
+            }
         }
     }
 
@@ -1158,6 +1163,27 @@ impl Project {
             success &= self.save_file(f, SaveType::Save);
         }
         success
+    }
+
+    fn edit_brr_sample(&mut self, id: ItemId, s: project::BrrSample) {
+        let (changed, c) = self
+            .data
+            .brr_samples
+            .edit_item(id, s, &mut self.samples_tab);
+
+        if changed {
+            self.tab_manager.mark_unsaved(FileType::Project);
+        }
+        if let Some(c) = c {
+            let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+        }
+    }
+
+    fn set_sample_tuning_frequency(&mut self, id: ItemId, frequency: f64) {
+        if let Some((_, s)) = self.data.brr_samples.get_id(id) {
+            let s = sample_with_new_tuning_frequency(s, frequency);
+            self.edit_brr_sample(id, s);
+        }
     }
 
     fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {

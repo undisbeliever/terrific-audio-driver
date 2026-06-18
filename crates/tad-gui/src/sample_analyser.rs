@@ -9,7 +9,7 @@ use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
 
 use brr::{BrrSample, MonoPcm16WaveFile};
-use compiler::project::{self, BrrSamplePitches};
+use compiler::project::{self, BrrSamplePitches, SampleNumber};
 use fltk::valuator::HorSlider;
 
 use std::cell::RefCell;
@@ -930,4 +930,66 @@ pub fn analyse_sample(
         fft_range,
         spectrum,
     }
+}
+
+const FIND_TUNING_FREQ_FFT_SIZE: usize = 4096;
+
+// Called by the compiler thread
+pub fn find_tuning_freq_for_wav(
+    sample: &MonoPcm16WaveFile,
+    loop_point: Option<SampleNumber>,
+) -> Option<f64> {
+    const FFT_SIZE: usize = FIND_TUNING_FREQ_FFT_SIZE;
+    const FLOAT_SCALE: f32 = -(i16::MIN as f32);
+
+    let samples = sample.samples.as_slice();
+
+    let decoded_samples: Vec<f32> = if samples.len() >= FFT_SIZE {
+        samples[..FFT_SIZE]
+            .iter()
+            .map(|&s| f32::from(s) / FLOAT_SCALE)
+            .collect()
+    } else {
+        let lp = loop_point.map(|s| s.0).unwrap_or(0).min(samples.len() - 16);
+
+        samples
+            .iter()
+            .chain(samples[lp..].iter().cycle())
+            .take(FFT_SIZE)
+            .map(|&s| f32::from(s) / FLOAT_SCALE)
+            .collect()
+    };
+
+    find_tuning_freq(decoded_samples)
+}
+
+// Called by the compiler thread
+pub fn find_tuning_freq_for_brr(sample: &brr::BrrSample) -> Option<f64> {
+    const FFT_SIZE: usize = FIND_TUNING_FREQ_FFT_SIZE;
+    const FLOAT_SCALE: f32 = -(i16::MIN as f32);
+
+    let mut decoded_samples = vec![0_i16; FFT_SIZE];
+    sample.decode_into_buffer(&mut decoded_samples, 0, 0, 0);
+
+    find_tuning_freq(
+        decoded_samples
+            .iter()
+            .map(|&s| f32::from(s) / FLOAT_SCALE)
+            .collect(),
+    )
+}
+
+fn find_tuning_freq(samples: Vec<f32>) -> Option<f64> {
+    let windowed_samples = hann_window(&samples);
+
+    // Analyse spectrum
+    let spectrum = samples_fft_to_spectrum(
+        &windowed_samples,
+        BRR_SAMPLE_RATE,
+        FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
+        Some(&scaling::scale_20_times_log10),
+    )
+    .ok()?;
+
+    Some(spectrum.max().0.val().round().into())
 }
