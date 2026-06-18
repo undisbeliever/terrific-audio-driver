@@ -658,6 +658,12 @@ pub struct UpdateButtonArgs {
     pub selected: Option<usize>,
 }
 
+impl UpdateButtonArgs {
+    pub fn can_add(&self) -> bool {
+        self.list_len < self.max_len
+    }
+}
+
 /// Callback used to enable or disable ListEditorTableButtons
 type UpdateButtonCallback = Box<dyn Fn(&UpdateButtonArgs) -> bool>;
 
@@ -692,6 +698,7 @@ impl ListEditorTableButtons {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn add_button(
         &mut self,
         label: &str,
@@ -700,6 +707,7 @@ impl ListEditorTableButtons {
         callback: impl FnMut(&mut Button) + 'static,
         list_len: usize,
         selected: Option<usize>,
+        index: Option<i32>,
     ) {
         let mut b = Button::default()
             .with_size(self.button_size, self.button_size)
@@ -719,7 +727,10 @@ impl ListEditorTableButtons {
 
         b.set_callback(callback);
 
-        self.pack.add(&b);
+        match index {
+            Some(i) => self.pack.insert(&b, i),
+            None => self.pack.add(&b),
+        }
 
         self.buttons.push((b, update_cb));
     }
@@ -900,12 +911,13 @@ where
         out
     }
 
-    pub fn add_button(
+    fn add_button_at_pos(
         &mut self,
         label: &str,
         tooltip: &str,
         update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
         cb: impl Fn() -> GuiMessage + 'static,
+        pos: Option<i32>,
     ) {
         let t = self.table.borrow();
         let mut lb = self.list_buttons.borrow_mut();
@@ -920,7 +932,28 @@ where
             },
             t.n_rows(),
             t.selected_row(),
+            pos,
         );
+    }
+
+    pub fn add_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn() -> GuiMessage + 'static,
+    ) {
+        self.add_button_at_pos(label, tooltip, update_cb, cb, None)
+    }
+
+    pub fn add_button_to_start(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn() -> GuiMessage + 'static,
+    ) {
+        self.add_button_at_pos(label, tooltip, update_cb, cb, Some(0))
     }
 
     pub fn add_sel_button(
@@ -948,6 +981,7 @@ where
             },
             t.n_rows(),
             t.selected_row(),
+            None,
         );
     }
 

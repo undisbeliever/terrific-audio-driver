@@ -418,6 +418,19 @@ impl BrrSampleSource {
             },
         }
     }
+
+    pub fn new_from_source(source: SourcePathBuf) -> Self {
+        match source.extension() {
+            Some(BRR_EXTENSION) => Self::BrrFile(BrrSource {
+                source,
+                loop_point: None,
+            }),
+            _ => Self::WaveFile(WaveSource {
+                source,
+                settings: Default::default(),
+            }),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]

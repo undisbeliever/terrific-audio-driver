@@ -6,6 +6,7 @@
 
 use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::list_editor::ListMessage;
+use crate::samples_tab::new_sample_from_file;
 use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
@@ -536,11 +537,12 @@ pub fn add_song_to_pf_dialog(
 }
 
 fn sample_file_dialog(
+    title: &str,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     source: Option<&SourcePathBuf>,
 ) -> Option<SourcePathBuf> {
-    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, source) {
+    if let Some(p) = pf_open_file_dialog(pd, title, SAMPLE_FILTERS, source) {
         let new_source = p.source_path;
 
         // Remove the previous and new files from sample cache to ensure any file changes are loaded
@@ -570,10 +572,19 @@ pub fn open_sample_file_dialog(
     id: ItemId,
 ) {
     if let Some((_, s)) = pd.brr_samples.get_id(id) {
-        if let Some(new_source) = sample_file_dialog(compiler_sender, pd, s.source_path()) {
+        if let Some(new_source) =
+            sample_file_dialog("Select sample", compiler_sender, pd, s.source_path())
+        {
             sender.send(GuiMessage::SetSampleFilename(id, new_source));
         }
     }
+}
+
+pub fn open_new_sample_file_dialog(
+    compiler_sender: &mpsc::Sender<ToCompiler>,
+    pd: &ProjectData,
+) -> Option<project::BrrSample> {
+    sample_file_dialog("Select new sample", compiler_sender, pd, None).map(new_sample_from_file)
 }
 
 pub fn save_spc_file_dialog(name: String, data: Box<[u8]>) {

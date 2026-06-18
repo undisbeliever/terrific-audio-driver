@@ -18,7 +18,9 @@ use crate::test_sample_widget::TestBrrSampleWidget;
 use crate::GuiMessage;
 
 use compiler::envelope::{Adsr, Envelope, Gain};
+use compiler::identifier::Name;
 use compiler::notes::Note;
+use compiler::path::SourcePathBuf;
 use compiler::pitch_table::default_octaves_for_tuning_frequency;
 use compiler::project::{
     self, BrrEncoderSettings, BrrEvaluator, BrrLoopFilter, BrrSample, BrrSamplePitches,
@@ -60,6 +62,20 @@ fn blank_sample() -> project::BrrSample {
     project::BrrSample {
         name: "name".parse().unwrap(),
         source: project::BrrSampleSource::WaveFile(Default::default()),
+        ignore_gaussian_overflow: Default::default(),
+        pitches: None,
+        envelope: DEFAULT_ENVELOPE,
+        comment: String::new(),
+    }
+}
+
+pub fn new_sample_from_file(source: SourcePathBuf) -> project::BrrSample {
+    project::BrrSample {
+        name: source
+            .file_stem_string()
+            .map(|s| Name::new_lossy(s.into()))
+            .unwrap_or_else(|| "name".parse().unwrap()),
+        source: BrrSampleSource::new_from_source(source),
         ignore_gaussian_overflow: Default::default(),
         pitches: None,
         envelope: DEFAULT_ENVELOPE,
@@ -170,7 +186,14 @@ impl SamplesTab {
         sample_sizes_button.set_tooltip("Show sample sizes");
         sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
-        let table = ListEditorTable::new_with_data(&mut sidebar, brr_samples, sender);
+        let mut table = ListEditorTable::new_with_data(&mut sidebar, brr_samples, sender);
+
+        table.add_button_to_start(
+            "@fileopen",
+            "Open new sample",
+            |a| a.can_add(),
+            || GuiMessage::OpenNewSampleDialog,
+        );
 
         sidebar.end();
 

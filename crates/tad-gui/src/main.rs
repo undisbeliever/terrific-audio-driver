@@ -41,8 +41,8 @@ use crate::compiler_thread::{CompilerOutput, ItemId, SoundEffectOutput, ToCompil
 use crate::dialogs::Dialogs;
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
-    save_spc_file_dialog,
+    load_project_file_or_show_error_message, open_mml_file_dialog, open_new_sample_file_dialog,
+    open_sfx_file_dialog, save_spc_file_dialog,
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
@@ -126,6 +126,7 @@ pub enum GuiMessage {
 
     BrrSample(ListMessage<project::BrrSample>),
     EditBrrSample(ItemId, project::BrrSample),
+    OpenNewSampleDialog,
     SetSampleFilename(ItemId, SourcePathBuf),
     SetSampleTuningFrequency(ItemId, f64),
     UserChangedSelectedSample,
@@ -402,14 +403,7 @@ impl Project {
             }
 
             GuiMessage::BrrSample(m) => {
-                let (changed, c) = self.data.brr_samples.process(m, &mut self.samples_tab);
-
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
-                }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
-                }
+                self.process_brr_sample_list_message(m);
             }
             GuiMessage::UserChangedSelectedSample => self
                 .samples_tab
@@ -427,6 +421,26 @@ impl Project {
 
                     if untuned_sample {
                         let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                    }
+                }
+            }
+            GuiMessage::OpenNewSampleDialog => {
+                let brr_samples = &mut self.data.brr_samples;
+
+                if brr_samples.len() < brr_samples.max_size() {
+                    if let Some(s) = open_new_sample_file_dialog(&self.compiler_sender, &self.data)
+                    {
+                        self.process_brr_sample_list_message(ListMessage::Add(s));
+
+                        if let Some((id, item, _)) = self
+                            .data
+                            .brr_samples
+                            .get_selected_row(self.samples_tab.table_mut())
+                        {
+                            if item.pitches.is_none() {
+                                let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                            }
+                        }
                     }
                 }
             }
@@ -1163,6 +1177,17 @@ impl Project {
             success &= self.save_file(f, SaveType::Save);
         }
         success
+    }
+
+    fn process_brr_sample_list_message(&mut self, m: ListMessage<project::BrrSample>) {
+        let (changed, c) = self.data.brr_samples.process(m, &mut self.samples_tab);
+
+        if changed {
+            self.tab_manager.mark_unsaved(FileType::Project);
+        }
+        if let Some(c) = c {
+            let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+        }
     }
 
     fn edit_brr_sample(&mut self, id: ItemId, s: project::BrrSample) {
