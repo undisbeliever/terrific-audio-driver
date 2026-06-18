@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{CadOutput, CombineSamplesError, ItemId, SampleOutput, ToCompiler};
+use crate::drag_and_drop::DragDropFileHandler;
 use crate::helpers::*;
 use crate::list_editor::{
     ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
@@ -228,6 +229,12 @@ impl SamplesTab {
                 s.send(GuiMessage::ShowSampleSizes);
             }
         });
+
+        // Must be `sidebar`, cannot be `group`.
+        //
+        // When I add drag+drop onto `group` the `name` Input takes over the drop event.
+        // and it ends up overriding the name instead of creating a new sample.
+        DragDropFileHandler::add_to_widget(&mut sidebar, sender, GuiMessage::DragAndDropSampleFile);
 
         Self {
             group,

@@ -11,6 +11,7 @@
 mod audio_thread;
 mod compiler_thread;
 mod dialogs;
+mod drag_and_drop;
 mod driver_state_window;
 mod files;
 mod help;
@@ -39,10 +40,11 @@ mod sound_effects_tab;
 use crate::about_tab::AboutTab;
 use crate::compiler_thread::{CompilerOutput, ItemId, SoundEffectOutput, ToCompiler};
 use crate::dialogs::Dialogs;
+use crate::drag_and_drop::DroppedFilePath;
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_mml_file_dialog, open_new_sample_file_dialog,
-    open_sfx_file_dialog, save_spc_file_dialog,
+    load_project_file_or_show_error_message, new_sample_from_dropped_file, open_mml_file_dialog,
+    open_new_sample_file_dialog, open_sfx_file_dialog, save_spc_file_dialog,
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
@@ -127,6 +129,7 @@ pub enum GuiMessage {
     BrrSample(ListMessage<project::BrrSample>),
     EditBrrSample(ItemId, project::BrrSample),
     OpenNewSampleDialog,
+    DragAndDropSampleFile(DroppedFilePath),
     SetSampleFilename(ItemId, SourcePathBuf),
     SetSampleTuningFrequency(ItemId, f64),
     UserChangedSelectedSample,
@@ -421,6 +424,27 @@ impl Project {
 
                     if untuned_sample {
                         let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                    }
+                }
+            }
+            GuiMessage::DragAndDropSampleFile(d) => {
+                let brr_samples = &mut self.data.brr_samples;
+
+                if brr_samples.len() < brr_samples.max_size() {
+                    if let Some(s) =
+                        new_sample_from_dropped_file(d, &self.compiler_sender, &self.data)
+                    {
+                        self.process_brr_sample_list_message(ListMessage::Add(s));
+
+                        if let Some((id, item, _)) = self
+                            .data
+                            .brr_samples
+                            .get_selected_row(self.samples_tab.table_mut())
+                        {
+                            if item.pitches.is_none() {
+                                let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                            }
+                        }
                     }
                 }
             }

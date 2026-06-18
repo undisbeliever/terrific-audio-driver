@@ -25,6 +25,9 @@ GUI changes:
  * The samples tab has been rewritten
  * Added a "Open new sample" button to the samples tab (located above the sample list)
  * The samples tab now automatically tunes the sample after opening the source file
+ * Added drag and drop files to the samples tab
+    * Dragging a single file onto the samples tab list will create a new sample using that file
+    * Files cannot be dragged into the editor widget.
  * The sample analyser window and samples tab have been merged
  * The sample analyser spectrum is now uses logarithmic scaling
 

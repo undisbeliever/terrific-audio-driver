@@ -5,7 +5,12 @@ Samples
 Sample Section
 ==============
 
-Samples can sourced from 8/16-bit mono `.wav` files or `.brr` files.
+Samples are sourced from 8/16-bit mono `.wav` files or `.brr` files.
+
+
+A single `.wav` and `.brr` file can be dragged + dropped into the Samples list
+(**not** the samples editor) to create new TAD samples.
+
 
 
 Wave Files
