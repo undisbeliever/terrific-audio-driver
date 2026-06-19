@@ -11,6 +11,7 @@ use crate::GuiMessage;
 use brr::{BrrSample, MonoPcm16WaveFile};
 use compiler::project::{self, BrrSamplePitches, SampleNumber};
 use fltk::valuator::HorSlider;
+use spectrum_analyzer::error::SpectrumAnalyzerError;
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
@@ -460,7 +461,7 @@ impl State {
         match &analysis {
             Some(a) => {
                 match &a.spectrum {
-                    Ok(s) => self.set_spectrum_values(s),
+                    Ok(_) => self.set_spectrum_values(a.peak_freq),
                     Err(_) => self.clear_spectrum_values(),
                 }
 
@@ -502,9 +503,11 @@ impl State {
         self.waveform.redraw();
     }
 
-    fn set_spectrum_values(&mut self, s: &FrequencySpectrum) {
-        self.peak_freq
-            .set_value(&format!("{} Hz", s.max().0.val().round()));
+    fn set_spectrum_values(&mut self, peak_freq: Option<f64>) {
+        match peak_freq {
+            Some(p) => self.peak_freq.set_value(&format!("{} Hz", p as i32)),
+            None => self.peak_freq.set_value(""),
+        }
         self.cursor_freq.set_value("");
         self.cursor_peak_freq.set_value("");
 
@@ -540,9 +543,8 @@ impl State {
 
     fn use_peak_clicked(&mut self) {
         if let Some(a) = &self.analysis {
-            if let Ok(s) = &a.spectrum {
+            if let Some(peak) = a.peak_freq {
                 if let Some(id) = self.item_id {
-                    let peak = s.max().0.val().into();
                     self.sender
                         .send(GuiMessage::SetSampleTuningFrequency(id, peak));
                 }
@@ -868,6 +870,7 @@ pub struct SampleAnalysis {
 
     fft_range: Range<usize>,
     spectrum: Result<FrequencySpectrum, String>,
+    peak_freq: Option<f64>,
 }
 
 impl std::fmt::Debug for SampleAnalysis {
@@ -914,16 +917,8 @@ pub fn analyse_sample(
     let window_offset = usize::min(fft.offset as usize, decoded_samples_f32.len() - window_len);
     let fft_range = window_offset..(window_offset + window_len);
 
-    let windowed_samples = hann_window(&decoded_samples_f32[fft_range.clone()]);
-
-    // Analyse spectrum
-    let spectrum = samples_fft_to_spectrum(
-        &windowed_samples,
-        BRR_SAMPLE_RATE,
-        FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
-        Some(&scaling::scale_20_times_log10),
-    )
-    .map_err(|e| format!("ERROR: {:?}", e));
+    let (spectrum, peak_freq) =
+        fft_spectrum_and_find_peak_frequency(&decoded_samples_f32[fft_range.clone()]);
 
     SampleAnalysis {
         n_input_samples,
@@ -931,8 +926,39 @@ pub fn analyse_sample(
         loop_point_samples: brr_sample.loop_point_samples(),
         decoded_samples_f32,
         fft_range,
-        spectrum,
+        spectrum: spectrum.map_err(|e| format!("ERROR: {:?}", e)),
+        peak_freq,
     }
+}
+
+fn fft_spectrum_and_find_peak_frequency(
+    samples: &[f32],
+) -> (
+    Result<FrequencySpectrum, SpectrumAnalyzerError>,
+    std::option::Option<f64>,
+) {
+    let windowed_samples = hann_window(samples);
+
+    // Analyse spectrum
+    let spectrum = samples_fft_to_spectrum(
+        &windowed_samples,
+        BRR_SAMPLE_RATE,
+        FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
+        Some(&scaling::scale_20_times_log10),
+    );
+
+    // The 0Hz frequency can be the maximum value on biased or unsymmetrical samples.
+    //
+    // When testing with a non-negative square wave, the first 2 values contained annoyingly
+    // large values.  This code ignores the first 2 data points to be extra cautious.
+    let peak_freq = spectrum.as_ref().ok().and_then(|s| {
+        s.data()[2..]
+            .iter()
+            .max_by_key(|d| &d.1)
+            .map(|d| d.0.val().into())
+    });
+
+    (spectrum, peak_freq)
 }
 
 const FIND_TUNING_FREQ_FFT_SIZE: usize = 4096;
@@ -963,7 +989,7 @@ pub fn find_tuning_freq_for_wav(
             .collect()
     };
 
-    find_tuning_freq(decoded_samples)
+    fft_spectrum_and_find_peak_frequency(&decoded_samples).1
 }
 
 // Called by the compiler thread
@@ -974,25 +1000,10 @@ pub fn find_tuning_freq_for_brr(sample: &brr::BrrSample) -> Option<f64> {
     let mut decoded_samples = vec![0_i16; FFT_SIZE];
     sample.decode_into_buffer(&mut decoded_samples, 0, 0, 0);
 
-    find_tuning_freq(
-        decoded_samples
-            .iter()
-            .map(|&s| f32::from(s) / FLOAT_SCALE)
-            .collect(),
-    )
-}
+    let samples: Vec<f32> = decoded_samples
+        .iter()
+        .map(|&s| f32::from(s) / FLOAT_SCALE)
+        .collect();
 
-fn find_tuning_freq(samples: Vec<f32>) -> Option<f64> {
-    let windowed_samples = hann_window(&samples);
-
-    // Analyse spectrum
-    let spectrum = samples_fft_to_spectrum(
-        &windowed_samples,
-        BRR_SAMPLE_RATE,
-        FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
-        Some(&scaling::scale_20_times_log10),
-    )
-    .ok()?;
-
-    Some(spectrum.max().0.val().round().into())
+    fft_spectrum_and_find_peak_frequency(&samples).1
 }

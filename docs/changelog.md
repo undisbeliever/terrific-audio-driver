@@ -30,6 +30,8 @@ GUI changes:
     * Files cannot be dragged into the editor widget.
  * The sample analyser window and samples tab have been merged
  * The sample analyser spectrum is now uses logarithmic scaling
+ * Fixed the sample analyser outputting a 0Hz peak on biased samples
+   (ie, a square wave with no negative values).
 
 MML Changes:
  * The MML compiler now merges `@` instrument and `A` ADSR envelope commands

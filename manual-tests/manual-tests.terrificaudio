@@ -68,6 +68,17 @@
       "last_octave": 6,
       "envelope": "adsr 12 1 1 16",
       "comment": null
+    },
+    {
+      "name": "biased_square",
+      "source": "samples/biased_square.brr",
+      "freq": 1000.0,
+      "loop": "none",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 1,
+      "last_octave": 6,
+      "envelope": "adsr 12 1 1 16",
+      "comment": "Used to confirm the sample analyser does not output a 0Hz peak on biased samples"
     }
   ],
   "samples": [],

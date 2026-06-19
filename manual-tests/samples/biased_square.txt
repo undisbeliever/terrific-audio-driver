@@ -1,0 +1,17 @@
+// A biased square wave that does not contain negative values
+//
+// Used to confirm the sample analyser can process biased samples.
+//
+
+    // loop point (in bytes)
+    dw  0
+
+    // Block 0 - all zeros
+    db  0
+    db  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+    // Block 1 - zero
+    // shift=12, filter=0, loop, end
+    db  (12 << 4) | (0 << 2) | 0b11
+    db  0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77
+
