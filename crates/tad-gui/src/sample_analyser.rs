@@ -661,8 +661,11 @@ impl State {
         draw::set_font(Font::Helvetica, app::font_size());
         draw::draw_text2("Spectrum", x + 4, y + 4, w - 4, h - 4, Align::TopLeft);
 
+        let min_val = f64::from(s.min().1.val());
+        let max_val = f64::from(s.max().1.val());
+
         let x_scale = self.spectrum_x_scale;
-        let y_scale = f64::from(-h) / f64::from(s.max().1.val()) * 0.975;
+        let y_scale = f64::from(-h) / (max_val - min_val) * 0.975;
 
         if self.item_id.is_some() && self.freq > 0.0 && self.freq < self.spectrum_max_freq {
             let freq_x = (self.freq * x_scale) as i32;
@@ -672,14 +675,14 @@ impl State {
         }
 
         draw::push_matrix();
-        draw::translate(x.into(), (y + h).into());
+        draw::translate(x.into(), f64::from(y + h) - min_val * y_scale);
         draw::scale_xy(x_scale, y_scale);
 
         draw::set_draw_color(SPECTRUM_COLOR);
         draw::begin_line();
 
         for (f, v) in s.data() {
-            draw::vertex(f.val().into(), v.val().into());
+            draw::vertex(f.val().into(), f64::from(v.val()))
         }
 
         draw::end_line();
