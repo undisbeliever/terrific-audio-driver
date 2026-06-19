@@ -276,7 +276,7 @@ pub fn default_octaves_for_tuning_frequency(freq: f64) -> RangeInclusive<Octave>
 
         let max = Octave::try_new((max_semitones - SPO + 1) / SPO).unwrap_or(Octave::MAX);
 
-        let min = Octave::try_new(max.as_u8().saturating_sub(4).into()).unwrap();
+        let min = Octave::try_new(max.as_u8().saturating_sub(5).into()).unwrap();
 
         min..=max
     } else {
