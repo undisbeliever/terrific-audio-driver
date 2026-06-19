@@ -70,7 +70,7 @@ fn blank_sample() -> project::BrrSample {
     }
 }
 
-pub fn new_sample_from_file(source: SourcePathBuf) -> project::BrrSample {
+pub fn new_sample_from_file(source: SourcePathBuf, tuning_freq: Option<f64>) -> project::BrrSample {
     project::BrrSample {
         name: source
             .file_stem_string()
@@ -78,7 +78,14 @@ pub fn new_sample_from_file(source: SourcePathBuf) -> project::BrrSample {
             .unwrap_or_else(|| "name".parse().unwrap()),
         source: BrrSampleSource::new_from_source(source),
         ignore_gaussian_overflow: Default::default(),
-        pitches: None,
+        pitches: tuning_freq.map(|f| {
+            let range = default_octaves_for_tuning_frequency(f);
+            BrrSamplePitches::Octaves {
+                tuning: SampleTuning::Frequency(f),
+                first: *range.start(),
+                last: *range.end(),
+            }
+        }),
         envelope: DEFAULT_ENVELOPE,
         comment: String::new(),
     }

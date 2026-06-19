@@ -43,8 +43,8 @@ use crate::dialogs::Dialogs;
 use crate::drag_and_drop::DroppedFilePath;
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, new_sample_from_dropped_file, open_mml_file_dialog,
-    open_new_sample_file_dialog, open_sfx_file_dialog, save_spc_file_dialog,
+    load_project_file_or_show_error_message, open_mml_file_dialog, open_new_sample_file_dialog,
+    open_sfx_file_dialog, sample_source_from_dropped_file, save_spc_file_dialog,
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
@@ -52,7 +52,7 @@ use crate::list_editor::{ListMessage, ListWithCompilerOutput};
 use crate::menu::{EditAction, Menu};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
-use crate::samples_tab::{sample_with_new_tuning_frequency, SamplesTab};
+use crate::samples_tab::{new_sample_from_file, sample_with_new_tuning_frequency, SamplesTab};
 use crate::sfx_export_order::SfxId;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
@@ -432,19 +432,11 @@ impl Project {
 
                 if brr_samples.len() < brr_samples.max_size() {
                     if let Some(s) =
-                        new_sample_from_dropped_file(d, &self.compiler_sender, &self.data)
+                        sample_source_from_dropped_file(d, &self.compiler_sender, &self.data)
                     {
-                        self.process_brr_sample_list_message(ListMessage::Add(s));
-
-                        if let Some((id, item, _)) = self
-                            .data
-                            .brr_samples
-                            .get_selected_row(self.samples_tab.table_mut())
-                        {
-                            if item.pitches.is_none() {
-                                let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
-                            }
-                        }
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::FindNewSampleFileTuning(s));
                     }
                 }
             }
@@ -454,17 +446,9 @@ impl Project {
                 if brr_samples.len() < brr_samples.max_size() {
                     if let Some(s) = open_new_sample_file_dialog(&self.compiler_sender, &self.data)
                     {
-                        self.process_brr_sample_list_message(ListMessage::Add(s));
-
-                        if let Some((id, item, _)) = self
-                            .data
-                            .brr_samples
-                            .get_selected_row(self.samples_tab.table_mut())
-                        {
-                            if item.pitches.is_none() {
-                                let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
-                            }
-                        }
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::FindNewSampleFileTuning(s));
                     }
                 }
             }
@@ -899,6 +883,11 @@ impl Project {
 
             CompilerOutput::SampleTuningFrequency(id, frequency) => {
                 self.set_sample_tuning_frequency(id, frequency);
+            }
+            CompilerOutput::NewSampleFileTuningFrequency(source, freq) => {
+                self.process_brr_sample_list_message(ListMessage::Add(new_sample_from_file(
+                    source, freq,
+                )));
             }
         }
     }

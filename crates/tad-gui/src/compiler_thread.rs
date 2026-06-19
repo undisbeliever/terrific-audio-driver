@@ -35,7 +35,7 @@ use compiler::project::DefaultSfxFlags;
 use compiler::project::{self};
 use compiler::samples::{
     combine_samples, compile_brr_sample, create_test_instrument_data, CompiledDataList,
-    SampleAndInstrumentData, SampleData, SampleFileCache,
+    SampleAndInstrumentData, SampleData, SampleFileCache, BRR_EXTENSION, WAV_EXTENSION,
 };
 use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
@@ -127,6 +127,7 @@ pub enum ToCompiler {
     BrrSample(ItemChanged<project::BrrSample>),
 
     FindSampleTuning(ItemId),
+    FindNewSampleFileTuning(SourcePathBuf),
     SampleAnalyserSettingsChanged(FftSettings),
 
     // Updates sfx_data_size and rechecks song sizes.
@@ -204,6 +205,7 @@ pub enum CompilerOutput {
 
     SampleAnalysis(ItemId, Option<SampleAnalysis>),
     SampleTuningFrequency(ItemId, f64),
+    NewSampleFileTuningFrequency(SourcePathBuf, Option<f64>),
 
     SongCursorDriverState(CursorDriverState),
 }
@@ -1393,7 +1395,39 @@ fn calculate_tick_song_driver_state(
     ));
 }
 
-fn find_freq_for_sample(
+fn find_tuning_freq_for_brr_file(
+    source: &SourcePathBuf,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    let b = sample_file_cache
+        .load_brr_file(source)
+        .as_ref()
+        .ok()?
+        .clone();
+
+    let b = if !b.requires_loop_offset() {
+        b.into_brr_sample(None).ok()?
+    } else {
+        b.into_brr_sample(Some(brr::SampleNumber(0))).ok()?
+    };
+    sample_analyser::find_tuning_freq_for_brr(&b)
+}
+
+fn find_tuning_freq_for_sample_source(
+    source: &SourcePathBuf,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    match source.extension() {
+        Some(WAV_EXTENSION) => sample_analyser::find_tuning_freq_for_wav(
+            sample_file_cache.load_wav_file(source).as_ref().ok()?,
+            None,
+        ),
+        Some(BRR_EXTENSION) => find_tuning_freq_for_brr_file(source, sample_file_cache),
+        _ => None,
+    }
+}
+
+fn find_tuning_freq_for_sample(
     input: &project::BrrSample,
     brr_sample_data: Option<&brr::BrrSample>,
     sample_file_cache: &mut SampleFileCache,
@@ -1406,20 +1440,7 @@ fn find_freq_for_sample(
 
         project::BrrSampleSource::BrrFile(s) => match brr_sample_data {
             Some(b) => sample_analyser::find_tuning_freq_for_brr(b),
-            None => {
-                let b = sample_file_cache
-                    .load_brr_file(&s.source)
-                    .as_ref()
-                    .ok()?
-                    .clone();
-
-                let b = if !b.requires_loop_offset() {
-                    b.into_brr_sample(None).ok()?
-                } else {
-                    b.into_brr_sample(Some(brr::SampleNumber(0))).ok()?
-                };
-                sample_analyser::find_tuning_freq_for_brr(&b)
-            }
+            None => find_tuning_freq_for_brr_file(&s.source, sample_file_cache),
         },
     }
 }
@@ -1746,11 +1767,15 @@ fn bg_thread(
             ToCompiler::FindSampleTuning(id) => {
                 if let Some((input, out)) = brr_samples.get_input_and_output_for_id(&id) {
                     if let Some(f) =
-                        find_freq_for_sample(input, out.brr_data(), &mut sample_file_cache)
+                        find_tuning_freq_for_sample(input, out.brr_data(), &mut sample_file_cache)
                     {
                         sender.send(CompilerOutput::SampleTuningFrequency(id, f));
                     }
                 }
+            }
+            ToCompiler::FindNewSampleFileTuning(source) => {
+                let f = find_tuning_freq_for_sample_source(&source, &mut sample_file_cache);
+                sender.send(CompilerOutput::NewSampleFileTuningFrequency(source, f));
             }
 
             ToCompiler::SampleAnalyserSettingsChanged(new_settings) => {

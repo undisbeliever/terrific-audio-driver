@@ -7,7 +7,6 @@
 use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::drag_and_drop::DroppedFilePath;
 use crate::list_editor::ListMessage;
-use crate::samples_tab::new_sample_from_file;
 use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
@@ -602,15 +601,15 @@ pub fn open_sample_file_dialog(
 pub fn open_new_sample_file_dialog(
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-) -> Option<project::BrrSample> {
-    sample_file_dialog("Select new sample", compiler_sender, pd, None).map(new_sample_from_file)
+) -> Option<SourcePathBuf> {
+    sample_file_dialog("Select new sample", compiler_sender, pd, None)
 }
 
-pub fn new_sample_from_dropped_file(
+pub fn sample_source_from_dropped_file(
     droped_file: DroppedFilePath,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-) -> Option<project::BrrSample> {
+) -> Option<SourcePathBuf> {
     let path = droped_file.take_path();
 
     if path
@@ -629,7 +628,7 @@ pub fn new_sample_from_dropped_file(
                     p.source_path.clone(),
                 ));
 
-                Some(new_sample_from_file(p.source_path))
+                Some(p.source_path)
             }
             None => None,
         }
