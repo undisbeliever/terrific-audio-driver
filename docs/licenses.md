@@ -410,18 +410,18 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.62](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.65](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs)
-  * [js-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
+  * [js-sys 0.3.102](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
   * [pkg-config 0.3.33](https://github.com/rust-lang/pkg-config-rs)
-  * [wasm-bindgen-futures 0.4.72](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
-  * [wasm-bindgen-macro-support 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support)
-  * [wasm-bindgen-macro 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
-  * [wasm-bindgen-shared 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
-  * [wasm-bindgen 0.2.122](https://github.com/wasm-bindgen/wasm-bindgen)
-  * [web-sys 0.3.99](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
+  * [wasm-bindgen-futures 0.4.75](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
+  * [wasm-bindgen-macro-support 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support)
+  * [wasm-bindgen-macro 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
+  * [wasm-bindgen-shared 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
+  * [wasm-bindgen 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen)
+  * [web-sys 0.3.102](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -457,14 +457,14 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.11.1](https://github.com/bitflags/bitflags)
-  * [log 0.4.30](https://github.com/rust-lang/log)
+  * [bitflags 2.13.0](https://github.com/bitflags/bitflags)
+  * [log 0.4.32](https://github.com/rust-lang/log)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
   * [regex-automata 0.4.14](https://github.com/rust-lang/regex)
-  * [regex-syntax 0.8.10](https://github.com/rust-lang/regex)
-  * [regex 1.12.3](https://github.com/rust-lang/regex)
+  * [regex-syntax 0.8.11](https://github.com/rust-lang/regex)
+  * [regex 1.12.4](https://github.com/rust-lang/regex)
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path)
 
 ```
@@ -809,7 +809,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [bytes 1.11.1](https://github.com/tokio-rs/bytes)
+  * [bytes 1.12.0](https://github.com/tokio-rs/bytes)
 
 ```
 Copyright (c) 2018 Carl Lerche
@@ -1062,7 +1062,7 @@ Used by:
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
   * [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
   * [toml_datetime 1.1.1+spec-1.1.0](https://github.com/toml-rs/toml)
-  * [toml_edit 0.25.11+spec-1.1.0](https://github.com/toml-rs/toml)
+  * [toml_edit 0.25.12+spec-1.1.0](https://github.com/toml-rs/toml)
   * [toml_parser 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
 
 ```
@@ -1470,7 +1470,7 @@ Used by:
   * [serde_core 1.0.228](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde)
   * [serde_json 1.0.150](https://github.com/serde-rs/json)
-  * [syn 2.0.117](https://github.com/dtolnay/syn)
+  * [syn 2.0.118](https://github.com/dtolnay/syn)
   * [thiserror-impl 1.0.69](https://github.com/dtolnay/thiserror)
   * [thiserror 1.0.69](https://github.com/dtolnay/thiserror)
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident)
@@ -1536,7 +1536,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.8.0](https://github.com/BurntSushi/memchr)
+  * [memchr 2.8.2](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [walkdir 2.5.0](https://github.com/BurntSushi/walkdir)
 
@@ -1634,7 +1634,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [shlex 1.3.0](https://github.com/comex/rust-shlex)
+  * [shlex 2.0.1](https://github.com/comex/rust-shlex)
 
 ```
 The MIT License (MIT)
