@@ -864,6 +864,10 @@ impl PitchesEditor {
     }
 
     fn update(&mut self, value: &Option<BrrSamplePitches>) {
+        // Always clear changed field (even when using sample-rates)
+        self.tuning_frequency.clear_changed();
+        self.tuning_wavelength.clear_changed();
+
         match value {
             Some(BrrSamplePitches::Octaves {
                 tuning,
@@ -991,12 +995,20 @@ impl PitchesEditor {
     ) -> Option<SampleTuning> {
         match edit_type {
             Some(EditTuningField::TuningFrequency) => {
-                InputHelper::read_or_reset(&mut self.tuning_frequency, &old.frequency())
-                    .map(SampleTuning::Frequency)
+                if self.tuning_frequency.changed() {
+                    InputHelper::read_or_reset(&mut self.tuning_frequency, &old.frequency())
+                        .map(SampleTuning::Frequency)
+                } else {
+                    Some(old.clone())
+                }
             }
             Some(EditTuningField::TuningWavelength) => {
-                InputHelper::read_or_reset(&mut self.tuning_wavelength, &old.wavelength())
-                    .map(SampleTuning::Wavelength)
+                if self.tuning_wavelength.changed() {
+                    InputHelper::read_or_reset(&mut self.tuning_wavelength, &old.wavelength())
+                        .map(SampleTuning::Wavelength)
+                } else {
+                    Some(old.clone())
+                }
             }
             None => Some(old.clone()),
         }
