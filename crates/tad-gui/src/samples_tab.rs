@@ -1253,7 +1253,8 @@ impl BrrSampleEditor {
                 let g = Group::new(0, y, c4 - c0, 6 * r, None);
 
                 let looping_cb = CheckButton::new(c1, y, c4 - c1, h, "Looping sample");
-                let loop_point = IntInput::new(c2, y + r, c4 - c2, h, "Loop point: ");
+                let mut loop_point = IntInput::new(c2, y + r, c4 - c2, h, "Loop point: ");
+                loop_point.set_tooltip("Loop point in samples (must be a multiple of 16)");
                 let mut loop_filter = Choice::new(c2, y + 2 * r, c4 - c2, h, "Loop filter: ");
                 loop_filter.set_tooltip("BRR Filter to use at the loop point");
                 loop_filter.add_choice(LoopFilterChoice::CHOICES);
@@ -1271,8 +1272,11 @@ impl BrrSampleEditor {
                     .set_tooltip("wav2brr evaluator to use when scoring BRR filters and nibbles");
                 evaluator.add_choice(BrrEvaluatorChoice::CHOICES);
 
-                let ignore_gaussian_overflow =
+                let mut ignore_gaussian_overflow =
                     CheckButton::new(c1, y + 5 * r, c4 - c1, h, "Ignore Gaussian overflow");
+                ignore_gaussian_overflow.set_tooltip(
+                    "Allow glitch samples that can overflow the Gaussian interpolator",
+                );
 
                 g.end();
 
@@ -1341,9 +1345,13 @@ impl BrrSampleEditor {
 
             let tuning_group = Group::new(c0, y + r, c5 - c0, 3 * h, None);
 
-            let tuning_frequency = FloatInput::new(c1, y + r, input_w, h, "Tuning frequency: ");
+            let mut tuning_frequency = FloatInput::new(c1, y + r, input_w, h, "Tuning frequency: ");
+            // Without `\n`, the tooltip wraps at the word rate (sample \n rate)
+            tuning_frequency
+                .set_tooltip("Frequency of the sample when played at\na 32000Hz sample rate");
             Frame::new(c4 - label_w, y + r, label_w, h, " Hz")
                 .with_align(Align::Inside | Align::Left);
+
             let tuning_wavelength =
                 FloatInput::new(c1, y + 2 * r, input_w, h, "Tuning wavelength: ");
             Frame::new(c4 - label_w, y + 2 * r, label_w, h, " samples")

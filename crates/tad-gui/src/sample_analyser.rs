@@ -204,17 +204,28 @@ impl SampleAnalyserWidget {
 
         let spectrum_stats_group = Group::new(pad, 0, width, line_height, None);
 
-        let freq_stats = |c, label| {
+        let freq_stats = |c, label, tooltip| {
             let bx = cx(c + 1) - use_w;
             let ox = bx - output_w;
-            (
-                Output::new(ox, 0, output_w, line_height, label),
-                Button::new(bx, 0, use_w, line_height, "Use"),
-            )
+
+            let mut o = Output::new(ox, 0, output_w, line_height, label);
+            o.set_tooltip(tooltip);
+
+            let b = Button::new(bx, 0, use_w, line_height, "Use");
+
+            (o, b)
         };
-        let (peak_freq, use_peak) = freq_stats(0, "Peak:");
-        let (cursor_freq, use_cursor) = freq_stats(1, "Cursor:");
-        let (cursor_peak_freq, use_cursor_peak) = freq_stats(2, "C Peak:");
+        let (peak_freq, use_peak) = freq_stats(0, "Peak:", "The loudest frequency in the spectrum");
+        let (cursor_freq, use_cursor) = freq_stats(
+            1,
+            "Cursor:",
+            "Frequency at the mouse cursor\n(click on spectrum to hold value)",
+        );
+        let (cursor_peak_freq, use_cursor_peak) = freq_stats(
+            2,
+            "C Peak:",
+            "Peak frequency near the mouse cursor\n(click spectrum to hold value)",
+        );
 
         spectrum_stats_group.end();
         parent.fixed(&spectrum_stats_group, line_height);
