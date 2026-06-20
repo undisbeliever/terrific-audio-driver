@@ -345,6 +345,8 @@ fn build_brr_directroy(
     }
 }
 
+// An instrument is a BRR sample that is loaded into Audio-RAM
+// with a pitch-table offset and an envelope.
 pub struct SampleAndInstrumentData {
     pub(crate) pitch_table: PitchTable,
 

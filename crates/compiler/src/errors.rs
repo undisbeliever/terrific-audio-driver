@@ -20,9 +20,9 @@ use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
 use crate::driver_constants::{
-    addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
-    MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
+    addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_BRR_SAMPLES,
+    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_N_SONGS, MAX_SFX_SUBROUTINES, MAX_SONG_DATA_SIZE,
+    MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
 use crate::echo::{
     EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap, MAX_FIR_ABS_SUM,
@@ -1711,11 +1711,7 @@ impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::TooManyBrrSamples(len) => {
-                write!(
-                    f,
-                    "too many BRR samples ({}, max: {}",
-                    len, MAX_INSTRUMENTS_AND_SAMPLES
-                )
+                write!(f, "too many BRR samples ({}, max: {}", len, MAX_BRR_SAMPLES)
             }
             Self::TooManyDirEntries(len) => {
                 write!(

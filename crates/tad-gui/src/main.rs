@@ -303,7 +303,7 @@ impl Project {
             project_songs: ListWithCompilerOutput::new(songs, driver_constants::MAX_N_SONGS),
             brr_samples: ListWithCompilerOutput::new(
                 brr_samples,
-                driver_constants::MAX_INSTRUMENTS_AND_SAMPLES,
+                driver_constants::MAX_BRR_SAMPLES,
             ),
         };
 

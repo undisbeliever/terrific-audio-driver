@@ -9,7 +9,7 @@ use std::ops::RangeInclusive;
 use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::PlayPitchPitch;
-use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
+use crate::driver_constants::MAX_BRR_SAMPLES;
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::Octave;
@@ -474,7 +474,7 @@ pub(crate) fn merge_pitch_vec(
     if pt.pitches.len() > MAX_N_PITCHES {
         return Err(PitchTableError::TooManyPitches(pt.pitches.len()));
     }
-    if pt.instrument_pto_and_note_range.len() > MAX_INSTRUMENTS_AND_SAMPLES {
+    if pt.instrument_pto_and_note_range.len() > MAX_BRR_SAMPLES {
         return Err(PitchTableError::TooManyInstruments);
     }
 

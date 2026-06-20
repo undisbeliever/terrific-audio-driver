@@ -10,7 +10,7 @@ use crate::command_compiler::analysis::{TransposeRange, TransposeStartRange};
 use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
-    FIR_FILTER_SIZE, MAX_INSTRUMENTS_AND_SAMPLES,
+    FIR_FILTER_SIZE, MAX_BRR_SAMPLES,
 };
 use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
@@ -406,7 +406,7 @@ u8_value_newtype!(
     InstrumentIdOutOfRange,
     NoInstrumentId,
     0,
-    (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
+    (MAX_BRR_SAMPLES - 1) as u8
 );
 
 impl StackDepth {

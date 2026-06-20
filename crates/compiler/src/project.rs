@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants;
-use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SOUND_EFFECTS};
+use crate::driver_constants::{MAX_BRR_SAMPLES, MAX_N_SONGS, MAX_SOUND_EFFECTS};
 use crate::envelope::Envelope;
 use crate::errors::{DeserializeError, ProjectFileError, ProjectFileErrors, UniqueNameListError};
 use crate::identifier::Name;
@@ -937,7 +937,7 @@ pub fn validate_brr_sample_names(
 ) -> Result<UniqueNamesList<BrrSample>, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let out = validate_list_names(brr_samples, true, MAX_INSTRUMENTS_AND_SAMPLES, |e| {
+    let out = validate_list_names(brr_samples, true, MAX_BRR_SAMPLES, |e| {
         errors.push(ProjectFileError::BrrSample(e))
     });
 
@@ -984,12 +984,9 @@ pub fn validate_project_file_names(
 ) -> Result<UniqueNamesProjectFile, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let brr_samples = validate_list_names(
-        pf.contents.brr_samples,
-        false,
-        MAX_INSTRUMENTS_AND_SAMPLES,
-        |e| errors.push(ProjectFileError::BrrSample(e)),
-    );
+    let brr_samples = validate_list_names(pf.contents.brr_samples, false, MAX_BRR_SAMPLES, |e| {
+        errors.push(ProjectFileError::BrrSample(e))
+    });
 
     let sfx_export_order = match validate_sfx_export_order(
         pf.contents.high_priority_sound_effects,
