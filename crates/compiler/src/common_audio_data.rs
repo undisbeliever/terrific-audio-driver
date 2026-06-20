@@ -177,10 +177,10 @@ pub fn build_common_audio_data(
     let sfx_subroutine_data = sfx_subroutines.bytecode_data();
 
     if n_dir_items > MAX_DIR_ITEMS {
-        errors.push(CommonAudioDataError::TooManyBrrSamples(n_dir_items));
+        errors.push(CommonAudioDataError::TooManyDirEntries(n_dir_items));
     }
     if n_instruments_and_samples > MAX_INSTRUMENTS_AND_SAMPLES {
-        errors.push(CommonAudioDataError::TooManyInstrumentsAndSamples(
+        errors.push(CommonAudioDataError::TooManyBrrSamples(
             n_instruments_and_samples,
         ));
     }

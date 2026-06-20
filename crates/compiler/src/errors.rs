@@ -472,9 +472,8 @@ pub struct SampleAndInstrumentDataError {
 
 #[derive(Debug)]
 pub enum CommonAudioDataError {
-    // ::TODO remove::
-    TooManyInstrumentsAndSamples(usize),
     TooManyBrrSamples(usize),
+    TooManyDirEntries(usize),
     TooManySfxSubroutines(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
@@ -1711,15 +1710,19 @@ impl Display for BrrError {
 impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::TooManyInstrumentsAndSamples(len) => {
+            Self::TooManyBrrSamples(len) => {
                 write!(
                     f,
-                    "too many instruments and samples ({}, max: {}",
+                    "too many BRR samples ({}, max: {}",
                     len, MAX_INSTRUMENTS_AND_SAMPLES
                 )
             }
-            Self::TooManyBrrSamples(len) => {
-                write!(f, "too many BRR samples ({}, max: {})", len, MAX_DIR_ITEMS)
+            Self::TooManyDirEntries(len) => {
+                write!(
+                    f,
+                    "too many BRR DIR directroy items ({}, max: {})",
+                    len, MAX_DIR_ITEMS
+                )
             }
             Self::TooManySfxSubroutines(n) => write!(
                 f,
