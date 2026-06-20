@@ -9,8 +9,8 @@ use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
     COMMON_DATA_BYTES_PER_PITCH, COMMON_DATA_BYTES_PER_SFX_SUBROUTINE,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
-    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SFX_DATA_ADDR,
-    MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
+    MAX_BRR_SAMPLES, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES,
+    MAX_SOUND_EFFECTS,
 };
 use crate::envelope::Envelope;
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
@@ -177,10 +177,10 @@ pub fn build_common_audio_data(
     let sfx_subroutine_data = sfx_subroutines.bytecode_data();
 
     if n_dir_items > MAX_DIR_ITEMS {
-        errors.push(CommonAudioDataError::TooManyBrrSamples(n_dir_items));
+        errors.push(CommonAudioDataError::TooManyDirEntries(n_dir_items));
     }
-    if n_instruments_and_samples > MAX_INSTRUMENTS_AND_SAMPLES {
-        errors.push(CommonAudioDataError::TooManyInstrumentsAndSamples(
+    if n_instruments_and_samples > MAX_BRR_SAMPLES {
+        errors.push(CommonAudioDataError::TooManyBrrSamples(
             n_instruments_and_samples,
         ));
     }

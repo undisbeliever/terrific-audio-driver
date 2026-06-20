@@ -73,6 +73,10 @@ impl SourcePathBuf {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.relative_path.as_str().is_empty()
+    }
+
     pub fn as_str(&self) -> &str {
         self.relative_path.as_str()
     }

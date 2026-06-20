@@ -10,8 +10,9 @@ use compiler::{
     notes::Note,
     path::SourcePathBuf,
     project::{
-        About, BlockNumber, BrrEvaluator, DefaultSfxFlags, Instrument, InstrumentNoteRange,
-        LoopSetting, Project, Sample, SampleNumber, Song,
+        About, BlockNumber, BrrEncoderSettings, BrrEvaluator, BrrLoopFilter, BrrSample,
+        BrrSamplePitches, BrrSampleSource, BrrSource, DefaultSfxFlags, Project, SampleNumber,
+        SampleTuning, Song, WaveSource,
     },
 };
 
@@ -23,18 +24,39 @@ fn source(path: &str) -> SourcePathBuf {
     SourcePathBuf::new_from_str(path)
 }
 
-fn octave_range(first: u32, last: u32) -> InstrumentNoteRange {
-    InstrumentNoteRange::Octave {
+fn freq_octaves(freq: f64, first: u32, last: u32) -> Option<BrrSamplePitches> {
+    Some(BrrSamplePitches::Octaves {
+        tuning: SampleTuning::Frequency(freq),
         first: first.try_into().unwrap(),
         last: last.try_into().unwrap(),
-    }
+    })
 }
 
-fn note_range(first: &str, last: &str) -> InstrumentNoteRange {
-    InstrumentNoteRange::Note {
+fn freq_notes(freq: f64, first: &str, last: &str) -> Option<BrrSamplePitches> {
+    Some(BrrSamplePitches::Notes {
+        tuning: SampleTuning::Frequency(freq),
         first: Note::parse_bytecode_argument(first).unwrap(),
         last: Note::parse_bytecode_argument(last).unwrap(),
-    }
+    })
+}
+
+fn sr(sr: &[u32]) -> Option<BrrSamplePitches> {
+    Some(BrrSamplePitches::SampleRates {
+        sample_rates: sr.to_owned(),
+    })
+}
+
+fn test_json(json: &str, expected: Project) {
+    let p = serde_json::from_str::<Project>(json).unwrap();
+    assert_eq!(p, expected);
+
+    let s = serde_json::to_string(&p).unwrap();
+
+    assert_eq!(
+        serde_json::from_str::<Project>(&s).unwrap(),
+        expected,
+        "serialised JSON assert error"
+    );
 }
 
 // Testing TAD backwards compatibility with version 0.0.2
@@ -137,75 +159,94 @@ fn version_0_0_2_example_project() {
         about: About {
             version: "0.0.2".to_owned(),
         },
-        instruments: vec![
-            Instrument {
+        brr_samples: vec![
+            BrrSample {
                 name: name("dbh"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHack(BlockNumber(3)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: Some(BlockNumber(3)),
+                    },
+                }),
+                pitches: freq_octaves(500.0, 1, 6),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("lrf"),
-                source: source("samples/lrf.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::LoopResetFilter(SampleNumber(0)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/lrf.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Reset),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("loop_with_filter"),
-                source: source("loop_with_filter.wav"),
-                freq: 1000.0,
-                loop_setting: LoopSetting::LoopWithFilter(SampleNumber(16)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("loop_with_filter.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(16)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(3, 7),
+                pitches: freq_octaves(1000.0, 3, 7),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("wav_no_loop"),
-                source: source("wav_no_loop.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("wav_no_loop.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: None,
+                        loop_filter: None,
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Gain(Gain::new(254)),
-                comment: Some("first example comment".to_owned()),
+                comment: "first example comment".to_owned(),
             },
-            Instrument {
+            BrrSample {
                 name: name("first_brr_sample"),
-                source: source("samples/first_brr_sample.brr"),
-                freq: 2000.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("samples/first_brr_sample.brr"),
+                    loop_point: None,
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(2000.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(8, 7, 6, 5).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("second_brr_sample"),
-                source: source("../second_brr_sample.brr"),
-                freq: 500.0,
-                loop_setting: LoopSetting::OverrideBrrLoopPoint(SampleNumber(32)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("../second_brr_sample.brr"),
+                    loop_point: Some(SampleNumber(32)),
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 5),
+                pitches: freq_octaves(500.0, 1, 5),
                 envelope: Envelope::Gain("F127".parse().unwrap()),
-                comment: Some("second example comment".to_owned()),
+                comment: "second example comment".to_owned(),
             },
         ],
-        samples: vec![],
         default_sfx_flags: Default::default(),
         high_priority_sound_effects: vec![],
         sound_effects: vec![
@@ -227,7 +268,7 @@ fn version_0_0_2_example_project() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 // The version that added samples
@@ -352,94 +393,119 @@ fn version_0_0_4() {
         about: About {
             version: "0.0.4".to_owned(),
         },
-        instruments: vec![
-            Instrument {
+        brr_samples: vec![
+            BrrSample {
                 name: name("dbh"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHack(BlockNumber(3)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: Some(BlockNumber(3)),
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("lrf"),
-                source: source("samples/lrf.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::LoopResetFilter(SampleNumber(0)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/lrf.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Reset),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("loop_with_filter"),
-                source: source("loop_with_filter.wav"),
-                freq: 1000.0,
-                loop_setting: LoopSetting::LoopWithFilter(SampleNumber(16)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("loop_with_filter.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(16)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(3, 7),
+                pitches: freq_octaves(1000.0, 3, 7),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("wav_no_loop"),
-                source: source("wav_no_loop.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("wav_no_loop.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: None,
+                        loop_filter: None,
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Gain(Gain::new(254)),
-                comment: Some("first example comment".to_owned()),
+                comment: "first example comment".to_owned(),
             },
-            Instrument {
+            BrrSample {
                 name: name("first_brr_sample"),
-                source: source("samples/first_brr_sample.brr"),
-                freq: 2000.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("samples/first_brr_sample.brr"),
+                    loop_point: None,
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(2000.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(8, 7, 6, 5).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("second_brr_sample"),
-                source: source("../second_brr_sample.brr"),
-                freq: 500.0,
-                loop_setting: LoopSetting::OverrideBrrLoopPoint(SampleNumber(32)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("../second_brr_sample.brr"),
+                    loop_point: Some(SampleNumber(32)),
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 5),
+                pitches: freq_octaves(500.0, 1, 5),
                 envelope: Envelope::Gain("F127".parse().unwrap()),
-                comment: Some("second example comment".to_owned()),
+                comment: "second example comment".to_owned(),
             },
-        ],
-        samples: vec![
-            Sample {
+            BrrSample {
                 name: name("sample"),
-                source: source("sample.brr"),
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("sample.brr"),
+                    loop_point: None,
+                }),
                 ignore_gaussian_overflow: false,
-                sample_rates: vec![16000, 18000],
+                pitches: sr(&[16000, 18000]),
                 envelope: Envelope::Adsr(Adsr::try_new(5, 6, 7, 8).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Sample {
+            BrrSample {
                 name: name("sample2"),
-                source: source("sample2.wav"),
-                loop_setting: LoopSetting::LoopFilter2(SampleNumber(42)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("sample2.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(42)),
+                        loop_filter: Some(BrrLoopFilter::Filter2),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                sample_rates: vec![32000],
+                pitches: sr(&[32000]),
                 envelope: Envelope::Gain("F127".parse().unwrap()),
-                comment: Some("sample comment".to_owned()),
+                comment: "sample comment".to_owned(),
             },
         ],
         default_sfx_flags: Default::default(),
@@ -463,7 +529,7 @@ fn version_0_0_4() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 #[test]
@@ -502,8 +568,7 @@ fn version_0_0_10_sfx_priority() {
         about: About {
             version: "0.0.10".to_owned(),
         },
-        instruments: vec![],
-        samples: vec![],
+        brr_samples: vec![],
         default_sfx_flags: DefaultSfxFlags {
             one_channel: false,
             interruptible: false,
@@ -515,7 +580,7 @@ fn version_0_0_10_sfx_priority() {
         songs: vec![],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 #[test]
@@ -544,8 +609,7 @@ fn version_0_0_10_all_sfx_flags_set() {
         about: About {
             version: "0.0.10".to_owned(),
         },
-        instruments: vec![],
-        samples: vec![],
+        brr_samples: vec![],
         default_sfx_flags: DefaultSfxFlags {
             one_channel: true,
             interruptible: true,
@@ -557,7 +621,7 @@ fn version_0_0_10_all_sfx_flags_set() {
         songs: vec![],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }
 
 // Changes since 0.0.10 (I think)
@@ -780,157 +844,215 @@ fn version_0_3_0() {
         about: About {
             version: "0.3.0".to_owned(),
         },
-        instruments: vec![
-            Instrument {
+        brr_samples: vec![
+            BrrSample {
                 name: name("dbh"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHack(BlockNumber(3)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: Some(BlockNumber(3)),
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("lrf"),
-                source: source("samples/lrf.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::LoopResetFilter(SampleNumber(0)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/lrf.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Reset),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                note_range: note_range("c1", "b6"),
+                pitches: freq_notes(500.0, "c1", "b6"),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("loop_with_filter"),
-                source: source("loop_with_filter.wav"),
-                freq: 1000.0,
-                loop_setting: LoopSetting::LoopWithFilter(SampleNumber(16)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("loop_with_filter.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(16)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(3, 7),
+                pitches: freq_octaves(1000.0, 3, 7),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("wav_no_loop"),
-                source: source("wav_no_loop.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("wav_no_loop.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: None,
+                        loop_filter: None,
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                note_range: note_range("d+4", "g5"),
+                pitches: freq_notes(500.0, "d+4", "g5"),
                 envelope: Envelope::Gain("B30".parse().unwrap()),
-                comment: Some("first example comment".to_owned()),
+                comment: "first example comment".to_owned(),
             },
-            Instrument {
+            BrrSample {
                 name: name("first_brr_sample"),
-                source: source("samples/first_brr_sample.brr"),
-                freq: 2000.0,
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("samples/first_brr_sample.brr"),
+                    loop_point: None,
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(2000.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(8, 7, 6, 5).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("second_brr_sample"),
-                source: source("../second_brr_sample.brr"),
-                freq: 500.0,
-                loop_setting: LoopSetting::OverrideBrrLoopPoint(SampleNumber(32)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("../second_brr_sample.brr"),
+                    loop_point: Some(SampleNumber(32)),
+                }),
                 ignore_gaussian_overflow: true,
-                note_range: octave_range(1, 5),
+                pitches: freq_octaves(500.0, 1, 5),
                 envelope: Envelope::Gain("F127".parse().unwrap()),
-                comment: Some("second example comment".to_owned()),
+                comment: "second example comment".to_owned(),
             },
-            Instrument {
+            BrrSample {
                 name: name("dbh_1"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHackFilter1(BlockNumber(2)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Filter1),
+                        dupe_block_hack: Some(BlockNumber(2)),
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("dbh_2"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHackFilter2(BlockNumber(3)),
-                evaluator: BrrEvaluator::SquaredError,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::SquaredError,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Filter2),
+                        dupe_block_hack: Some(BlockNumber(3)),
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Instrument {
+            BrrSample {
                 name: name("dbh_3"),
-                source: source("samples/dbh.wav"),
-                freq: 500.0,
-                loop_setting: LoopSetting::DupeBlockHackFilter3(BlockNumber(4)),
-                evaluator: BrrEvaluator::SquaredErrorAvoidGaussianOverflow,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("samples/dbh.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::SquaredErrorAvoidGaussianOverflow,
+                        loop_point: Some(SampleNumber(0)),
+                        loop_filter: Some(BrrLoopFilter::Filter3),
+                        dupe_block_hack: Some(BlockNumber(4)),
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                note_range: octave_range(1, 6),
+                pitches: freq_octaves(500.0, 1, 6),
                 envelope: Envelope::Adsr(Adsr::try_new(12, 1, 1, 16).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-        ],
-        samples: vec![
-            Sample {
+            BrrSample {
                 name: name("sample"),
-                source: source("sample.brr"),
-                loop_setting: LoopSetting::None,
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::BrrFile(BrrSource {
+                    source: source("sample.brr"),
+                    loop_point: None,
+                }),
                 ignore_gaussian_overflow: false,
-                sample_rates: vec![16000, 18000],
+                pitches: sr(&[16000, 18000]),
                 envelope: Envelope::Adsr(Adsr::try_new(5, 6, 7, 8).unwrap()),
-                comment: None,
+                comment: String::new(),
             },
-            Sample {
+            BrrSample {
                 name: name("filter_1"),
-                source: source("filename.wav"),
-                loop_setting: LoopSetting::LoopFilter1(SampleNumber(16)),
-                evaluator: BrrEvaluator::SquaredErrorAvoidGaussianOverflow,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("filename.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::SquaredErrorAvoidGaussianOverflow,
+                        loop_point: Some(SampleNumber(16)),
+                        loop_filter: Some(BrrLoopFilter::Filter1),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                sample_rates: vec![],
+                pitches: sr(&[]),
                 envelope: Envelope::Gain(Gain::new(127)),
-                comment: Some("sample comment".to_owned()),
+                comment: "sample comment".to_owned(),
             },
-            Sample {
+            BrrSample {
                 name: name("filter_2"),
-                source: source("filename.wav"),
-                loop_setting: LoopSetting::LoopFilter2(SampleNumber(42)),
-                evaluator: BrrEvaluator::SquaredError,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("filename.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::SquaredError,
+                        loop_point: Some(SampleNumber(42)),
+                        loop_filter: Some(BrrLoopFilter::Filter2),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: false,
-                sample_rates: vec![8000],
+                pitches: sr(&[8000]),
                 envelope: Envelope::Gain(Gain::new(127)),
-                comment: None,
+                comment: String::new(),
             },
-            Sample {
+            BrrSample {
                 name: name("filter_3"),
-                source: source("filename.wav"),
-                loop_setting: LoopSetting::LoopFilter3(SampleNumber(16)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("filename.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(16)),
+                        loop_filter: Some(BrrLoopFilter::Filter3),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                sample_rates: vec![6000],
+                pitches: sr(&[6000]),
                 envelope: Envelope::Gain(Gain::new(127)),
-                comment: None,
+                comment: String::new(),
             },
-            Sample {
+            BrrSample {
                 name: name("auto_filter"),
-                source: source("filename.wav"),
-                loop_setting: LoopSetting::LoopWithFilter(SampleNumber(20)),
-                evaluator: BrrEvaluator::Default,
+                source: BrrSampleSource::WaveFile(WaveSource {
+                    source: source("filename.wav"),
+                    settings: BrrEncoderSettings {
+                        evaluator: BrrEvaluator::Default,
+                        loop_point: Some(SampleNumber(20)),
+                        loop_filter: Some(BrrLoopFilter::Auto),
+                        dupe_block_hack: None,
+                    },
+                }),
                 ignore_gaussian_overflow: true,
-                sample_rates: vec![12000, 13000],
+                pitches: sr(&[12000, 13000]),
                 envelope: Envelope::Gain(Gain::new(127)),
-                comment: None,
+                comment: String::new(),
             },
         ],
         default_sfx_flags: DefaultSfxFlags {
@@ -953,5 +1075,5 @@ fn version_0_3_0() {
         ],
     };
 
-    assert_eq!(serde_json::from_str::<Project>(json).unwrap(), expected);
+    test_json(json, expected);
 }

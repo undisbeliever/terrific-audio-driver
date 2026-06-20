@@ -210,6 +210,11 @@ impl Note {
         note_id: LAST_NOTE_ID,
     };
 
+    pub const C3: Self = Self { note_id: 3 * 12 };
+    pub const B6: Self = Self {
+        note_id: 5 * 12 + 11,
+    };
+
     /// audio-driver note_id.
     /// NOT MIDI-note-number and NOT Piano-key-number
     pub const fn note_id(&self) -> u8 {

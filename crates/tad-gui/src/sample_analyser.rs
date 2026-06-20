@@ -1,39 +1,34 @@
-//! Sample Analyser Dialog
+//! Sample Analyser widgets
 
 // SPDX-FileCopyrightText: © 2024 Marcus Rowe <undisbeliever@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{ItemId, ToCompiler};
-use crate::helpers::{ch_units_to_width, input_height, label_packed, InputForm, SetActive};
-use crate::sample_widgets::{BrrSettingsWidget, SampleWidgetEditor, SourceFileType};
-use crate::{GuiMessage, InstrumentOrSampleId};
+use crate::helpers::{ch_units_to_width, input_height};
+use crate::GuiMessage;
 
 use brr::{BrrSample, MonoPcm16WaveFile};
-use compiler::project::{self, BrrEvaluator, LoopSetting};
+use compiler::project::{self, BrrSamplePitches, SampleNumber};
 use fltk::valuator::HorSlider;
+use spectrum_analyzer::error::SpectrumAnalyzerError;
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 
 extern crate fltk;
-use compiler::errors::BrrError;
-use compiler::path::SourcePathBuf;
 use fltk::app;
 use fltk::button::Button;
 use fltk::draw;
 use fltk::enums::{Align, Color, Event, Font, FrameType};
-use fltk::group::{Flex, Group, Pack, PackType};
+use fltk::group::{Flex, Group};
 use fltk::menu::Choice;
-use fltk::misc::Spinner;
 use fltk::output::Output;
-use fltk::prelude::{GroupExt, InputExt, MenuExt, ValuatorExt, WidgetBase, WidgetExt, WindowExt};
+use fltk::prelude::{GroupExt, InputExt, MenuExt, ValuatorExt, WidgetBase, WidgetExt};
 use fltk::widget::Widget;
-use fltk::window::Window;
 
 extern crate spectrum_analyzer;
 use spectrum_analyzer::windows::hann_window;
@@ -60,8 +55,11 @@ const MIN_WAVEFORM_WIDTH: usize = 192;
 /// Amount to scroll (in fractions of a screen) when scrolling the scroll wheel in the waveform widget
 const WAVEFORM_SCROLL: f64 = 1.0 / 32.0;
 
-/// Number of spectrum frequencies to test to the left and right of the cursor in the spectrum widget
-const SPECTRUM_CURSOR_PEAK_LEFT_RIGHT: usize = 12;
+// Number of pixels left/right of the cursor to test when finding the cursor peak frequency
+const CURSOR_PEAK_PIXELS_TO_TEST: f64 = 12.0;
+// Minimum frequency to the left/right of cursor to test when finding the cursor peak frequency
+const CURSOR_PEAK_MIN_FREQ_TO_TEST: f64 = 50.0;
+
 /// Maximum frequency to show in the spectrum widget
 const MAX_SPECTRUM_FREQ: f32 = 8000.0;
 
@@ -83,11 +81,11 @@ fn read_spectrum_range_choice(c: &Choice) -> f64 {
     }
 }
 
-const DEFAULT_FFT_SIZE_VALUE: i32 = 4;
-
 const FFT_SIZE_CHOICES: &str = "256|512|1024|2048|4096|8192|16384|32768";
 const _: () = assert!(MIN_SPECTRUM_SAMPLES == 256);
 const _: () = assert!(MAX_SPECTRUM_SAMPLES == 32768);
+
+const DEFAULT_FFT_SIZE_VALUE: i32 = 4;
 
 #[derive(Debug)]
 struct FftSize {
@@ -104,6 +102,10 @@ fn read_fft_choice(c: &Choice) -> FftSize {
 }
 
 impl FftSize {
+    const DEFAULT: Self = Self {
+        choice: DEFAULT_FFT_SIZE_VALUE as u8,
+    };
+
     fn value(&self) -> usize {
         MIN_SPECTRUM_SAMPLES << self.choice
     }
@@ -116,23 +118,19 @@ enum WaveformMoveEvent {
     ScrollRight,
 }
 
-pub struct SampleAnalyserDialog {
+pub struct SampleAnalyserWidget {
     state: Rc<RefCell<State>>,
 }
 
 struct State {
     sender: app::Sender<GuiMessage>,
     compiler_sender: mpsc::Sender<ToCompiler>,
-    audio_sender: mpsc::Sender<AudioMessage>,
 
-    item_id: Option<InstrumentOrSampleId>,
-    source: SourcePathBuf,
+    item_id: Option<ItemId>,
+
     freq: f64,
-    loop_setting: project::LoopSetting,
-    evaluator: project::BrrEvaluator,
 
     analysis: Option<SampleAnalysis>,
-    analysis_error: Option<String>,
 
     spectrum_max_freq: f64,
     spectrum_x_scale: f64,
@@ -141,12 +139,15 @@ struct State {
     waveform_x_offset: usize,
     waveform_x_scale: f64,
 
-    window: Window,
-
     spectrum: Widget,
     waveform: Widget,
 
-    spectrum_stats_group: Pack,
+    first_group: Group,
+    play_button: Button,
+    fft_offset: HorSlider,
+    fft_size_choice: Choice,
+
+    spectrum_stats_group: Group,
     spectrum_range_choice: Choice,
     peak_freq: Output,
     cursor_freq: Output,
@@ -155,156 +156,90 @@ struct State {
     use_peak: Button,
     use_cursor: Button,
     use_cursor_peak: Button,
-
-    fft_offset: HorSlider,
-    fft_size_choice: Choice,
-
-    source_out: Output,
-    freq_widget: Spinner,
-    brr_settings_widget: BrrSettingsWidget,
-
-    ok_button: Button,
-    play_button: Button,
 }
 
-impl SampleAnalyserDialog {
+impl SampleAnalyserWidget {
     pub fn new(
+        parent: &mut Flex,
+        width: i32,
         sender: app::Sender<GuiMessage>,
         compiler_sender: mpsc::Sender<ToCompiler>,
-        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
-        let mut window = Window::default();
+        let line_height = input_height(parent);
 
-        window.set_label("Sample Analyser");
-        window.set_size(
-            ch_units_to_width(&window, 120),
-            ch_units_to_width(&window, 65),
-        );
-        window.size_range(
-            ch_units_to_width(&window, 90),
-            ch_units_to_width(&window, 65),
-            0,
-            0,
-        );
-        window.make_resizable(true);
-        window.make_modal(true);
+        let output_w = ch_units_to_width(parent, 10);
+        let use_w = ch_units_to_width(parent, 4);
 
-        let ch = |ch_units| ch_units_to_width(&window, ch_units);
+        let play_w = use_w;
+        let fftsize_w = output_w;
+        let srange_w = output_w + use_w;
 
-        let mut group = Flex::default_fill().column();
-        let margin = ch(1);
-        group.set_pad(margin);
-        group.set_margin(margin);
+        let pad = parent.pad();
 
-        let spectrum = Widget::default();
-
-        let mut spectrum_stats_group = Pack::default();
-        spectrum_stats_group.set_type(PackType::Horizontal);
-        spectrum_stats_group.set_spacing(margin / 2);
-
-        let line_height = input_height(&spectrum_stats_group);
-        let use_width = ch(4);
-        let stats_width = ch(10);
-
-        let spectrum_range_choice = Choice::default().with_size(ch(15), line_height);
-
-        label_packed("Peak:");
-        let peak_freq = Output::default().with_size(stats_width, line_height);
-        let use_peak = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        label_packed(" Cursor:");
-        let cursor_freq = Output::default().with_size(stats_width, line_height);
-        let use_cursor = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        label_packed(" Cursor (peak):");
-        let cursor_peak_freq = Output::default().with_size(stats_width, line_height);
-        let use_cursor_peak = Button::default()
-            .with_label("Use")
-            .with_size(use_width, line_height);
-
-        spectrum_stats_group.end();
-        group.fixed(&spectrum_stats_group, line_height);
+        let col_width = width / 3;
+        let cx = |c| pad + c * col_width;
 
         let waveform = Widget::default();
 
-        let mut fft_group = Flex::default().row();
-        group.fixed(&fft_group, line_height);
+        let first_group = Group::new(pad, 0, width, line_height, None);
 
-        let fft_offset_label = label_packed("FFT offset");
-        fft_group.fixed(&fft_offset_label, fft_offset_label.width());
+        let mut play_button = Button::new(pad, 0, play_w, line_height, "@>");
+        play_button.set_tooltip("Play BRR sample at 32000Hz");
 
-        let fft_offset = HorSlider::default();
+        let offset_x = pad + play_w + pad;
+        let mut fft_offset =
+            HorSlider::new(offset_x, 0, col_width - play_w - pad, line_height, None);
+        fft_offset.set_tooltip("FFT range");
 
-        let fft_size_label = label_packed("Max size");
-        fft_group.fixed(&fft_size_label, fft_size_label.width());
-
-        let mut fft_size_choice = Choice::default().with_size(ch(10), line_height);
+        let mut fft_size_choice =
+            Choice::new(cx(2) - fftsize_w, 0, fftsize_w, line_height, "FFT size: ");
         fft_size_choice.add_choice(FFT_SIZE_CHOICES);
         fft_size_choice.set_value(DEFAULT_FFT_SIZE_VALUE);
         fft_size_choice.set_tooltip("Maximum FFT size");
-        fft_group.fixed(&fft_size_choice, ch(10));
 
-        fft_group.end();
+        let spectrum_range_choice =
+            Choice::new(cx(3) - srange_w, 0, srange_w, line_height, "Range: ");
 
-        let mut bottom_column = Flex::default().row();
+        first_group.end();
+        parent.fixed(&first_group, line_height);
 
-        let mut form = InputForm::new(15);
-        let source_out = form.add_input::<Output>("Source:");
-        let freq = form.add_input::<Spinner>("Frequency:");
-        let brr_settings_widget = BrrSettingsWidget::new(&mut form);
+        let spectrum = Widget::default();
 
-        let form_row_height = form.row_height();
-        let (form, form_height) = form.end();
-        bottom_column.fixed(&form, ch(65));
+        let spectrum_stats_group = Group::new(pad, 0, width, line_height, None);
 
-        let _empty_space = Widget::default();
+        let freq_stats = |c, label, tooltip| {
+            let bx = cx(c + 1) - use_w;
+            let ox = bx - output_w;
 
-        let (ok_button, mut cancel_button, play_button) = {
-            let bw = ch(10);
-            let bh = form_row_height;
+            let mut o = Output::new(ox, 0, output_w, line_height, label);
+            o.set_tooltip(tooltip);
 
-            let last_x = bw + margin;
-            let last_y = form_height - form_row_height;
+            let b = Button::new(bx, 0, use_w, line_height, "Use");
 
-            let mut b_group = Group::default();
-            b_group.set_size(bw * 2 + margin, form_height);
-            b_group.make_resizable(false);
-
-            let mut play_button = Button::new(last_x, 0, bw, bh, "@>");
-            play_button.set_tooltip("Play BRR sample at 32000Hz");
-
-            let ok_button = Button::new(0, last_y, bw, bh, "Ok");
-            let cancel_button = Button::new(last_x, last_y, bw, bh, "Cancel");
-
-            b_group.end();
-            bottom_column.fixed(&b_group, b_group.w());
-
-            (ok_button, cancel_button, play_button)
+            (o, b)
         };
+        let (peak_freq, use_peak) = freq_stats(0, "Peak:", "The loudest frequency in the spectrum");
+        let (cursor_freq, use_cursor) = freq_stats(
+            1,
+            "Cursor:",
+            "Frequency at the mouse cursor\n(click on spectrum to hold value)",
+        );
+        let (cursor_peak_freq, use_cursor_peak) = freq_stats(
+            2,
+            "C Peak:",
+            "Peak frequency near the mouse cursor\n(click spectrum to hold value)",
+        );
 
-        group.fixed(&bottom_column, form_height);
-        bottom_column.end();
-
-        group.end();
-        window.end();
+        spectrum_stats_group.end();
+        parent.fixed(&spectrum_stats_group, line_height);
 
         let state = Rc::new(RefCell::from(State {
             sender,
             compiler_sender,
-            audio_sender,
 
             item_id: None,
-            source: Default::default(),
-            freq: 500.0,
-            loop_setting: LoopSetting::None,
-            evaluator: BrrEvaluator::Default,
-
+            freq: 0.0,
             analysis: None,
-            analysis_error: None,
 
             spectrum_max_freq: MAX_SPECTRUM_FREQ.into(),
             spectrum_x_scale: 0.0,
@@ -312,10 +247,13 @@ impl SampleAnalyserDialog {
             waveform_x_offset: 0,
             waveform_x_scale: 1.0,
 
-            window,
-
             spectrum,
             waveform,
+
+            first_group,
+            play_button,
+            fft_offset,
+            fft_size_choice,
 
             spectrum_stats_group,
             spectrum_range_choice,
@@ -326,16 +264,6 @@ impl SampleAnalyserDialog {
             use_peak,
             use_cursor,
             use_cursor_peak,
-
-            fft_offset,
-            fft_size_choice,
-
-            source_out,
-            freq_widget: freq,
-            brr_settings_widget,
-
-            ok_button,
-            play_button,
         }));
 
         {
@@ -344,7 +272,7 @@ impl SampleAnalyserDialog {
             s.spectrum.draw({
                 let state = state.clone();
                 move |_| {
-                    state.borrow().draw_waveform();
+                    state.borrow_mut().draw_spectrum();
                 }
             });
             s.spectrum.handle({
@@ -355,43 +283,18 @@ impl SampleAnalyserDialog {
             s.waveform.draw({
                 let state = state.clone();
                 move |_| {
-                    state.borrow_mut().draw_spectrum();
+                    state.borrow().draw_waveform();
                 }
             });
             s.waveform.handle({
                 let state = state.clone();
-                move |_, ev| Self::handle_waveform_event(ev, &state)
+                move |widget, ev| Self::handle_waveform_event(widget, ev, &state)
             });
 
             s.play_button.set_callback({
                 let state = state.clone();
                 move |_| {
                     state.borrow().play_button_clicked();
-                }
-            });
-            s.ok_button.set_callback({
-                let state = state.clone();
-                move |_| {
-                    state.borrow_mut().ok_button_clicked();
-                }
-            });
-
-            cancel_button.set_callback({
-                let mut window = s.window.clone();
-                move |_| {
-                    window.hide();
-                }
-            });
-
-            s.brr_settings_widget.set_editor(state.clone());
-
-            s.freq_widget.set_minimum(0.0);
-            s.freq_widget.set_maximum(16000.0);
-
-            s.freq_widget.set_callback({
-                let state = state.clone();
-                move |_| {
-                    state.borrow_mut().freq_changed();
                 }
             });
 
@@ -409,7 +312,7 @@ impl SampleAnalyserDialog {
             });
 
             s.spectrum_range_choice.add_choice(SPECTRUM_RANGE_CHOICES);
-            s.spectrum_range_choice.set_value(1);
+            s.spectrum_range_choice.set_value(2);
             s.spectrum_range_choice.set_callback({
                 let state = state.clone();
                 move |_| {
@@ -442,70 +345,74 @@ impl SampleAnalyserDialog {
         Self { state }
     }
 
-    pub fn show_for_instrument(&mut self, id: ItemId, inst: &project::Instrument) {
-        self.state.borrow_mut().show(
-            InstrumentOrSampleId::Instrument(id),
-            inst.source.clone(),
-            inst.freq,
-            inst.loop_setting.clone(),
-            inst.evaluator,
-        );
+    pub fn clear_and_deactivate(&mut self) {
+        self.state.borrow_mut().clear();
     }
 
-    pub fn show_for_sample(&mut self, id: ItemId, s: &project::Sample) {
-        self.state.borrow_mut().show(
-            InstrumentOrSampleId::Sample(id),
-            s.source.clone(),
-            0.0,
-            s.loop_setting.clone(),
-            s.evaluator,
-        );
+    pub fn selected_sample_edited(&mut self, id: ItemId, data: &project::BrrSample) {
+        self.state.borrow_mut().selected_sample_edited(id, data);
     }
 
-    pub fn analysis_from_compiler_thread(&mut self, r: Result<SampleAnalysis, BrrError>) {
-        self.state.borrow_mut().analysis_from_compiler_thread(r)
+    pub fn analysis_from_compiler_thread(
+        &mut self,
+        sample_id: ItemId,
+        analysis: Option<SampleAnalysis>,
+    ) {
+        self.state
+            .borrow_mut()
+            .analysis_from_compiler_thread(sample_id, analysis)
     }
 
     fn handle_spectrum_event(ev: Event, state: &Rc<RefCell<State>>) -> bool {
+        // state can be borrowed by `selected_sample_edited()` or `clear_and_deactivate()`.
+
         match ev {
             Event::Enter => true,
             Event::Leave => {
-                state.borrow_mut().spectrum_leave_event();
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_leave_event();
+                }
                 true
             }
             Event::Move => {
-                state.borrow_mut().spectrum_move_event(app::event_x());
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_move_event(app::event_x());
+                }
                 true
             }
             Event::Push => true,
             Event::Released => {
-                state.borrow_mut().spectrum_release_event(app::event_x());
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.spectrum_release_event(app::event_x());
+                }
                 true
             }
             _ => false,
         }
     }
 
-    fn handle_waveform_event(ev: Event, state: &Rc<RefCell<State>>) -> bool {
+    fn handle_waveform_event(widget: &Widget, ev: Event, state: &Rc<RefCell<State>>) -> bool {
         match ev {
-            Event::MouseWheel => {
+            Event::MouseWheel if app::event_inside_widget(widget) => {
                 let m = if app::event_dy() == app::MouseWheel::Up {
-                    if app::is_event_ctrl() {
-                        WaveformMoveEvent::ZoomOut
-                    } else {
-                        WaveformMoveEvent::ScrollRight
-                    }
-                } else if app::event_dy() == app::MouseWheel::Down {
                     if app::is_event_ctrl() {
                         WaveformMoveEvent::ZoomIn
                     } else {
                         WaveformMoveEvent::ScrollLeft
                     }
+                } else if app::event_dy() == app::MouseWheel::Down {
+                    if app::is_event_ctrl() {
+                        WaveformMoveEvent::ZoomOut
+                    } else {
+                        WaveformMoveEvent::ScrollRight
+                    }
                 } else {
                     // Unknown move wheel movement
                     return true;
                 };
-                state.borrow_mut().waveform_move(m);
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.waveform_move(m);
+                }
                 true
             }
             _ => false,
@@ -513,91 +420,62 @@ impl SampleAnalyserDialog {
     }
 }
 
-impl SampleWidgetEditor for State {
-    fn on_finished_editing(&mut self) {
-        let (loop_setting, evaluator) = self.brr_settings_widget.read_or_reset(&self.loop_setting);
-
-        self.evaluator = evaluator;
-
-        if let Some(ls) = loop_setting {
-            self.loop_setting = ls;
+impl State {
+    fn clear(&mut self) {
+        if self.item_id.is_some() {
+            self.item_id = None;
+            // Stop analysing samples in the compiler thread
             self.send_analyse_sample_message();
         }
-    }
-
-    fn loop_settings(&self) -> &LoopSetting {
-        &self.loop_setting
-    }
-}
-
-impl State {
-    fn freq_changed(&mut self) {
-        self.freq = self.freq_widget.value();
-
-        self.spectrum.redraw();
-        self.window.redraw();
-    }
-
-    fn show(
-        &mut self,
-        id: InstrumentOrSampleId,
-        source: SourcePathBuf,
-        freq: f64,
-        loop_setting: LoopSetting,
-        evaluator: BrrEvaluator,
-    ) {
-        self.item_id = Some(id);
-
-        self.source = source;
-        self.freq = freq;
-        self.loop_setting = loop_setting;
-        self.evaluator = evaluator;
-
-        self.source_out.set_value(self.source.as_str());
-        self.freq_widget.set_value(freq);
-        self.brr_settings_widget
-            .set_value(&self.loop_setting, self.evaluator);
-
-        self.brr_settings_widget
-            .update_loop_type_choice(SourceFileType::from_source(&self.source));
 
         self.analysis = None;
-        self.analysis_error = None;
 
         self.clear_spectrum_values();
+    }
 
-        self.play_button.deactivate();
-        self.ok_button.deactivate();
-        let _ = self.ok_button.take_focus();
+    fn selected_sample_edited(&mut self, id: ItemId, data: &project::BrrSample) {
+        if self.item_id != Some(id) {
+            self.item_id = Some(id);
 
-        let is_instrument = matches!(id, InstrumentOrSampleId::Instrument(_));
-        self.freq_widget.set_active(is_instrument);
-        self.use_peak.set_active(is_instrument);
-        self.use_cursor.set_active(is_instrument);
-        self.use_cursor_peak.set_active(is_instrument);
+            self.analysis = None;
 
-        self.window.show();
+            self.clear_spectrum_values();
 
-        self.send_analyse_sample_message();
+            self.send_analyse_sample_message();
+        }
+
+        self.freq = match &data.pitches {
+            Some(BrrSamplePitches::Notes { tuning, .. })
+            | Some(BrrSamplePitches::Octaves { tuning, .. }) => tuning.frequency(),
+            Some(BrrSamplePitches::SampleRates { .. }) | None => -1.0,
+        };
     }
 
     fn send_analyse_sample_message(&self) {
-        let _ = self.compiler_sender.send(ToCompiler::AnalyseSample(
-            self.source.clone(),
-            self.loop_setting.clone(),
-            self.evaluator,
-            FftSettings {
+        let _ = self
+            .compiler_sender
+            .send(ToCompiler::SampleAnalyserSettingsChanged(FftSettings {
+                sample_id: self.item_id,
                 offset: self.fft_offset.value() as u32,
                 size: read_fft_choice(&self.fft_size_choice),
-            },
-        ));
+            }));
     }
 
-    fn analysis_from_compiler_thread(&mut self, r: Result<SampleAnalysis, BrrError>) {
-        match r {
-            Ok(a) => {
+    fn analysis_from_compiler_thread(
+        &mut self,
+        sample_id: ItemId,
+        analysis: Option<SampleAnalysis>,
+    ) {
+        let analysis = if self.item_id == Some(sample_id) {
+            analysis
+        } else {
+            None
+        };
+
+        match &analysis {
+            Some(a) => {
                 match &a.spectrum {
-                    Ok(s) => self.set_spectrum_values(s),
+                    Ok(_) => self.set_spectrum_values(a.peak_freq),
                     Err(_) => self.clear_spectrum_values(),
                 }
 
@@ -614,24 +492,23 @@ impl State {
                     self.fft_offset.set_value(pos as f64);
                 }
 
-                self.analysis = Some(a);
-                self.analysis_error = None;
-
-                self.play_button.activate();
-                self.ok_button.activate();
+                self.first_group.activate();
+                self.waveform.activate();
+                self.spectrum.activate();
             }
-            Err(e) => {
+            None => {
                 self.clear_spectrum_values();
 
                 self.analysis = None;
-                self.analysis_error = Some(e.to_string());
 
                 self.fft_offset.set_range(0.0, 0.0);
 
-                self.play_button.deactivate();
-                self.ok_button.deactivate();
+                self.first_group.deactivate();
+                self.waveform.deactivate();
+                self.spectrum.deactivate();
             }
         }
+        self.analysis = analysis;
 
         self.waveform_x_offset = 0;
         self.waveform_x_scale = 1.0;
@@ -640,9 +517,11 @@ impl State {
         self.waveform.redraw();
     }
 
-    fn set_spectrum_values(&mut self, s: &FrequencySpectrum) {
-        self.peak_freq
-            .set_value(&format!("{} Hz", s.max().0.val().round()));
+    fn set_spectrum_values(&mut self, peak_freq: Option<f64>) {
+        match peak_freq {
+            Some(p) => self.peak_freq.set_value(&format!("{} Hz", p as i32)),
+            None => self.peak_freq.set_value(""),
+        }
         self.cursor_freq.set_value("");
         self.cursor_peak_freq.set_value("");
 
@@ -676,33 +555,28 @@ impl State {
         }
     }
 
-    fn set_freq(&mut self, f: f64) {
-        let f = f.round();
-
-        self.freq = f;
-        self.freq_widget.set_value(f);
-
-        self.spectrum.redraw();
-        self.window.redraw();
-    }
-
     fn use_peak_clicked(&mut self) {
         if let Some(a) = &self.analysis {
-            if let Ok(s) = &a.spectrum {
-                self.set_freq(s.max().0.val().into());
+            if let Some(peak) = a.peak_freq {
+                if let Some(id) = self.item_id {
+                    self.sender
+                        .send(GuiMessage::SetSampleTuningFrequency(id, peak));
+                }
             }
         }
     }
 
     fn use_cursor_clicked(&mut self) {
-        if let Some(c) = self.spectrum_cursor_clicked {
-            self.set_freq(c.0);
+        if let (Some(id), Some(c)) = (self.item_id, self.spectrum_cursor_clicked) {
+            self.sender
+                .send(GuiMessage::SetSampleTuningFrequency(id, c.0));
         }
     }
 
     fn use_cursor_peak_clicked(&mut self) {
-        if let Some(c) = self.spectrum_cursor_clicked {
-            self.set_freq(c.1);
+        if let (Some(id), Some(c)) = (self.item_id, self.spectrum_cursor_clicked) {
+            self.sender
+                .send(GuiMessage::SetSampleTuningFrequency(id, c.1));
         }
     }
 
@@ -710,7 +584,6 @@ impl State {
         self.spectrum_max_freq = read_spectrum_range_choice(&self.spectrum_range_choice);
 
         self.spectrum.redraw();
-        self.window.redraw();
     }
 
     fn get_freq_for_curosr_x(&self, event_x: i32) -> Option<(f64, f64)> {
@@ -726,19 +599,24 @@ impl State {
         let x = event_x - self.spectrum.x() - Self::FRAME_MARGIN;
 
         if x_scale > 0.0 && x > 0 {
+            let data = spectrum.data();
+
+            // Assumes `spectrum.data()` is sorted and the frequency is evenly spaced.
+            let to_index = |f| {
+                let i = f / f64::from(spectrum.max_fr().val()) * (data.len() as f64);
+                (i as usize).clamp(0, data.len() - 1)
+            };
+
             let cursor_freq = f64::round(x as f64 / x_scale);
 
-            // Find closest peak near the mouse cursor.
-            // Assumes `spectrum.data()` is sorted and the frequency is evenly spaced.
-            let index =
-                cursor_freq / f64::from(spectrum.max_fr().val()) * (spectrum.data().len() as f64);
-            let index = (index as usize).clamp(
-                SPECTRUM_CURSOR_PEAK_LEFT_RIGHT,
-                spectrum.data().len() - SPECTRUM_CURSOR_PEAK_LEFT_RIGHT - 1,
-            );
-            let range = (index - SPECTRUM_CURSOR_PEAK_LEFT_RIGHT)
-                ..=(index + SPECTRUM_CURSOR_PEAK_LEFT_RIGHT);
-            let peak = spectrum.data()[range].iter().max_by_key(|s| s.1)?;
+            let freq_to_test =
+                (CURSOR_PEAK_PIXELS_TO_TEST / x_scale).clamp(CURSOR_PEAK_MIN_FREQ_TO_TEST, 500.0);
+
+            let index = to_index(cursor_freq);
+            let offset = to_index(freq_to_test);
+            let range = index.saturating_sub(offset)..(index + offset).min(data.len() - 1);
+
+            let peak = data[range].iter().max_by_key(|s| s.1)?;
             let peak_freq = f64::round(peak.0.val().into());
 
             Some((cursor_freq, peak_freq))
@@ -804,10 +682,13 @@ impl State {
         draw::set_font(Font::Helvetica, app::font_size());
         draw::draw_text2("Spectrum", x + 4, y + 4, w - 4, h - 4, Align::TopLeft);
 
-        let x_scale = self.spectrum_x_scale;
-        let y_scale = f64::from(-h) / f64::from(s.max().1.val());
+        let min_val = f64::from(s.min().1.val());
+        let max_val = f64::from(s.max().1.val());
 
-        if self.item_id.is_some() {
+        let x_scale = self.spectrum_x_scale;
+        let y_scale = f64::from(-h) / (max_val - min_val) * 0.975;
+
+        if self.item_id.is_some() && self.freq > 0.0 && self.freq < self.spectrum_max_freq {
             let freq_x = (self.freq * x_scale) as i32;
 
             draw::set_draw_color(SPECTRUM_INST_FREQ_COLOR);
@@ -815,14 +696,14 @@ impl State {
         }
 
         draw::push_matrix();
-        draw::translate(x.into(), (y + h).into());
+        draw::translate(x.into(), f64::from(y + h) - min_val * y_scale);
         draw::scale_xy(x_scale, y_scale);
 
         draw::set_draw_color(SPECTRUM_COLOR);
         draw::begin_line();
 
         for (f, v) in s.data() {
-            draw::vertex(f.val().into(), v.val().into());
+            draw::vertex(f.val().into(), f64::from(v.val()))
         }
 
         draw::end_line();
@@ -839,12 +720,6 @@ impl State {
 
         draw::set_line_style(draw::LineStyle::Solid, 0);
 
-        if let Some(e) = &self.analysis_error {
-            draw::set_draw_color(Color::Red);
-            draw::set_font(Font::Helvetica, app::font_size());
-            draw::draw_text2(e, x + 4, y + 4, w - 4, h - 4, Align::TopLeft);
-        }
-
         if let Some(analysis) = &self.analysis {
             self.draw_waveform_waveform(analysis, x, y, w, h);
         }
@@ -859,7 +734,7 @@ impl State {
         // Do not show the padding if the sample does not loop
         let n_samples = match analysis.loop_point_samples {
             Some(_) => samples.len(),
-            None => analysis.n_samples,
+            None => analysis.n_input_samples,
         };
 
         let samples_default_zoom = Self::waveform_samples_default_zoom(analysis);
@@ -897,7 +772,7 @@ impl State {
         // Draw loop points
         if let Some(lp) = analysis.loop_point_samples {
             if lp < n_samples {
-                let loop_size = analysis.brr_sample.n_samples() - lp;
+                let loop_size = analysis.n_brr_samples - lp;
 
                 draw::set_draw_color(WAVEFORM_LOOP_POINT_COLOR);
                 for i in (lp..samples.len()).step_by(loop_size) {
@@ -933,9 +808,9 @@ impl State {
         match analysis.loop_point_samples {
             Some(_) => min(
                 analysis.decoded_samples_f32.len(),
-                max(analysis.n_samples * 2, MIN_WAVEFORM_WIDTH),
+                max(analysis.n_input_samples * 2, MIN_WAVEFORM_WIDTH),
             ),
-            None => analysis.n_samples,
+            None => analysis.n_input_samples,
         }
     }
 
@@ -972,45 +847,49 @@ impl State {
             );
 
             self.waveform.redraw();
-            self.window.redraw();
         }
     }
 
     fn play_button_clicked(&self) {
-        if let Some(a) = &self.analysis {
-            let _ = self
-                .audio_sender
-                .send(AudioMessage::PlayBrrSampleAt32Khz(a.brr_sample.clone()));
+        if let Some(id) = self.item_id {
+            let _ = self.compiler_sender.send(ToCompiler::PlaySampleAt32Khz(id));
         }
-    }
-
-    fn ok_button_clicked(&mut self) {
-        if let Some(id) = &mut self.item_id {
-            self.sender.send(GuiMessage::CommitSampleAnalyserChanges {
-                id: *id,
-                freq: self.freq,
-                loop_setting: self.loop_setting.clone(),
-                evaluator: self.evaluator,
-            });
-        }
-        self.window.hide();
     }
 }
 
 #[derive(Debug)]
 pub struct FftSettings {
+    sample_id: Option<ItemId>,
     size: FftSize,
     offset: u32,
 }
 
+impl FftSettings {
+    pub fn selected_sample_id(&self) -> Option<ItemId> {
+        self.sample_id
+    }
+}
+
+impl Default for FftSettings {
+    fn default() -> Self {
+        Self {
+            sample_id: None,
+            size: FftSize::DEFAULT,
+            offset: 0,
+        }
+    }
+}
+
 pub struct SampleAnalysis {
-    brr_sample: Arc<BrrSample>,
-    n_samples: usize,
-    decoded_samples_f32: Vec<f32>,
+    n_input_samples: usize,
+    n_brr_samples: usize,
     loop_point_samples: Option<usize>,
+
+    decoded_samples_f32: Vec<f32>,
 
     fft_range: Range<usize>,
     spectrum: Result<FrequencySpectrum, String>,
+    peak_freq: Option<f64>,
 }
 
 impl std::fmt::Debug for SampleAnalysis {
@@ -1021,15 +900,15 @@ impl std::fmt::Debug for SampleAnalysis {
 
 // Called by the compiler thread
 pub fn analyse_sample(
-    brr_sample: Arc<BrrSample>,
+    brr_sample: &BrrSample,
     wav_sample: Option<&MonoPcm16WaveFile>,
-    fft: FftSettings,
+    fft: &FftSettings,
 ) -> SampleAnalysis {
     const FLOAT_SCALE: f32 = -(i16::MIN as f32);
 
     let fft_size = fft.size.value();
 
-    let n_samples = match wav_sample {
+    let n_input_samples = match wav_sample {
         Some(w) => w.samples.len(),
         None => brr_sample.n_samples(),
     };
@@ -1057,23 +936,93 @@ pub fn analyse_sample(
     let window_offset = usize::min(fft.offset as usize, decoded_samples_f32.len() - window_len);
     let fft_range = window_offset..(window_offset + window_len);
 
-    let windowed_samples = hann_window(&decoded_samples_f32[fft_range.clone()]);
+    let (spectrum, peak_freq) =
+        fft_spectrum_and_find_peak_frequency(&decoded_samples_f32[fft_range.clone()]);
+
+    SampleAnalysis {
+        n_input_samples,
+        n_brr_samples: brr_sample.n_samples(),
+        loop_point_samples: brr_sample.loop_point_samples(),
+        decoded_samples_f32,
+        fft_range,
+        spectrum: spectrum.map_err(|e| format!("ERROR: {:?}", e)),
+        peak_freq,
+    }
+}
+
+fn fft_spectrum_and_find_peak_frequency(
+    samples: &[f32],
+) -> (
+    Result<FrequencySpectrum, SpectrumAnalyzerError>,
+    std::option::Option<f64>,
+) {
+    let windowed_samples = hann_window(samples);
 
     // Analyse spectrum
     let spectrum = samples_fft_to_spectrum(
         &windowed_samples,
         BRR_SAMPLE_RATE,
         FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
-        Some(&scaling::divide_by_N_sqrt),
-    )
-    .map_err(|e| format!("ERROR: {:?}", e));
+        Some(&scaling::scale_20_times_log10),
+    );
 
-    SampleAnalysis {
-        loop_point_samples: brr_sample.loop_point_samples(),
-        n_samples,
-        brr_sample,
-        decoded_samples_f32,
-        fft_range,
-        spectrum,
-    }
+    // The 0Hz frequency can be the maximum value on biased or unsymmetrical samples.
+    //
+    // When testing with a non-negative square wave, the first 2 values contained annoyingly
+    // large values.  This code ignores the first 2 data points to be extra cautious.
+    let peak_freq = spectrum.as_ref().ok().and_then(|s| {
+        s.data()[2..]
+            .iter()
+            .max_by_key(|d| &d.1)
+            .map(|d| d.0.val().into())
+    });
+
+    (spectrum, peak_freq)
+}
+
+const FIND_TUNING_FREQ_FFT_SIZE: usize = 4096;
+
+// Called by the compiler thread
+pub fn find_tuning_freq_for_wav(
+    sample: &MonoPcm16WaveFile,
+    loop_point: Option<SampleNumber>,
+) -> Option<f64> {
+    const FFT_SIZE: usize = FIND_TUNING_FREQ_FFT_SIZE;
+    const FLOAT_SCALE: f32 = -(i16::MIN as f32);
+
+    let samples = sample.samples.as_slice();
+
+    let decoded_samples: Vec<f32> = if samples.len() >= FFT_SIZE {
+        samples[..FFT_SIZE]
+            .iter()
+            .map(|&s| f32::from(s) / FLOAT_SCALE)
+            .collect()
+    } else {
+        let lp = loop_point.map(|s| s.0).unwrap_or(0).min(samples.len() - 16);
+
+        samples
+            .iter()
+            .chain(samples[lp..].iter().cycle())
+            .take(FFT_SIZE)
+            .map(|&s| f32::from(s) / FLOAT_SCALE)
+            .collect()
+    };
+
+    fft_spectrum_and_find_peak_frequency(&decoded_samples).1
+}
+
+// Called by the compiler thread
+pub fn find_tuning_freq_for_brr(sample: &brr::BrrSample) -> Option<f64> {
+    const FFT_SIZE: usize = FIND_TUNING_FREQ_FFT_SIZE;
+    const FLOAT_SCALE: f32 = -(i16::MIN as f32);
+
+    let mut decoded_samples = vec![0_i16; FFT_SIZE];
+    sample.decode_into_buffer(&mut decoded_samples, 0, 0, 0);
+
+    let samples: Vec<f32> = decoded_samples
+        .iter()
+        .map(|&s| f32::from(s) / FLOAT_SCALE)
+        .collect();
+
+    fft_spectrum_and_find_peak_frequency(&samples).1
 }

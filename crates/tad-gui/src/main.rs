@@ -11,12 +11,11 @@
 mod audio_thread;
 mod compiler_thread;
 mod dialogs;
+mod drag_and_drop;
 mod driver_state_window;
-mod envelope_widget;
 mod files;
 mod help;
 mod helpers;
-mod instrument_editor;
 mod licenses_dialog;
 mod list_editor;
 mod menu;
@@ -24,14 +23,13 @@ mod mml_editor;
 mod monitor_timer;
 mod names;
 mod sample_analyser;
-mod sample_editor;
 mod sample_sizes_widget;
-mod sample_widgets;
 mod sfx_export_order;
 mod sfx_window;
 mod symbols;
 mod tables;
 mod tabs;
+mod test_sample_widget;
 
 mod about_tab;
 mod project_tab;
@@ -40,14 +38,13 @@ mod song_tab;
 mod sound_effects_tab;
 
 use crate::about_tab::AboutTab;
-use crate::compiler_thread::{
-    CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
-};
+use crate::compiler_thread::{CompilerOutput, ItemId, SoundEffectOutput, ToCompiler};
 use crate::dialogs::Dialogs;
+use crate::drag_and_drop::DroppedFilePath;
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
-    save_spc_file_dialog,
+    load_project_file_or_show_error_message, open_mml_file_dialog, open_new_sample_file_dialog,
+    open_sfx_file_dialog, sample_source_from_dropped_file, save_spc_file_dialog,
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
@@ -55,7 +52,7 @@ use crate::list_editor::{ListMessage, ListWithCompilerOutput};
 use crate::menu::{EditAction, Menu};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
-use crate::samples_tab::SamplesTab;
+use crate::samples_tab::{new_sample_from_file, sample_with_new_tuning_frequency, SamplesTab};
 use crate::sfx_export_order::SfxId;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
@@ -78,18 +75,15 @@ use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput, SfxToCompiler, ShortSongError};
 use driver_state_window::DriverStateWindow;
 use files::{
-    new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
-    open_sample_sample_dialog, song_name_from_path,
+    new_project_dialog, open_project_dialog, open_sample_file_dialog, song_name_from_path,
 };
 use fltk::dialog;
 use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
-use list_editor::{ListPairWithCompilerOutputs, ListWithCompilerOutputEditor};
+use list_editor::ListWithCompilerOutputEditor;
 use monitor_timer::MonitorTimer;
-use names::deduplicate_two_name_vecs;
-use sample_analyser::SampleAnalyserDialog;
 use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
 use sound_effects_tab::MAX_SFX_FILE_SOUND_EFFECTS;
@@ -132,11 +126,12 @@ pub enum GuiMessage {
 
     SelectProjectSong(usize),
 
-    Instrument(ListMessage<project::Instrument>),
-    Sample(ListMessage<project::Sample>),
-    EditInstrument(ItemId, project::Instrument),
-    UserChangedSelectedInstrument,
-    EditSample(ItemId, project::Sample),
+    BrrSample(ListMessage<project::BrrSample>),
+    EditBrrSample(ItemId, project::BrrSample),
+    OpenNewSampleDialog,
+    DragAndDropSampleFile(DroppedFilePath),
+    SetSampleFilename(ItemId, SourcePathBuf),
+    SetSampleTuningFrequency(ItemId, f64),
     UserChangedSelectedSample,
 
     NewMmlFile,
@@ -163,18 +158,7 @@ pub enum GuiMessage {
 
     ShowSampleSizes,
 
-    OpenAnalyseInstrumentDialog(ItemId),
-    OpenAnalyseSampleDialog(ItemId),
-
-    CommitSampleAnalyserChanges {
-        id: InstrumentOrSampleId,
-        freq: f64,
-        loop_setting: project::LoopSetting,
-        evaluator: project::BrrEvaluator,
-    },
-
-    OpenInstrumentSampleDialog(ItemId),
-    OpenSampleSampleDialog(ItemId),
+    OpenSampleFileDialog(ItemId),
 
     OpenSongTab(usize),
 
@@ -198,7 +182,6 @@ pub enum GuiMessage {
     PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffectCommand(SfxId, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
-    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseAudio,
     PauseResumeAudio(ItemId),
@@ -225,13 +208,6 @@ pub enum GuiMessage {
 pub type ProjectSongsData =
     ListWithCompilerOutput<project::Song, Result<Arc<SongData>, ShortSongError>>;
 
-pub type InstrumentsAndSamplesData = ListPairWithCompilerOutputs<
-    project::Instrument,
-    InstrumentOutput,
-    project::Sample,
-    SampleOutput,
->;
-
 pub struct ProjectData {
     pf_parent_path: ParentPathBuf,
 
@@ -244,17 +220,7 @@ pub struct ProjectData {
     // Using ShortSongError so I do not have to clong a complicated `SongError` struct.
     project_songs: ListWithCompilerOutput<project::Song, Result<Arc<SongData>, ShortSongError>>,
 
-    instruments_and_samples: InstrumentsAndSamplesData,
-}
-
-impl ProjectData {
-    pub fn instruments(&self) -> &ListWithCompilerOutput<project::Instrument, InstrumentOutput> {
-        self.instruments_and_samples.list1()
-    }
-
-    pub fn samples(&self) -> &ListWithCompilerOutput<project::Sample, SampleOutput> {
-        self.instruments_and_samples.list2()
-    }
+    brr_samples: ListWithCompilerOutput<project::BrrSample, SampleOutput>,
 }
 
 pub struct SoundEffectsData {
@@ -275,8 +241,6 @@ struct Project {
     audio_sender: mpsc::Sender<AudioMessage>,
     audio_monitor: AudioMonitor,
     audio_monitor_timer: MonitorTimer,
-
-    sample_analyser_dialog: SampleAnalyserDialog,
 
     tab_manager: TabManager,
     sfx_tab_selected: bool,
@@ -320,10 +284,9 @@ impl Project {
             c.low_priority_sound_effects,
         );
         let (songs, songs_renamed) = deduplicate_names(c.songs);
-        let (instruments_and_samples, i_and_s_renamed) =
-            deduplicate_two_name_vecs(c.instruments, c.samples);
+        let (brr_samples, samples_renamed) = deduplicate_names(c.brr_samples);
 
-        let total_renamed = sfx_renamed + songs_renamed + i_and_s_renamed;
+        let total_renamed = sfx_renamed + songs_renamed + samples_renamed;
         if total_renamed > 0 {
             dialog::message_title("Duplicate names found");
             dialog::alert_default(&format!("{} items have been renamed", total_renamed));
@@ -338,9 +301,9 @@ impl Project {
             sfx_export_order,
 
             project_songs: ListWithCompilerOutput::new(songs, driver_constants::MAX_N_SONGS),
-            instruments_and_samples: ListPairWithCompilerOutputs::new(
-                instruments_and_samples,
-                driver_constants::MAX_INSTRUMENTS_AND_SAMPLES,
+            brr_samples: ListWithCompilerOutput::new(
+                brr_samples,
+                driver_constants::MAX_BRR_SAMPLES,
             ),
         };
 
@@ -361,17 +324,11 @@ impl Project {
             tab_manager: TabManager::new(tabs, menu),
             sfx_tab_selected: false,
 
-            sample_analyser_dialog: SampleAnalyserDialog::new(
-                sender,
-                compiler_sender.clone(),
-                audio_sender.clone(),
-            ),
-
             sfx_window: SfxWindow::new(sender),
             driver_state_window: DriverStateWindow::new(sender, audio_monitor.clone()),
 
             project_tab: ProjectTab::new(&data, sender),
-            samples_tab: SamplesTab::new(&data.instruments_and_samples, sender),
+            samples_tab: SamplesTab::new(&data.brr_samples, sender, compiler_sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
@@ -448,63 +405,55 @@ impl Project {
                 self.project_tab.song_table.set_selected_row(index)
             }
 
-            GuiMessage::Instrument(m) => {
-                let (changed, c) = self
-                    .data
-                    .instruments_and_samples
-                    .process1(m, &mut self.samples_tab);
-
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
-                }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
-                }
+            GuiMessage::BrrSample(m) => {
+                self.process_brr_sample_list_message(m);
             }
-            GuiMessage::Sample(m) => {
-                let (changed, c) = self
-                    .data
-                    .instruments_and_samples
-                    .process2(m, &mut self.samples_tab);
-
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
-                }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::Sample(c));
-                }
-            }
-            GuiMessage::UserChangedSelectedInstrument => self
+            GuiMessage::UserChangedSelectedSample => self
                 .samples_tab
-                .selected_item_changed(self.data.instruments()),
-            GuiMessage::UserChangedSelectedSample => {
-                self.samples_tab.selected_item_changed(self.data.samples())
+                .selected_item_changed(&self.data.brr_samples),
+            GuiMessage::EditBrrSample(id, sample) => {
+                self.edit_brr_sample(id, sample);
             }
-            GuiMessage::EditInstrument(id, inst) => {
-                let (changed, c) =
-                    self.data
-                        .instruments_and_samples
-                        .edit_item1(id, inst, &mut self.samples_tab);
+            GuiMessage::SetSampleFilename(id, new_source) => {
+                if let Some((_, s)) = self.data.brr_samples.get_id(id) {
+                    let untuned_sample = s.pitches.is_none();
 
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
-                }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
+                    let mut s = s.clone();
+                    s.set_source_path(new_source);
+                    self.edit_brr_sample(id, s);
+
+                    if untuned_sample {
+                        let _ = self.compiler_sender.send(ToCompiler::FindSampleTuning(id));
+                    }
                 }
             }
-            GuiMessage::EditSample(id, sample) => {
-                let (changed, c) =
-                    self.data
-                        .instruments_and_samples
-                        .edit_item2(id, sample, &mut self.samples_tab);
+            GuiMessage::DragAndDropSampleFile(d) => {
+                let brr_samples = &mut self.data.brr_samples;
 
-                if changed {
-                    self.tab_manager.mark_unsaved(FileType::Project);
+                if brr_samples.len() < brr_samples.max_size() {
+                    if let Some(s) =
+                        sample_source_from_dropped_file(d, &self.compiler_sender, &self.data)
+                    {
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::FindNewSampleFileTuning(s));
+                    }
                 }
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::Sample(c));
+            }
+            GuiMessage::OpenNewSampleDialog => {
+                let brr_samples = &mut self.data.brr_samples;
+
+                if brr_samples.len() < brr_samples.max_size() {
+                    if let Some(s) = open_new_sample_file_dialog(&self.compiler_sender, &self.data)
+                    {
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::FindNewSampleFileTuning(s));
+                    }
                 }
+            }
+            GuiMessage::SetSampleTuningFrequency(id, frequency) => {
+                self.set_sample_tuning_frequency(id, frequency);
             }
 
             GuiMessage::SfxSubroutinesChanged(mml) => {
@@ -620,11 +569,6 @@ impl Project {
                 let _ = self
                     .compiler_sender
                     .send(ToCompiler::PlaySfxUsingSfxBuffer(id, pan));
-            }
-            GuiMessage::PlayInstrument(id, args) => {
-                let _ = self
-                    .compiler_sender
-                    .send(ToCompiler::PlayInstrument(id, args));
             }
             GuiMessage::PlaySample(id, args) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));
@@ -794,55 +738,9 @@ impl Project {
             GuiMessage::ShowSampleSizes => {
                 self.samples_tab.show_sample_sizes_widget();
             }
-            GuiMessage::OpenInstrumentSampleDialog(id) => {
-                open_instrument_sample_dialog(&self.sender, &self.compiler_sender, &self.data, id);
+            GuiMessage::OpenSampleFileDialog(id) => {
+                open_sample_file_dialog(&self.sender, &self.compiler_sender, &self.data, id);
             }
-            GuiMessage::OpenSampleSampleDialog(id) => {
-                open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, id);
-            }
-
-            GuiMessage::OpenAnalyseInstrumentDialog(id) => {
-                if let Some((_, inst)) = self.data.instruments().get_id(id) {
-                    self.sample_analyser_dialog.show_for_instrument(id, inst);
-                }
-            }
-            GuiMessage::OpenAnalyseSampleDialog(id) => {
-                if let Some((_, s)) = self.data.samples().get_id(id) {
-                    self.sample_analyser_dialog.show_for_sample(id, s);
-                }
-            }
-            GuiMessage::CommitSampleAnalyserChanges {
-                id,
-                freq,
-                loop_setting,
-                evaluator,
-            } => match id {
-                InstrumentOrSampleId::Instrument(id) => {
-                    if let Some((index, inst)) = self.data.instruments().get_id(id) {
-                        self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
-                            index,
-                            project::Instrument {
-                                freq,
-                                loop_setting,
-                                evaluator,
-                                ..inst.clone()
-                            },
-                        )));
-                    }
-                }
-                InstrumentOrSampleId::Sample(id) => {
-                    if let Some((index, sample)) = self.data.samples().get_id(id) {
-                        self.process(GuiMessage::Sample(ListMessage::ItemEdited(
-                            index,
-                            project::Sample {
-                                loop_setting,
-                                evaluator,
-                                ..sample.clone()
-                            },
-                        )));
-                    }
-                }
-            },
 
             GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.get(index) {
@@ -908,19 +806,10 @@ impl Project {
                 ));
             }
 
-            CompilerOutput::Instrument(id, co) => {
-                self.data.instruments_and_samples.set_compiler_output1(
-                    id,
-                    co,
-                    &mut self.samples_tab,
-                );
-            }
-            CompilerOutput::Sample(id, co) => {
-                self.data.instruments_and_samples.set_compiler_output2(
-                    id,
-                    co,
-                    &mut self.samples_tab,
-                );
+            CompilerOutput::BrrSample(id, co) => {
+                self.data
+                    .brr_samples
+                    .set_compiler_output(id, co, &mut self.samples_tab);
             }
             CompilerOutput::SfxSubroutines(co) => {
                 self.sound_effects_tab
@@ -988,8 +877,17 @@ impl Project {
                 }
             },
 
-            CompilerOutput::SampleAnalysis(r) => {
-                self.sample_analyser_dialog.analysis_from_compiler_thread(r)
+            CompilerOutput::SampleAnalysis(id, a) => {
+                self.samples_tab.analysis_from_compiler_thread(id, a);
+            }
+
+            CompilerOutput::SampleTuningFrequency(id, frequency) => {
+                self.set_sample_tuning_frequency(id, frequency);
+            }
+            CompilerOutput::NewSampleFileTuningFrequency(source, freq) => {
+                self.process_brr_sample_list_message(ListMessage::Add(new_sample_from_file(
+                    source, freq,
+                )));
             }
         }
     }
@@ -999,9 +897,8 @@ impl Project {
             compiler_thread::ProjectToCompiler {
                 default_sfx_flags: self.data.default_sfx_flags,
                 sfx_export_order: self.data.sfx_export_order.clone(),
+                brr_samples: self.data.brr_samples.replace_all_vec(),
                 pf_songs: self.data.project_songs.replace_all_vec(),
-                instruments: self.data.instruments().replace_all_vec(),
-                samples: self.data.samples().replace_all_vec(),
             },
         ));
 
@@ -1295,6 +1192,38 @@ impl Project {
         success
     }
 
+    fn process_brr_sample_list_message(&mut self, m: ListMessage<project::BrrSample>) {
+        let (changed, c) = self.data.brr_samples.process(m, &mut self.samples_tab);
+
+        if changed {
+            self.tab_manager.mark_unsaved(FileType::Project);
+        }
+        if let Some(c) = c {
+            let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+        }
+    }
+
+    fn edit_brr_sample(&mut self, id: ItemId, s: project::BrrSample) {
+        let (changed, c) = self
+            .data
+            .brr_samples
+            .edit_item(id, s, &mut self.samples_tab);
+
+        if changed {
+            self.tab_manager.mark_unsaved(FileType::Project);
+        }
+        if let Some(c) = c {
+            let _ = self.compiler_sender.send(ToCompiler::BrrSample(c));
+        }
+    }
+
+    fn set_sample_tuning_frequency(&mut self, id: ItemId, frequency: f64) {
+        if let Some((_, s)) = self.data.brr_samples.get_id(id) {
+            let s = sample_with_new_tuning_frequency(s, frequency);
+            self.edit_brr_sample(id, s);
+        }
+    }
+
     fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {
         let pf_songs = &self.data.project_songs;
 
@@ -1356,8 +1285,8 @@ impl ProjectData {
                 version: CARGO_PKG_VERSION.to_owned(),
             },
 
-            instruments: self.instruments().item_iter().cloned().collect(),
-            samples: self.samples().item_iter().cloned().collect(),
+            brr_samples: self.brr_samples.item_iter().cloned().collect(),
+
             songs: self.project_songs.item_iter().cloned().collect(),
 
             default_sfx_flags: self.default_sfx_flags,

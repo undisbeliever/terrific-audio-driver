@@ -26,7 +26,7 @@ use crate::identifier::{ChannelId, MusicChannelIndex, Name};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::Note;
 use crate::pitch_table::PitchTable;
-use crate::project::{self, single_item_unique_names_list, InstrumentOrSample, UniqueNamesList};
+use crate::project::{self, single_item_unique_names_list, UniqueNamesList};
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
@@ -235,25 +235,25 @@ pub fn song_header_size(n_active_channels: usize, n_subroutines: usize) -> usize
     SONG_HEADER_SIZE + n_active_channels * 2 + n_subroutines * 2
 }
 
-fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample> {
-    static LOCK: OnceLock<UniqueNamesList<InstrumentOrSample>> = OnceLock::new();
+fn sample_song_fake_instruments() -> &'static UniqueNamesList<project::BrrSample> {
+    static LOCK: OnceLock<UniqueNamesList<project::BrrSample>> = OnceLock::new();
 
     LOCK.get_or_init(|| {
-        let inst = InstrumentOrSample::Instrument(project::Instrument {
+        single_item_unique_names_list(project::BrrSample {
             name: Name::try_new("name".to_owned()).unwrap(),
-            source: Default::default(),
-            freq: 0.0,
-            loop_setting: project::LoopSetting::None,
-            evaluator: Default::default(),
+            source: project::BrrSampleSource::BrrFile(project::BrrSource {
+                source: Default::default(),
+                loop_point: Default::default(),
+            }),
             ignore_gaussian_overflow: false,
-            note_range: project::InstrumentNoteRange::Note {
+            pitches: Some(project::BrrSamplePitches::Notes {
+                tuning: project::SampleTuning::Frequency(0.0),
                 first: Note::MIN,
                 last: Note::MAX,
-            },
+            }),
             envelope: Envelope::Gain(Gain::new(0)),
             comment: Default::default(),
-        });
-        single_item_unique_names_list(inst)
+        })
     })
 }
 
@@ -500,7 +500,7 @@ pub fn override_song_tick_clock(song: &mut SongData, tick_clock: TickClock) {
 fn compile_song_commands(
     song: crate::command_compiler::commands::SongCommands,
     pitch_table: &PitchTable,
-    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     errors: MmlCompileErrors,
 ) -> Result<SongData, SongError> {
     let mut errors = errors;
@@ -616,7 +616,7 @@ pub fn compile_mml_song(
     mml: &str,
     file_name: &str,
     song_name: Option<Name>,
-    data_instruments: &UniqueNamesList<project::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<project::BrrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {
     let (s, errors) = mml::parse_mml_song(mml, file_name, song_name, data_instruments)?;

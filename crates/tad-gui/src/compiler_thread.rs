@@ -24,19 +24,18 @@ use compiler::common_audio_data::{
 use compiler::driver_constants::{self, COMMON_DATA_BYTES_PER_SOUND_EFFECT};
 use compiler::envelope::Envelope;
 use compiler::errors::{
-    self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
+    self, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
 use compiler::identifier::{ChannelId, Name};
 use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
-use compiler::project::{self, BrrEvaluator};
-use compiler::project::{DefaultSfxFlags, LoopSetting};
+use compiler::project::DefaultSfxFlags;
+use compiler::project::{self};
 use compiler::samples::{
-    combine_samples, create_test_instrument_data, encode_or_load_brr_file,
-    load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
-    SampleAndInstrumentData, SampleFileCache, SampleSampleData, WAV_EXTENSION,
+    combine_samples, compile_brr_sample, create_test_instrument_data, CompiledDataList,
+    SampleAndInstrumentData, SampleData, SampleFileCache, BRR_EXTENSION, WAV_EXTENSION,
 };
 use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
@@ -97,8 +96,7 @@ pub struct ProjectToCompiler {
     pub default_sfx_flags: DefaultSfxFlags,
     pub sfx_export_order: GuiSfxExportOrder,
     pub pf_songs: ReplaceAllVec<project::Song>,
-    pub instruments: ReplaceAllVec<project::Instrument>,
-    pub samples: ReplaceAllVec<project::Sample>,
+    pub brr_samples: ReplaceAllVec<project::BrrSample>,
 }
 
 #[derive(Debug)]
@@ -126,10 +124,11 @@ pub enum ToCompiler {
 
     ProjectSongs(ItemChanged<project::Song>),
 
-    Instrument(ItemChanged<project::Instrument>),
-    Sample(ItemChanged<project::Sample>),
+    BrrSample(ItemChanged<project::BrrSample>),
 
-    AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator, FftSettings),
+    FindSampleTuning(ItemId),
+    FindNewSampleFileTuning(SourcePathBuf),
+    SampleAnalyserSettingsChanged(FftSettings),
 
     // Updates sfx_data_size and rechecks song sizes.
     // (sent when the user deselects the sound effects tab in the GUI)
@@ -154,8 +153,8 @@ pub enum ToCompiler {
 
     CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
     CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
-    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
+    PlaySampleAt32Khz(ItemId),
 
     ExportSongToSpcFile(ItemId),
 
@@ -164,12 +163,8 @@ pub enum ToCompiler {
 }
 
 #[derive(Debug)]
-pub struct InstrumentSize(pub usize);
-
-#[derive(Debug)]
 pub struct SampleSize(pub usize);
 
-pub type InstrumentOutput = Result<InstrumentSize, errors::SampleError>;
 pub type SampleOutput = Result<SampleSize, errors::SampleError>;
 pub type SfxSubroutineOutput = Result<Arc<CompiledSfxSubroutines>, SfxSubroutinesError>;
 pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
@@ -191,8 +186,7 @@ pub enum CursorDriverState {
 pub enum CompilerOutput {
     Panic(String),
 
-    Instrument(ItemId, InstrumentOutput),
-    Sample(ItemId, SampleOutput),
+    BrrSample(ItemId, SampleOutput),
 
     CommonAudioData(CadOutput),
 
@@ -209,7 +203,9 @@ pub enum CompilerOutput {
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Box<[u8]>), SpcFileError>),
 
-    SampleAnalysis(Result<SampleAnalysis, BrrError>),
+    SampleAnalysis(ItemId, Option<SampleAnalysis>),
+    SampleTuningFrequency(ItemId, f64),
+    NewSampleFileTuningFrequency(SourcePathBuf, Option<f64>),
 
     SongCursorDriverState(CursorDriverState),
 }
@@ -257,12 +253,50 @@ impl CadOutput {
     }
 }
 
+#[derive(Default)]
+pub enum SampleState {
+    #[default]
+    NotCompiled,
+    Ok(SampleData),
+    BrrDataOnly(Arc<brr::BrrSample>),
+    Error,
+}
+
+impl SampleState {
+    fn is_ok(&self) -> bool {
+        match self {
+            SampleState::Ok(_) => true,
+            SampleState::NotCompiled | SampleState::BrrDataOnly(_) | SampleState::Error => false,
+        }
+    }
+
+    fn data(&self) -> Option<&SampleData> {
+        match self {
+            SampleState::Ok(s) => Some(s),
+            SampleState::NotCompiled | SampleState::BrrDataOnly(_) | SampleState::Error => None,
+        }
+    }
+
+    fn brr_data(&self) -> Option<&brr::BrrSample> {
+        match self {
+            SampleState::Ok(s) => Some(s.sample_data()),
+            SampleState::BrrDataOnly(b) => Some(b),
+            SampleState::NotCompiled | SampleState::Error => None,
+        }
+    }
+
+    fn share_brr_data(&self) -> Option<Arc<brr::BrrSample>> {
+        match self {
+            SampleState::Ok(s) => Some(s.share_sample_data()),
+            SampleState::BrrDataOnly(b) => Some(Arc::clone(b)),
+            SampleState::NotCompiled | SampleState::Error => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum CombineSamplesError {
-    IndividualErrors {
-        n_instrument_errors: usize,
-        n_sample_errors: usize,
-    },
+    IndividualErrors(usize),
     CombineError(errors::SampleAndInstrumentDataError),
     CommonAudioData(errors::CommonAudioDataErrors),
     UniqueNamesError(ProjectFileErrors),
@@ -271,15 +305,9 @@ pub enum CombineSamplesError {
 impl std::fmt::Display for CombineSamplesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CombineSamplesError::IndividualErrors {
-                n_instrument_errors,
-                n_sample_errors,
-            } => match (*n_instrument_errors, *n_sample_errors) {
-                (1, 0) => writeln!(f, "1 instrument has an error"),
-                (0, 1) => writeln!(f, "1 sample has an error"),
-                (i, 0) => writeln!(f, "{i} instruments have errors"),
-                (0, s) => writeln!(f, "{s} samples have errors"),
-                (i, s) => writeln!(f, "{i} instruments and {s} samples have errors"),
+            CombineSamplesError::IndividualErrors(n_sample_errors) => match n_sample_errors {
+                1 => writeln!(f, "1 sample has an error"),
+                s => writeln!(f, "{s} samples have errors"),
             },
             CombineSamplesError::CombineError(e) => {
                 writeln!(f, "{}", e.multiline_display())
@@ -498,8 +526,18 @@ where
         self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
+    fn get_input_and_output_for_id(&self, id: &ItemId) -> Option<(&ItemT, &OutT)> {
+        self.map
+            .get(id)
+            .and_then(|i: &usize| self.items.get(*i).zip(self.output.get(*i)))
+    }
+
     fn name_map(&self) -> &HashMap<Name, usize> {
         &self.name_map
+    }
+
+    fn output_iter(&self) -> std::slice::Iter<'_, OutT> {
+        self.output.iter()
     }
 
     // NOTE: Does not compile the items::
@@ -633,21 +671,15 @@ where
     }
 }
 
-impl<ItemT, OutT> CList<ItemT, Option<OutT>> {
-    fn count_errors(&self) -> usize {
-        self.output.iter().filter(|o| o.is_none()).count()
-    }
-}
-
-impl<ItemT, OutT> CompiledDataList for CList<ItemT, Option<OutT>> {
-    type Item = OutT;
+impl CompiledDataList for CList<project::BrrSample, SampleState> {
+    type Item = SampleData;
 
     fn expected_len(&self) -> usize {
         self.output.len()
     }
 
     fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
-        self.output.iter().flatten()
+        self.output.iter().flat_map(|s| s.data())
     }
 }
 
@@ -669,50 +701,57 @@ impl Sender {
     }
 }
 
-fn create_instrument_compiler<'a>(
-    sample_file_cache: &'a mut SampleFileCache,
-    sender: &'a Sender,
-) -> impl (FnMut(ItemId, &project::Instrument) -> Option<InstrumentSampleData>) + 'a {
-    |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
-        Ok(s) => {
-            sender.send(CompilerOutput::Instrument(
-                id,
-                Ok(InstrumentSize(s.sample_size())),
-            ));
-            Some(s)
-        }
-        Err(e) => {
-            sender.send(CompilerOutput::Instrument(id, Err(e)));
-            None
-        }
-    }
-}
-
 fn create_sample_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
+    fft_settings: &'a FftSettings,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &project::Sample) -> Option<SampleSampleData>) + 'a {
-    |id, sample| match load_sample_for_sample(sample, sample_file_cache) {
+) -> impl (FnMut(ItemId, &project::BrrSample) -> SampleState) + 'a {
+    |id, input| match compile_brr_sample(input, sample_file_cache) {
         Ok(s) => {
-            sender.send(CompilerOutput::Sample(id, Ok(SampleSize(s.sample_size()))));
-            Some(s)
+            sender.send(CompilerOutput::BrrSample(
+                id,
+                Ok(SampleSize(s.sample_size())),
+            ));
+
+            if fft_settings.selected_sample_id() == Some(id) {
+                analyse_sample(
+                    id,
+                    input,
+                    s.sample_data(),
+                    sample_file_cache,
+                    fft_settings,
+                    sender,
+                );
+            }
+
+            SampleState::Ok(s)
         }
-        Err(e) => {
-            sender.send(CompilerOutput::Sample(id, Err(e)));
-            None
+        Err((Some(s), e)) => {
+            sender.send(CompilerOutput::BrrSample(id, Err(e)));
+
+            if fft_settings.selected_sample_id() == Some(id) {
+                analyse_sample(id, input, &s, sample_file_cache, fft_settings, sender);
+            }
+            SampleState::BrrDataOnly(s)
+        }
+        Err((None, e)) => {
+            sender.send(CompilerOutput::BrrSample(id, Err(e)));
+
+            if fft_settings.selected_sample_id() == Some(id) {
+                // ::TODO read brr from SampleError::
+                sender.send(CompilerOutput::SampleAnalysis(id, None));
+            }
+            SampleState::Error
         }
     }
 }
 
-fn build_play_instrument_data(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
+fn build_play_sample_data(
+    samples: &CList<project::BrrSample, SampleState>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(Box<CommonAudioData>, SongData)> {
-    let sample = match instruments.get_output_for_id(&id) {
-        Some(Some(s)) => s,
-        _ => return None,
-    };
+    let sample = samples.get_output_for_id(&id).and_then(|s| s.data())?;
 
     let (sample_data, max_note) = create_test_instrument_data(sample)?;
 
@@ -730,36 +769,12 @@ fn build_play_instrument_data(
     Some((common_audio_data, song_data))
 }
 
-fn build_play_sample_data(
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
-    id: ItemId,
-    args: PlaySampleArgs,
-) -> Option<(Box<CommonAudioData>, SongData)> {
-    let sample = match samples.get_output_for_id(&id) {
-        Some(Some(s)) => s.clone(),
-        _ => return None,
-    };
-
-    let sample_data = combine_samples([].as_slice(), [sample].as_slice()).ok()?;
-
-    let blank_sfx = blank_compiled_sound_effects();
-    let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
-    let common_audio_data =
-        Box::new(build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?);
-    let song_data =
-        test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
-
-    Some((common_audio_data, song_data))
-}
-
 fn instrument_and_sample_names(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
+    brr_samples: &CList<project::BrrSample, SampleState>,
 ) -> Arc<InstrumentAndSampleNames> {
-    let i_names = instruments.items().iter().map(|inst| inst.name.clone());
-    let s_names = samples.items().iter().map(|s| s.name.clone());
+    let s_names = brr_samples.items().iter().map(|s| s.name.clone());
 
-    Arc::new(InstrumentAndSampleNames(i_names.chain(s_names).collect()))
+    Arc::new(InstrumentAndSampleNames(s_names.collect()))
 }
 
 fn compile_sfx_subroutines(
@@ -885,7 +900,7 @@ fn calc_sfx_data_size(
 }
 
 struct SongDependencies {
-    inst_map: project::UniqueNamesList<project::InstrumentOrSample>,
+    inst_map: project::UniqueNamesList<project::BrrSample>,
     combined_samples: SampleAndInstrumentData,
     common_data_no_sfx_size: usize,
     sfx_data_size: usize,
@@ -898,24 +913,20 @@ impl SongDependencies {
 }
 
 fn build_cad_no_sfx_and_song_dependencies(
-    instruments: &CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<project::Sample, Option<SampleSampleData>>,
+    brr_samples: &CList<project::BrrSample, SampleState>,
     instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_export_order: &GuiSfxExportOrder,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> Result<(Arc<CommonAudioDataNoSfx>, SongDependencies), CombineSamplesError> {
     // Test all instruments and samples are compiled
-    let n_instrument_errors = instruments.count_errors();
-    let n_sample_errors = samples.count_errors();
-    if n_instrument_errors + n_sample_errors > 0 {
-        return Err(CombineSamplesError::IndividualErrors {
-            n_instrument_errors,
-            n_sample_errors,
-        });
+    let n_sample_errors = brr_samples.output_iter().filter(|s| !s.is_ok()).count();
+
+    if n_sample_errors > 0 {
+        return Err(CombineSamplesError::IndividualErrors(n_sample_errors));
     }
 
-    let combined_samples = match combine_samples(instruments, samples) {
+    let combined_samples = match combine_samples(brr_samples) {
         Ok(s) => s,
         Err(e) => {
             return Err(CombineSamplesError::CombineError(e));
@@ -931,10 +942,7 @@ fn build_cad_no_sfx_and_song_dependencies(
         Err(e) => return Err(CombineSamplesError::CommonAudioData(e)),
     };
 
-    match project::validate_instrument_and_sample_names(
-        instruments.items().iter(),
-        samples.items.iter(),
-    ) {
+    match project::validate_brr_sample_names(brr_samples.items.clone()) {
         Ok(instruments) => {
             let sd = SongDependencies {
                 inst_map: instruments,
@@ -1387,45 +1395,98 @@ fn calculate_tick_song_driver_state(
     ));
 }
 
-fn analyse_sample(
-    cache: &mut SampleFileCache,
-    source: SourcePathBuf,
-    loop_setting: LoopSetting,
-    evaluator: BrrEvaluator,
-    fft_settings: FftSettings,
-) -> Result<SampleAnalysis, BrrError> {
-    let brr_sample = Arc::new(encode_or_load_brr_file(
-        &source,
-        cache,
-        &loop_setting,
-        evaluator,
-    )?);
+fn find_tuning_freq_for_brr_file(
+    source: &SourcePathBuf,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    let b = sample_file_cache
+        .load_brr_file(source)
+        .as_ref()
+        .ok()?
+        .clone();
 
-    let wav_sample = match source.extension() {
-        Some(WAV_EXTENSION) => match cache.load_wav_file(&source) {
-            Ok(w) => Some(w),
-            Err(e) => return Err(e.clone()),
-        },
-        _ => None,
+    let b = if !b.requires_loop_offset() {
+        b.into_brr_sample(None).ok()?
+    } else {
+        b.into_brr_sample(Some(brr::SampleNumber(0))).ok()?
     };
-
-    Ok(sample_analyser::analyse_sample(
-        brr_sample,
-        wav_sample,
-        fft_settings,
-    ))
+    sample_analyser::find_tuning_freq_for_brr(&b)
 }
 
-fn compile_all_samples(
-    instruments: &mut CList<project::Instrument, Option<InstrumentSampleData>>,
-    samples: &mut CList<project::Sample, Option<SampleSampleData>>,
+fn find_tuning_freq_for_sample_source(
+    source: &SourcePathBuf,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    match source.extension() {
+        Some(WAV_EXTENSION) => sample_analyser::find_tuning_freq_for_wav(
+            sample_file_cache.load_wav_file(source).as_ref().ok()?,
+            None,
+        ),
+        Some(BRR_EXTENSION) => find_tuning_freq_for_brr_file(source, sample_file_cache),
+        _ => None,
+    }
+}
+
+fn find_tuning_freq_for_sample(
+    input: &project::BrrSample,
+    brr_sample_data: Option<&brr::BrrSample>,
+    sample_file_cache: &mut SampleFileCache,
+) -> Option<f64> {
+    match &input.source {
+        project::BrrSampleSource::WaveFile(s) => sample_analyser::find_tuning_freq_for_wav(
+            sample_file_cache.load_wav_file(&s.source).as_ref().ok()?,
+            s.settings.loop_point,
+        ),
+
+        project::BrrSampleSource::BrrFile(s) => match brr_sample_data {
+            Some(b) => sample_analyser::find_tuning_freq_for_brr(b),
+            None => find_tuning_freq_for_brr_file(&s.source, sample_file_cache),
+        },
+    }
+}
+
+fn analyse_sample(
+    id: ItemId,
+    input: &project::BrrSample,
+    brr_sample_data: &brr::BrrSample,
+    sample_file_cache: &mut SampleFileCache,
+    fft_settings: &FftSettings,
+    sender: &Sender,
+) {
+    let w = match &input.source {
+        project::BrrSampleSource::WaveFile(s) => {
+            sample_file_cache.load_wav_file(&s.source).as_ref().ok()
+        }
+        project::BrrSampleSource::BrrFile(_) => None,
+    };
+
+    let s = sample_analyser::analyse_sample(brr_sample_data, w, fft_settings);
+    sender.send(CompilerOutput::SampleAnalysis(id, Some(s)));
+}
+
+fn analyse_selected_sample(
+    fft_settings: &FftSettings,
+    brr_samples: &CList<project::BrrSample, SampleState>,
     sample_file_cache: &mut SampleFileCache,
     sender: &Sender,
 ) {
-    let c = create_instrument_compiler(sample_file_cache, sender);
-    instruments.recompile_all(c);
+    if let Some(id) = fft_settings.selected_sample_id() {
+        if let Some((item, state)) = brr_samples.get_input_and_output_for_id(&id) {
+            match state.brr_data() {
+                Some(s) => analyse_sample(id, item, s, sample_file_cache, fft_settings, sender),
+                None => sender.send(CompilerOutput::SampleAnalysis(id, None)),
+            }
+        }
+    }
+}
 
-    let c = create_sample_compiler(sample_file_cache, sender);
+fn compile_all_samples(
+    samples: &mut CList<project::BrrSample, SampleState>,
+    sample_file_cache: &mut SampleFileCache,
+    fft_settings: &FftSettings,
+    sender: &Sender,
+) {
+    let c = create_sample_compiler(sample_file_cache, fft_settings, sender);
     samples.recompile_all(c);
 }
 
@@ -1450,12 +1511,13 @@ fn bg_thread(
     let mut sfx_export_order = Arc::new(sfx_eo.clone());
 
     let mut pf_songs = IList::new();
-    let mut instruments = CList::new();
-    let mut samples = CList::new();
+    let mut brr_samples = CList::new();
     let mut sfx_subroutines_mml = SfxSubroutinesMml(String::new());
     let mut sfx_subroutines = None;
     let mut sound_effects = CList::new();
     let mut songs = SongCompiler::new(parent_path.clone());
+
+    let mut fft_settings = FftSettings::default();
 
     let mut sample_file_cache = SampleFileCache::new(parent_path);
 
@@ -1463,7 +1525,7 @@ fn bg_thread(
     let mut cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>> = None;
     let mut cad_no_sfx: Option<Arc<CommonAudioDataNoSfx>> = None;
 
-    let mut inst_sample_names = Arc::default();
+    let mut sample_names = Arc::default();
 
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
@@ -1482,16 +1544,15 @@ fn bg_thread(
                 songs.replace_all_and_load_songs(&p.pf_songs);
 
                 pf_songs.replace_all(p.pf_songs);
-                instruments.replace_all(p.instruments);
-                samples.replace_all(p.samples);
+                brr_samples.replace_all(p.brr_samples);
 
                 sfx_export_order = Arc::new(sfx_eo.clone());
-                inst_sample_names = instrument_and_sample_names(&instruments, &samples);
+                sample_names = instrument_and_sample_names(&brr_samples);
 
                 compile_all_samples(
-                    &mut instruments,
-                    &mut samples,
+                    &mut brr_samples,
                     &mut sample_file_cache,
+                    &fft_settings,
                     &sender,
                 );
 
@@ -1509,9 +1570,9 @@ fn bg_thread(
             ToCompiler::ClearSampleCacheAndRebuild => {
                 sample_file_cache.clear_cache();
                 compile_all_samples(
-                    &mut instruments,
-                    &mut samples,
+                    &mut brr_samples,
                     &mut sample_file_cache,
+                    &fft_settings,
                     &sender,
                 );
 
@@ -1534,36 +1595,21 @@ fn bg_thread(
                 songs.process_pf_song_message(&m, &pf_songs, &song_dependencies, &sender);
                 pf_songs.process_message(m);
             }
-            ToCompiler::Instrument(m) => {
-                let name_changed = instruments.item_changes_name(&m);
+            ToCompiler::BrrSample(m) => {
+                let name_changed = brr_samples.item_changes_name(&m);
 
-                let c = create_instrument_compiler(&mut sample_file_cache, &sender);
-                instruments.process_message(m, c);
-
-                if name_changed {
-                    inst_sample_names = instrument_and_sample_names(&instruments, &samples);
-                }
-                song_dependencies = None;
-                pending_combine_samples = true;
-            }
-            ToCompiler::Sample(m) => {
-                let name_changed = samples.item_changes_name(&m);
-
-                let c = create_sample_compiler(&mut sample_file_cache, &sender);
-                samples.process_message(m, c);
+                let c = create_sample_compiler(&mut sample_file_cache, &fft_settings, &sender);
+                brr_samples.process_message(m, c);
 
                 if name_changed {
-                    inst_sample_names = instrument_and_sample_names(&instruments, &samples);
+                    sample_names = instrument_and_sample_names(&brr_samples);
                 }
                 song_dependencies = None;
                 pending_combine_samples = true;
             }
             ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
-                let c = create_instrument_compiler(&mut sample_file_cache, &sender);
-                instruments.recompile_all_if(c, |inst| inst.source == source_path);
-
-                let c = create_sample_compiler(&mut sample_file_cache, &sender);
-                samples.recompile_all_if(c, |inst| inst.source == source_path);
+                let c = create_sample_compiler(&mut sample_file_cache, &fft_settings, &sender);
+                brr_samples.recompile_all_if(c, |inst| inst.source_path() == Some(&source_path));
 
                 song_dependencies = None;
                 pending_combine_samples = true;
@@ -1696,14 +1742,16 @@ fn bg_thread(
                     };
                 }
             }
-            ToCompiler::PlayInstrument(id, args) => {
-                if let Some((c_data, s_data)) = build_play_instrument_data(&instruments, id, args) {
+            ToCompiler::PlaySample(id, args) => {
+                if let Some((c_data, s_data)) = build_play_sample_data(&brr_samples, id, args) {
                     sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
                 }
             }
-            ToCompiler::PlaySample(id, args) => {
-                if let Some((c_data, s_data)) = build_play_sample_data(&samples, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
+            ToCompiler::PlaySampleAt32Khz(id) => {
+                if let Some(s) = brr_samples.get_output_for_id(&id) {
+                    if let Some(s) = s.share_brr_data() {
+                        sender.send_audio(AudioMessage::PlayBrrSampleAt32Khz(s));
+                    }
                 }
             }
 
@@ -1716,15 +1764,28 @@ fn bg_thread(
                 sample_file_cache.remove_path(&source_path);
             }
 
-            ToCompiler::AnalyseSample(source_path, loop_setting, evaluator, fft_settings) => {
-                let r = analyse_sample(
+            ToCompiler::FindSampleTuning(id) => {
+                if let Some((input, out)) = brr_samples.get_input_and_output_for_id(&id) {
+                    if let Some(f) =
+                        find_tuning_freq_for_sample(input, out.brr_data(), &mut sample_file_cache)
+                    {
+                        sender.send(CompilerOutput::SampleTuningFrequency(id, f));
+                    }
+                }
+            }
+            ToCompiler::FindNewSampleFileTuning(source) => {
+                let f = find_tuning_freq_for_sample_source(&source, &mut sample_file_cache);
+                sender.send(CompilerOutput::NewSampleFileTuningFrequency(source, f));
+            }
+
+            ToCompiler::SampleAnalyserSettingsChanged(new_settings) => {
+                fft_settings = new_settings;
+                analyse_selected_sample(
+                    &fft_settings,
+                    &brr_samples,
                     &mut sample_file_cache,
-                    source_path,
-                    loop_setting,
-                    evaluator,
-                    fft_settings,
+                    &sender,
                 );
-                sender.send(CompilerOutput::SampleAnalysis(r));
             }
         }
 
@@ -1735,9 +1796,8 @@ fn bg_thread(
             pending_combine_samples = false;
 
             match build_cad_no_sfx_and_song_dependencies(
-                &instruments,
-                &samples,
-                &inst_sample_names,
+                &brr_samples,
+                &sample_names,
                 &sfx_export_order,
                 &sfx_subroutines,
                 &sound_effects,
@@ -1774,7 +1834,7 @@ fn bg_thread(
 
             match build_common_data_with_sfx_buffer(
                 &song_dependencies,
-                &inst_sample_names,
+                &sample_names,
                 &sfx_subroutines,
             ) {
                 Some(Ok(c)) => {
@@ -1803,7 +1863,7 @@ fn bg_thread(
 
             let (cad, sfx_data_size) = build_common_audio_data_with_sfx(
                 &song_dependencies,
-                &inst_sample_names,
+                &sample_names,
                 &sfx_export_order,
                 &sfx_subroutines,
                 &sound_effects,

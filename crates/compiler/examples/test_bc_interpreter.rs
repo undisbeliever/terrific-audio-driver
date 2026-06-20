@@ -405,7 +405,7 @@ fn main() {
             &mml_file.contents,
             &mml_file.file_name,
             Some(song.name.clone()),
-            &project.instruments_and_samples,
+            &project.brr_samples,
             samples.pitch_table(),
         )
         .unwrap();

@@ -17,7 +17,7 @@ use compiler::envelope::{Envelope, Gain};
 use compiler::identifier::Name;
 use compiler::notes::Octave;
 use compiler::project;
-use compiler::project::{validate_sfx_export_order, DefaultSfxFlags, Instrument};
+use compiler::project::{validate_sfx_export_order, DefaultSfxFlags};
 use compiler::samples::combine_samples;
 use compiler::sound_effects::{
     combine_sound_effects, compile_sfx_subroutines, compile_sound_effect_input, SfxFlags,
@@ -500,30 +500,25 @@ fn test_emu() -> Emu {
 
 // Should only be called once
 fn _build_test_common_audio_data() -> CommonAudioData {
-    let samples = combine_samples([].as_slice(), [].as_slice()).unwrap();
+    let samples = combine_samples([].as_slice()).unwrap();
     let pitch_table = samples.pitch_table();
 
-    // Required to prevent a `ProjectFileErrors([InstrumentOrSample(Empty)])` error
-    let dummy_instrument = Instrument {
+    // Required to prevent a `ProjectFileErrors([BrrSample(Empty)])` error
+    let dummy_instrument = project::BrrSample {
         name: Name::from_str("__dummy").unwrap(),
-        source: Default::default(),
-        freq: 500.0,
-        loop_setting: project::LoopSetting::None,
-        evaluator: Default::default(),
+        source: project::BrrSampleSource::BrrFile(Default::default()),
         ignore_gaussian_overflow: false,
-        note_range: project::InstrumentNoteRange::Octave {
+        pitches: Some(project::BrrSamplePitches::Octaves {
+            tuning: project::SampleTuning::Frequency(500.0),
             first: Octave::try_new(2).unwrap(),
             last: Octave::try_new(5).unwrap(),
-        },
+        }),
         envelope: Envelope::Gain(Gain::new(127)),
-        comment: None,
+        comment: Default::default(),
     };
 
-    let instruments_and_samples = project::validate_instrument_and_sample_names(
-        [dummy_instrument].iter(),
-        std::iter::empty(),
-    )
-    .unwrap();
+    let instruments_and_samples =
+        project::validate_brr_sample_names(vec![dummy_instrument]).unwrap();
 
     let subroutines = compile_sfx_subroutines(
         &SfxSubroutinesMml(String::new()),

@@ -139,7 +139,7 @@ fn compile_sound_effects(
                 Ok(sfx_file) => {
                     match sound_effects::compile_sound_effects_file(
                         &sfx_file,
-                        &pf.instruments_and_samples,
+                        &pf.brr_samples,
                         pitch_table,
                     ) {
                         Err(e) => {
@@ -281,7 +281,7 @@ fn compile_song(
         &mml_file.contents,
         &mml_file.file_name,
         song_name,
-        &pf.instruments_and_samples,
+        &pf.brr_samples,
         pitch_table,
     ) {
         Ok(mml) => mml,
@@ -302,7 +302,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.project_file);
     let (mml_file, song_name) = load_mml_file(&args.song, &pf);
 
-    let pitch_table = match build_pitch_table(&pf.instruments_and_samples) {
+    let pitch_table = match build_pitch_table(&pf.brr_samples) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -537,7 +537,7 @@ fn compile_and_check_song(
         &mml_file.contents,
         &mml_file.file_name,
         Some(song.name.clone()),
-        &pf.instruments_and_samples,
+        &pf.brr_samples,
         pitch_table,
     ) {
         Ok(mml) => mml,

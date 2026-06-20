@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{ItemId, ToCompiler};
+use crate::drag_and_drop::DroppedFilePath;
 use crate::list_editor::ListMessage;
 use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
@@ -14,6 +15,7 @@ use compiler::identifier::Name;
 use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
 use compiler::project;
 use compiler::project::{ProjectFile, Song};
+use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use compiler::sfx_file::{build_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
 use compiler::textfile::{load_text_file_with_limit, TextFile, MAX_FILE_SIZE};
 
@@ -103,6 +105,13 @@ fn show_and_validate_pf_file_dialog_output(
         }
     }
 
+    validate_pf_file_path(path, pd)
+}
+
+fn validate_pf_file_path(path: PathBuf, pd: &ProjectData) -> PfFileDialogState {
+    #[cfg(windows)]
+    let mut path = path;
+
     if !path.is_absolute() {
         return PfFileDialogState::Error("path is not absolute".to_owned());
     }
@@ -172,7 +181,17 @@ fn pf_open_file_dialog(
         }
     };
 
-    match show_and_validate_pf_file_dialog_output(dialog, pd, None) {
+    let o = show_and_validate_pf_file_dialog_output(dialog, pd, None);
+
+    check_open_file_dialog_state(o, pd, filter)
+}
+
+fn check_open_file_dialog_state(
+    o: PfFileDialogState,
+    pd: &ProjectData,
+    filter: &str,
+) -> Option<PfFileDialogResult> {
+    match o {
         PfFileDialogState::Cancelled => None,
         PfFileDialogState::Error(msg) => {
             dialog::message_title("Error");
@@ -535,72 +554,86 @@ pub fn add_song_to_pf_dialog(
     }
 }
 
-fn open_sample_dialog(
+fn sample_file_dialog(
+    title: &str,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-    source: &SourcePathBuf,
+    source: Option<&SourcePathBuf>,
 ) -> Option<SourcePathBuf> {
-    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(source)) {
+    if let Some(p) = pf_open_file_dialog(pd, title, SAMPLE_FILTERS, source) {
         let new_source = p.source_path;
 
         // Remove the previous and new files from sample cache to ensure any file changes are loaded
-        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(source.clone()));
+        if let Some(s) = source {
+            let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(s.clone()));
+        }
         let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(new_source.clone()));
 
-        // The sample might be used by more than one instrument.
+        // The file might be used by more than one sample.
         // Recompile all instruments that use the sample file.
         // Will also recompile this instrument/sample if `source` was unchanged.
         let _ = compiler_sender.send(ToCompiler::RecompileInstrumentsUsingSample(
             new_source.clone(),
         ));
 
-        if source != &new_source {
-            Some(new_source)
-        } else {
-            None
-        }
+        // Always send a `SetSampleFilename` message
+        Some(new_source)
     } else {
         None
     }
 }
 
-pub fn open_instrument_sample_dialog(
+pub fn open_sample_file_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     id: ItemId,
 ) {
-    let inst = match pd.instruments().get_id(id) {
-        Some((_, inst)) => inst,
-        None => return,
-    };
-
-    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &inst.source) {
-        let new_inst = project::Instrument {
-            source: new_source,
-            ..inst.clone()
-        };
-        sender.send(GuiMessage::EditInstrument(id, new_inst));
+    if let Some((_, s)) = pd.brr_samples.get_id(id) {
+        if let Some(new_source) =
+            sample_file_dialog("Select sample", compiler_sender, pd, s.source_path())
+        {
+            sender.send(GuiMessage::SetSampleFilename(id, new_source));
+        }
     }
 }
 
-pub fn open_sample_sample_dialog(
-    sender: &fltk::app::Sender<GuiMessage>,
+pub fn open_new_sample_file_dialog(
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-    id: ItemId,
-) {
-    let sample = match pd.samples().get_id(id) {
-        Some((_, s)) => s,
-        None => return,
-    };
+) -> Option<SourcePathBuf> {
+    sample_file_dialog("Select new sample", compiler_sender, pd, None)
+}
 
-    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &sample.source) {
-        let new_sample = project::Sample {
-            source: new_source,
-            ..sample.clone()
-        };
-        sender.send(GuiMessage::EditSample(id, new_sample));
+pub fn sample_source_from_dropped_file(
+    droped_file: DroppedFilePath,
+    compiler_sender: &mpsc::Sender<ToCompiler>,
+    pd: &ProjectData,
+) -> Option<SourcePathBuf> {
+    let path = droped_file.take_path();
+
+    if path
+        .extension()
+        .is_some_and(|ext| ext == WAV_EXTENSION || ext == BRR_EXTENSION)
+        && path.exists()
+    {
+        let ds = validate_pf_file_path(path, pd);
+        match check_open_file_dialog_state(ds, pd, SAMPLE_FILTERS) {
+            Some(p) => {
+                let _ = compiler_sender
+                    .send(ToCompiler::RemoveFileFromSampleCache(p.source_path.clone()));
+
+                // The file might be used by more than one sample.
+                let _ = compiler_sender.send(ToCompiler::RecompileInstrumentsUsingSample(
+                    p.source_path.clone(),
+                ));
+
+                Some(p.source_path)
+            }
+            None => None,
+        }
+    } else {
+        None
     }
 }
 

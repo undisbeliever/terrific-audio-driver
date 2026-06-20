@@ -10,7 +10,7 @@ use crate::command_compiler::analysis::{TransposeRange, TransposeStartRange};
 use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
-    FIR_FILTER_SIZE, MAX_INSTRUMENTS_AND_SAMPLES,
+    FIR_FILTER_SIZE, MAX_BRR_SAMPLES,
 };
 use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
@@ -19,7 +19,7 @@ use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
-use crate::project::{self, InstrumentOrSample, UniqueNamesList};
+use crate::project::{self, BrrSamplePitches, UniqueNamesList};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -406,7 +406,7 @@ u8_value_newtype!(
     InstrumentIdOutOfRange,
     NoInstrumentId,
     0,
-    (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
+    (MAX_BRR_SAMPLES - 1) as u8
 );
 
 impl StackDepth {
@@ -1451,7 +1451,7 @@ pub struct Bytecode<'a> {
     context: BytecodeContext,
     bytecode: Vec<u8>,
 
-    instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
+    instruments: &'a UniqueNamesList<project::BrrSample>,
     pitch_table: &'a PitchTable,
     subroutines: &'a CompiledSubroutines,
     subroutin_name_map: &'a dyn SubroutineNameMap,
@@ -1469,7 +1469,7 @@ pub struct Bytecode<'a> {
 impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
-        instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
+        instruments: &'a UniqueNamesList<project::BrrSample>,
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
@@ -1492,7 +1492,7 @@ impl<'a> Bytecode<'a> {
     pub fn new_append_to_vec(
         vec: Vec<u8>,
         context: BytecodeContext,
-        instruments: &'a UniqueNamesList<project::InstrumentOrSample>,
+        instruments: &'a UniqueNamesList<project::BrrSample>,
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
@@ -1581,7 +1581,7 @@ impl<'a> Bytecode<'a> {
         &self.state
     }
 
-    pub fn get_instrument(&self) -> Option<&InstrumentOrSample> {
+    pub fn get_instrument(&self) -> Option<&project::BrrSample> {
         self.state
             .instrument
             .instrument_id()
@@ -2139,18 +2139,21 @@ impl<'a> Bytecode<'a> {
         }
 
         match self.instruments.get_index(id.as_u8().into()) {
-            Some(InstrumentOrSample::Instrument(i)) => {
-                let (pto, range) = self.pitch_table.instrument_pto_and_note_range(id);
+            Some(s) => match &s.pitches {
+                Some(BrrSamplePitches::Notes { tuning, .. })
+                | Some(BrrSamplePitches::Octaves { tuning, .. }) => {
+                    let (pto, range) = self.pitch_table.instrument_pto_and_note_range(id);
 
-                self.state.instrument = InstrumentState::Hint(id, range);
-                self.state.instrument_tuning = Some(pto);
-                self.state.instrument_hint =
-                    Some((id, envelope, InstrumentHintFreq::from_instrument(i)));
-                Ok(())
-            }
-            Some(InstrumentOrSample::Sample(_)) => {
-                Err(ChannelError::CannotSetInstrumentHintForSample)
-            }
+                    self.state.instrument = InstrumentState::Hint(id, range);
+                    self.state.instrument_tuning = Some(pto);
+                    self.state.instrument_hint =
+                        Some((id, envelope, InstrumentHintFreq::from_tuning(tuning)));
+                    Ok(())
+                }
+                Some(BrrSamplePitches::SampleRates { .. }) | None => {
+                    Err(ChannelError::CannotSetInstrumentHintNoTuning)
+                }
+            },
             None => Err(ChannelError::CannotSetInstrumentHintForUnknown),
         }
     }
@@ -2166,7 +2169,7 @@ impl<'a> Bytecode<'a> {
         self._set_state_instrument_and_note_range(instrument);
 
         self.state.envelope = match self.instruments.get_index(instrument.as_u8().into()) {
-            Some(i) => IeState::Known(i.envelope()),
+            Some(i) => IeState::Known(i.envelope),
             None => IeState::Unknown,
         };
 
@@ -2743,20 +2746,23 @@ impl<'a> Bytecode<'a> {
             match old_instrument {
                 InstrumentState::Known(id, _) | InstrumentState::Hint(id, _) => {
                     match self.instruments.get_index(id.as_u8().into()) {
-                        Some(InstrumentOrSample::Instrument(i)) => {
-                            let inst_freq = InstrumentHintFreq::from_instrument(i);
-                            if sub_hint_freq != inst_freq {
-                                return Err(
-                                    BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
-                                        subroutine: sub_hint_freq,
-                                        instrument: inst_freq,
-                                    },
-                                );
+                        Some(s) => match &s.pitches {
+                            Some(BrrSamplePitches::Notes { tuning, .. })
+                            | Some(BrrSamplePitches::Octaves { tuning, .. }) => {
+                                let inst_freq = InstrumentHintFreq::from_tuning(tuning);
+                                if sub_hint_freq != inst_freq {
+                                    return Err(
+                                        BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+                                            subroutine: sub_hint_freq,
+                                            instrument: inst_freq,
+                                        },
+                                    );
+                                }
                             }
-                        }
-                        Some(InstrumentOrSample::Sample(_)) => {
-                            return Err(BytecodeError::SubroutineInstrumentHintSampleMismatch);
-                        }
+                            Some(BrrSamplePitches::SampleRates { .. }) | None => {
+                                return Err(BytecodeError::SubroutineInstrumentHintNoTuning);
+                            }
+                        },
                         None => return Err(BytecodeError::SubroutineInstrumentHintNoInstrumentSet),
                     }
                 }

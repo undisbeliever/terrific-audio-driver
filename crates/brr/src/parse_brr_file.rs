@@ -70,6 +70,10 @@ impl ValidBrrFile {
         &self.brr_data
     }
 
+    pub fn requires_loop_offset(&self) -> bool {
+        self.loop_flag && self.loop_offset.is_none()
+    }
+
     /// If loop_point is Some and the BRR File contains a loop header, loop_point will override
     /// the BRR loop header.
     pub fn into_brr_sample(

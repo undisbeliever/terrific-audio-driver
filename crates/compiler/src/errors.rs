@@ -20,9 +20,9 @@ use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
 use crate::driver_constants::{
-    addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
-    MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
+    addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_BRR_SAMPLES,
+    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_N_SONGS, MAX_SFX_SUBROUTINES, MAX_SONG_DATA_SIZE,
+    MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
 use crate::echo::{
     EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap, MAX_FIR_ABS_SUM,
@@ -39,7 +39,6 @@ use crate::path::PathString;
 use crate::pitch_table::{
     InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate, MAX_N_PITCHES,
 };
-use crate::project::LoopSetting;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
@@ -78,11 +77,9 @@ pub enum UniqueNameListError {
 
 #[derive(Debug)]
 pub enum ProjectFileError {
-    Instrument(UniqueNameListError),
-    Sample(UniqueNameListError),
+    BrrSample(UniqueNameListError),
     SoundEffect(UniqueNameListError),
     Song(UniqueNameListError),
-    InstrumentOrSample(UniqueNameListError),
 }
 
 #[derive(Debug)]
@@ -140,6 +137,7 @@ pub enum ValueError {
 
     CannotConvertPitchFrequency(PlayPitchFrequency, u32),
     CannotConvertPitchFrequencySample,
+    CannotConvertPitchFrequencyNoPitches,
     CannotConvertPitchFrequencyUnknownInstrument,
 
     PxPanOutOfRange(i32),
@@ -373,7 +371,7 @@ pub enum BytecodeError {
         transpose: RangeInclusive<i8>,
         inst_range: RangeInclusive<Note>,
     },
-    SubroutineInstrumentHintSampleMismatch,
+    SubroutineInstrumentHintNoTuning,
     SubroutineInstrumentHintNoInstrumentSet,
 
     MissingEndLoopInAsmBlock,
@@ -450,13 +448,11 @@ pub enum BrrError {
     IoError(std::sync::Arc<(PathString, io::Error)>),
     WaveFileError(std::sync::Arc<(PathString, brr::WavError)>),
 
+    NoFilename,
     UnknownFileType(PathString),
     BrrEncodeError(PathString, brr::EncodeError),
     BrrParseError(PathString, brr::ParseError),
     FileTooLarge(PathString),
-
-    InvalidLoopSettingWav(LoopSetting),
-    InvalidLoopSettingBrr(LoopSetting),
 
     GaussianOverflowDetected,
 }
@@ -467,23 +463,17 @@ pub struct SampleError {
     pub pitch_error: Option<PitchError>,
 }
 
-#[derive(Debug)]
-pub enum TaggedSampleError {
-    Instrument(usize, Name, SampleError),
-    Sample(usize, Name, SampleError),
-}
-
+// ::TODO remove::
 #[derive(Debug)]
 pub struct SampleAndInstrumentDataError {
-    pub sample_errors: Vec<TaggedSampleError>,
+    pub sample_errors: Vec<(usize, Name, SampleError)>,
     pub pitch_table_error: Option<PitchTableError>,
 }
 
 #[derive(Debug)]
 pub enum CommonAudioDataError {
-    // ::TODO remove::
-    TooManyInstrumentsAndSamples(usize),
     TooManyBrrSamples(usize),
+    TooManyDirEntries(usize),
     TooManySfxSubroutines(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
@@ -500,8 +490,9 @@ pub struct SfxCannotFitInSfxBuffer();
 
 #[derive(Debug)]
 pub enum PitchError {
-    SampleRateTooHigh,
-    SampleRateTooLow,
+    NoPitchTableData,
+    TuningFrequencyTooHigh,
+    TuningFrequencyTooLow,
     FirstOctaveGreaterThanLastOctave,
     FirstNoteGreaterThanLastNote,
     FirstOctaveTooLow(RangeInclusive<u8>),
@@ -672,7 +663,7 @@ pub enum ChannelError {
     InstrumentHintAlreadySet,
     InstrumentHintOnlyAllowedInSubroutines,
     InstrumentHintInstrumentAlreadySet,
-    CannotSetInstrumentHintForSample,
+    CannotSetInstrumentHintNoTuning,
     CannotSetInstrumentHintForUnknown,
 
     // Bytecode assembler errors
@@ -847,9 +838,7 @@ fn fmt_unique_name_list_error(
 impl Display for ProjectFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
-            Self::Sample(e) => fmt_unique_name_list_error(f, e, "sample"),
-            Self::InstrumentOrSample(e) => fmt_unique_name_list_error(f, e, "instrument or sample"),
+            Self::BrrSample(e) => fmt_unique_name_list_error(f, e, "brr sample"),
             Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
             Self::Song(e) => fmt_unique_name_list_error(f, e, "song"),
         }
@@ -1004,6 +993,12 @@ impl Display for ValueError {
             }
             Self::CannotConvertPitchFrequencySample => {
                 write!(f, "cannot convert frequency to VxPITCH: @ is a sample")
+            }
+            Self::CannotConvertPitchFrequencyNoPitches => {
+                write!(
+                    f,
+                    "cannot convert frequency to VxPITCH: instrument has no tuning"
+                )
             }
             Self::CannotConvertPitchFrequencyUnknownInstrument => {
                 write!(f, "cannot convert frequency to VxPITCH: unknown instrument")
@@ -1576,9 +1571,9 @@ impl Display for BytecodeError {
             } => {
                 write!(f, "subroutine instrument hint frequency ({sub_freq}) does not match current instrument ({inst_freq})")
             }
-            Self::SubroutineInstrumentHintSampleMismatch => write!(
+            Self::SubroutineInstrumentHintNoTuning => write!(
                 f,
-                "subroutine has an instrument hint and the current instrument is a sample"
+                "subroutine has an instrument hint the current instrument has no tuning (ie, cannot play notes)"
             ),
             Self::SubroutineInstrumentHintNoInstrumentSet => write!(
                 f,
@@ -1696,17 +1691,11 @@ impl Display for BrrError {
             Self::IoError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
             Self::WaveFileError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
 
+            Self::NoFilename => write!(f, "no filename"),
             Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p),
             Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p, e),
             Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p, e),
             Self::FileTooLarge(p) => write!(f, "file too large: {}", p),
-
-            Self::InvalidLoopSettingWav(ls) => {
-                write!(f, "cannot use {} on wav files", ls.serialier_value())
-            }
-            Self::InvalidLoopSettingBrr(ls) => {
-                write!(f, "cannot use {} on brr files", ls.serialier_value())
-            }
 
             Self::GaussianOverflowDetected => {
                 write!(
@@ -1721,15 +1710,15 @@ impl Display for BrrError {
 impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::TooManyInstrumentsAndSamples(len) => {
+            Self::TooManyBrrSamples(len) => {
+                write!(f, "too many BRR samples ({}, max: {}", len, MAX_BRR_SAMPLES)
+            }
+            Self::TooManyDirEntries(len) => {
                 write!(
                     f,
-                    "too many instruments and samples ({}, max: {}",
-                    len, MAX_INSTRUMENTS_AND_SAMPLES
+                    "too many BRR DIR directroy items ({}, max: {})",
+                    len, MAX_DIR_ITEMS
                 )
-            }
-            Self::TooManyBrrSamples(len) => {
-                write!(f, "too many BRR samples ({}, max: {})", len, MAX_DIR_ITEMS)
             }
             Self::TooManySfxSubroutines(n) => write!(
                 f,
@@ -1761,8 +1750,9 @@ impl Display for SfxCannotFitInSfxBuffer {
 impl Display for PitchError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::SampleRateTooHigh => write!(f, "sample rate too high"),
-            Self::SampleRateTooLow => write!(f, "sample rate too low"),
+            Self::NoPitchTableData => write!(f, "sample has no pitch-table data"),
+            Self::TuningFrequencyTooHigh => write!(f, "tuning frequency is too high"),
+            Self::TuningFrequencyTooLow => write!(f, "tuning frequency is too low"),
             Self::FirstOctaveGreaterThanLastOctave => {
                 write!(f, "first octave must be <= last octave")
             }
@@ -1771,25 +1761,25 @@ impl Display for PitchError {
             }
             Self::FirstOctaveTooLow(r) => write!(
                 f,
-                "first octave too low (instrument tuning can play octaves {} - {})",
+                "first octave too low (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::LastOctaveTooHigh(r) => write!(
                 f,
-                "last octave too high (instrument tuning can play octaves {} - {})",
+                "last octave too high (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::FirstOctaveTooLowLastOctaveTooHigh(r) => write!(
                 f,
-                "first and last octave out of bounds (instrument tuning can play octaves {} - {})",
+                "first and last octave out of bounds (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::InvalidNoteRange(r) => write!(
                 f,
-                "invalid note range (instrument tuning can only play notes {} - {})",
+                "invalid note range (tuning can only play notes {} - {})",
                 r.start().bytecode_argument_display(),
                 r.end().bytecode_argument_display()
             ),
@@ -2104,8 +2094,8 @@ impl Display for ChannelError {
             Self::InstrumentHintInstrumentAlreadySet => {
                 write!(f, "cannot set instrument hint: instrument already set")
             }
-            Self::CannotSetInstrumentHintForSample => {
-                write!(f, "cannot set instrument hint: not an instrument")
+            Self::CannotSetInstrumentHintNoTuning => {
+                write!(f, "cannot set instrument hint: instrument has no tuning")
             }
             Self::CannotSetInstrumentHintForUnknown => {
                 write!(f, "cannot set instrument hint: unknown instrument")
@@ -2437,24 +2427,12 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
 
         writeln!(f, "Error compiling samples")?;
 
-        for e in &error.sample_errors {
-            match e {
-                TaggedSampleError::Instrument(i, n, e) => {
-                    if let Some(e) = &e.brr_error {
-                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
-                    }
-                    if let Some(e) = &e.pitch_error {
-                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
-                    }
-                }
-                TaggedSampleError::Sample(i, n, e) => {
-                    if let Some(e) = &e.brr_error {
-                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
-                    }
-                    if let Some(e) = &e.pitch_error {
-                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
-                    }
-                }
+        for (i, n, e) in &error.sample_errors {
+            if let Some(e) = &e.brr_error {
+                writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+            }
+            if let Some(e) = &e.pitch_error {
+                writeln!(f, "  Instrument {} {}: {}", i, n, e)?
             }
         }
 

@@ -1,57 +1,31 @@
-Instruments
-===========
- * **Source**: A `.wav` or `.brr` file
- * **Frequency**: The frequency of the sample when played at a sample-rate of 32000 Hz
- * **Loop**: Determines how the sample is looped (see *Loop Options* below)
- * **Note range**: The range of notes that can be played with the instrument
- * **Envelope**: The default envelope for the sample (see *Envelopes* section below)
- * **Comment**: A small comment you can add to the instrument
-
-
 Samples
 =======
-Samples do not play notes or octaves.
-Instead, the user supplies a list of sample rates that the sample can be played at.
-
-Samples are treated exactly the same as instruments in MML and bytecode assembly.
-The first sample-rate is Note 0, the second sample-rate is Note 1, etc.
-
- * **Source**: A `.wav` or `.brr` file
- * **Loop**: Determines how the sample is looped (see *Loop Options* below)
- * **Sample Rates**: A list of sample rates that the sample source can be played at
- * **Envelope**: The default envelope for the sample (see *Envelopes* section below)
- * **Comment**: A small comment you can add to the sample
 
 
-Source
-======
+Sample Section
+==============
 
-The terrific audio driver can load instruments and samples from either `.brr` files of 16-bit mono `.wav` files.
+Samples are sourced from 8/16-bit mono `.wav` files or `.brr` files.
 
 
-BRR Files
----------
-`.brr` files are raw BRR files may contain an optional two byte loop-point header.  The file size is
-used to determine if the loop-point header exists or not.
+A single `.wav` and `.brr` file can be dragged + dropped into the Samples list
+(**not** the samples editor) to create new TAD samples.
 
-If the `.brr` file has the loop-flag set but does not have a loop-point header, the loop point
-(multiple of 16) must be manually set.
-
-If the loop-point header exists, it can be overridden.
 
 
 Wave Files
 ----------
 
-The compiler will only accept mono 16-bit uncompressed .wav files.  Cutting, retuning or editing
-sample files is beyond the scope of the program.
+The compiler will only accept mono 8 or 16 bit uncompressed `.wav` files.
+Cutting, returning or editing sample files is beyond the scope of the program.
 
  * WAVE files must be a multiple of 16 samples in size.
  * The loop point must be a multiple of 16 samples.
  * The sample should start at 0 amplitude.
  * Looping samples should be short.
- * Looping sample WAVE files should loop perfectly to prevent clicking, popping or buzzing.
-   This can be achieved by tuning the sample (in a digital audio editor) so its wavelength is a multiple of 16.
+ * Looping sample WAVE files should loop perfectly to prevent clicking, popping
+   or buzzing.  This can be achieved by tuning the sample (in a digital audio
+   editor) so its wavelength is a multiple of 16.  
    Example tuning frequencies include (when played back at 32000Hz):
      * 2000 Hz (16 wavelength)
      * 1000 Hz (32 wavelength)
@@ -61,54 +35,116 @@ sample files is beyond the scope of the program.
      * 333.3 Hz (96 wavelength)
      * 250 Hz (128 wavelength)
 
-### Loop Options
 
-The first Combo-Box is the loop type:
+Loop Options:
 
- * None:  The sample will not loop.
- * Loop:  The sample at the given sample point (multiple of 16).
-   The BRR filter is not reset at the loop point.  The sample might not loop perfectly, causing either
-   low-frequency noise or glitches.
- * Dupe Block Hack:  Duplicates `N` blocks to the end of the sample in an attempt to increase the
-   quality of the first-looping BRR block.
+ * **Loop point**: The loop point in samples (must be a multiple of 16).
+ * **Loop filter**: The BRR filter to use at loop point.
+    * Reset:  The BRR filter is reset to 0 at the loop point,
+      ensuring the sample loops perfectly.
+    * Auto:  The best BRR filter at the loop point is used.
+       * The last BRR block is not tested when determining the loop point BRR filter.
+       * The sample might not loop perfectly, causing either low-frequency noise
+         or glitches.
+    * BRR Filter 1/2/3:  Force the BRR filter at the loop point.
+       * This allows the user to override the BRR filter at the loop point,
+         which might create a better sounding sample.
+       * The sample might not loop perfectly, causing either low-frequency noise
+         or glitches.
+ * **Dupe block hack**: Duplicates `N` blocks to the end of the sample in an
+   attempt to improve the quality of the looping BRR block.
     * This increases the sample size by 9 bytes per block.
-    * The filter will not be reset at the loop point.
-    * Most samples created with this hack will not loop perfectly, which can add low-frequency
-      oscillation or noise to the sample.
+    * Cannot be used with the "Reset filter" loop filter.
+    * Most samples created with this hack will not loop perfectly, which can add
+      low-frequency oscillation or noise to the sample.
     * This option may create a glitched sample, hence the name dupe block hack.
 
 
-The second Combo-Box is the BRR filter at the loop point:
+Encoder settings:
 
-  * Reset:  The BRR filter is reset to 0 at the loop point.  This will ensure the sample loops perfectly.
-  * Auto:  The best BRR filter at the loop point is used.
-    * The last BRR block is not tested when determining the loop point BRR filter.
-    * The sample might not loop perfectly, causing either low-frequency noise or glitches.
-  * BRR Filter 1/2/3:  Force the BRR filter at the loop point.
-    * This allows the user to override the BRR filter at the loop point, which might create a better sounding sample.
-    * The sample might not loop perfectly, causing either low-frequency noise or glitches.
+ * **Evaluator**: The evaluator to use when scoring BRR filters and nibbles.
+ * **Ignore Gaussian overflow**: Allow glitched Gaussian overflow samples.
 
-
-Sample Frequency
-================
-
-This is the frequency of the instrument when played back at 32000Hz.  It is used to build a pitch
-table containing the sample-rate for every note and instrument that can be played.
+   Samples that contain 3 maximum-negative values in a row can overflow the
+   Gaussian interpolator and create a loud pop.  TAD normally forbids these
+   samples but the overflow test can be ignored for glitch samples that
+   intentionally exploit the overflow.
 
 
-Note range
-==========
+BRR Files
+---------
 
-These fields will place limits on the notes an instrument can be played at.
+`.brr` files are raw BRR files with an optional two byte loop-point header.
+The file size is used to determine if the loop-point header exists or not.
 
-Instruments played with excessively high note can have aliasing effects, while instruments played
-at an excessively low note can loose detail and precision.
+If the `.brr` file has the loop-flag set and does not have a loop-point header,
+the loop point (in samples) must be manually set.
 
-Limiting an instrument's note range can also reduce the size of the pitch table.
+If the loop-point header exists, it can be overridden.
+
+
+
+Pitches
+=======
+
+In TAD, the `VxPITCH` values (speed to play the BRR sample at) are
+pre-calculated and stored in a pitch table inside the common-audio-data.
+
+TAD supports BRR samples that play notes or sample-rates.
+
+The samples tab includes a test sample widget that can play notes and
+sample-rates to confirm the sample is tuned correctly.
+
+
+Octaves/Notes
+-------------
+
+These settings are for samples that play notes or octaves.
+
+The sample needs to be tuned to calculate the `VxPITCH` values for the range of
+octaves/notes used by the sample.
+
+The tuning frequency is the frequency of the instrument when played back at
+32000Hz.  It is used to build a pitch table containing the `VxPITCH` values for
+every note in the octave/note range.
+
+The samples tab includes a spectrum analyser to assist in selecting the correct
+tuning frequency.
+ * Clicking on the "Use" button will apply the tuning to the sample.
+ * Hovering the mouse will update the "Cursor" and "Cursor Peak" values.
+   Clicking the mouse will freeze the values.
+
+
+### Range
+
+These fields will place limits on the octaves or notes a sample can play.
+
+Samples played with excessively high note can have aliasing effects, while
+samples played at an excessively low note can loose detail and precision.
+
+Some tuning frequencies cannot play all possible notes:
+ * Tuning frequencies < 988Hz cannot play octave 7
+ * Tuning frequencies > 4186Hz cannot play octave 0
+
+Limiting the octave/note range can also reduce the size of the pitch table.
+
+
+Sample Rates
+------------
+
+This setting is intended for samples that are played at a specific sample rate
+(for example: vocal samples, recorded SFX, etc).
+
+Instead of tuning the sample, the user supplies a white-space separated list of
+sample-rates that the sample is played at.
+
+The first sample-rate is Note 0, the second sample-rate is Note 1, etc.
+
 
 
 Envelopes
 =========
+
 
 Adsr
 ----
@@ -131,7 +167,8 @@ The release rate after keyoff is fixed.
 Gain
 ----
 
-The GAIN envelope disables ADSR and writes a 8-bit value to the S-DSP `GAIN` register.
+The GAIN envelope disables ADSR and writes a 8-bit value to the S-DSP `GAIN`
+register.
 
  * `<u8>` (no prefix) - the raw 8 bit value to write to the GAIN register
  * `F<value>` - fixed envelope (0-128)
@@ -139,5 +176,3 @@ The GAIN envelope disables ADSR and writes a 8-bit value to the S-DSP `GAIN` reg
  * `E<rate>` - exponential decrease envelope (0-31)
  * `I<rate>` - linear increase envelope (0-31)
  * `B<rate>` - bent increase envelope (0-31)
-
-
