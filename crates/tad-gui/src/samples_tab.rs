@@ -556,11 +556,56 @@ impl BrrEvaluatorChoice {
     }
 }
 
+// Cannot use `fltk::misc::Spinner`.
+// For some strange reason the value decrements when I press tab.
+// ::TODO figure out why a Spinner does not work::
+struct LoopPointWidget(IntInput);
+
+impl LoopPointWidget {
+    fn new(x: i32, y: i32, width: i32, height: i32, title: &str, tooltip: &str) -> Self {
+        let mut s = IntInput::new(x, y, width, height, title);
+        s.set_tooltip(tooltip);
+
+        Self(s)
+    }
+
+    fn clear_and_deactivate(&mut self) {
+        self.0.set_value("");
+        self.0.deactivate();
+    }
+
+    fn set_active(&mut self, a: bool) {
+        self.0.set_active(a)
+    }
+
+    fn set_value(&mut self, value: Option<SampleNumber>) {
+        match value {
+            Some(v) => self.0.set_value(&v.0.to_string()),
+            None => self.0.set_value(""),
+        }
+    }
+
+    fn read_or_reset(&mut self, old_value: &Option<SampleNumber>) -> Option<SampleNumber> {
+        match self.0.value().parse::<usize>() {
+            Ok(sn) if sn <= 0x10000 => {
+                // Round up to the next multiple of 16
+                let sn = (sn + 15) & !15;
+
+                Some(SampleNumber(sn))
+            }
+            _ => {
+                self.set_value(*old_value);
+                None
+            }
+        }
+    }
+}
+
 struct BrrEncoderSettingsEditor {
     group: Group,
 
     looping_cb: CheckButton,
-    loop_point: IntInput,
+    loop_point: LoopPointWidget,
     loop_filter: Choice,
     dupe_block_hack: IntInput,
 
@@ -573,11 +618,10 @@ impl BrrEncoderSettingsEditor {
         self.group.deactivate();
 
         self.looping_cb.clear();
-        self.loop_point.deactivate();
+        self.loop_point.clear_and_deactivate();
         self.loop_filter.deactivate();
         self.dupe_block_hack.deactivate();
 
-        self.loop_point.set_value("");
         self.loop_filter.set_value(-1);
         self.dupe_block_hack.set_value("");
         self.evaluator.set_value(-1);
@@ -597,7 +641,7 @@ impl BrrEncoderSettingsEditor {
         self.loop_filter.set_active(looping);
         self.dupe_block_hack.set_active(looping);
 
-        InputHelper::set_widget_value(&mut self.loop_point, &value.loop_point);
+        self.loop_point.set_value(value.loop_point);
         self.loop_filter.set_value(match value.loop_filter {
             Some(lf) => LoopFilterChoice::from_data(lf).to_i32(),
             None => -1,
@@ -615,7 +659,7 @@ impl BrrEncoderSettingsEditor {
 
         match self.looping_cb.value() {
             true => {
-                let loop_point = InputHelper::read_or_reset(&mut self.loop_point, &old.loop_point);
+                let loop_point = self.loop_point.read_or_reset(&old.loop_point);
 
                 let mut loop_filter = LoopFilterChoice::read_widget(&self.loop_filter).to_data();
 
@@ -631,7 +675,7 @@ impl BrrEncoderSettingsEditor {
 
                 Some(BrrEncoderSettings {
                     evaluator,
-                    loop_point: Some(loop_point?.unwrap_or(SampleNumber(0))),
+                    loop_point: Some(loop_point.unwrap_or(SampleNumber(0))),
                     loop_filter: Some(loop_filter),
                     dupe_block_hack: dupe_block_hack?.filter(|dbh| dbh.0 != 0),
                 })
@@ -656,7 +700,7 @@ struct BrrSourceEditor {
     group: Group,
 
     looping_cb: CheckButton,
-    override_loop_point: IntInput,
+    override_loop_point: LoopPointWidget,
 
     ignore_gaussian_overflow: CheckButton,
 }
@@ -666,9 +710,7 @@ impl BrrSourceEditor {
         self.group.deactivate();
 
         self.looping_cb.clear();
-        self.override_loop_point.deactivate();
-
-        self.override_loop_point.set_value("");
+        self.override_loop_point.clear_and_deactivate();
 
         self.ignore_gaussian_overflow.set(ignore_gaussian_overflow);
     }
@@ -681,18 +723,17 @@ impl BrrSourceEditor {
         self.looping_cb.set(override_lp);
         self.override_loop_point.set_active(override_lp);
 
-        InputHelper::set_widget_value(&mut self.override_loop_point, &s.loop_point);
+        self.override_loop_point.set_value(s.loop_point);
         self.ignore_gaussian_overflow.set(ignore_gaussian_overflow);
     }
 
     fn read_or_reset(&mut self, old: &BrrSource) -> Option<BrrSampleSource> {
         match self.looping_cb.value() {
             true => {
-                let loop_point =
-                    InputHelper::read_or_reset(&mut self.override_loop_point, &old.loop_point);
+                let loop_point = self.override_loop_point.read_or_reset(&old.loop_point);
 
                 Some(BrrSampleSource::BrrFile(BrrSource {
-                    loop_point: Some(loop_point?.unwrap_or(SampleNumber(0))),
+                    loop_point: Some(loop_point.unwrap_or(SampleNumber(0))),
 
                     // Must be last
                     source: old.source.clone(),
@@ -1246,8 +1287,14 @@ impl BrrSampleEditor {
                 let g = Group::new(0, y, c4 - c0, 6 * r, None);
 
                 let looping_cb = CheckButton::new(c1, y, c4 - c1, h, "Looping sample");
-                let mut loop_point = IntInput::new(c2, y + r, c4 - c2, h, "Loop point: ");
-                loop_point.set_tooltip("Loop point in samples (must be a multiple of 16)");
+                let loop_point = LoopPointWidget::new(
+                    c2,
+                    y + r,
+                    c4 - c2,
+                    h,
+                    "Loop point: ",
+                    "Loop point in samples",
+                );
                 let mut loop_filter = Choice::new(c2, y + 2 * r, c4 - c2, h, "Loop filter: ");
                 loop_filter.set_tooltip("BRR Filter to use at the loop point");
                 loop_filter.add_choice(LoopFilterChoice::CHOICES);
@@ -1289,7 +1336,14 @@ impl BrrSampleEditor {
                 let mut g = Group::new(0, y, c4 - c0, 3 * r, None);
 
                 let override_loop_cb = CheckButton::new(c1, y, c4 - c1, h, "Override loop point");
-                let loop_point = IntInput::new(c2, y + r, c4 - c2, h, "Loop point: ");
+                let override_loop_point = LoopPointWidget::new(
+                    c2,
+                    y + r,
+                    c4 - c2,
+                    h,
+                    "Loop point: ",
+                    "BRR loop point in samples",
+                );
 
                 let ignore_gaussian_overflow =
                     CheckButton::new(c1, y + 2 * r, c4 - c1, h, "Ignore Gaussian overflow");
@@ -1300,7 +1354,7 @@ impl BrrSampleEditor {
                 BrrSourceEditor {
                     group: g,
                     looping_cb: override_loop_cb,
-                    override_loop_point: loop_point,
+                    override_loop_point,
                     ignore_gaussian_overflow,
                 }
             };
@@ -1498,7 +1552,7 @@ impl BrrSampleEditor {
 
             in_callback(&mut editor.name);
             cb_callback(&mut editor.sample_source.wav_settings.looping_cb);
-            it_callback(&mut editor.sample_source.wav_settings.loop_point);
+            it_callback(&mut editor.sample_source.wav_settings.loop_point.0);
             editor.sample_source.wav_settings.loop_filter.set_callback({
                 let o = out.clone();
                 move |_| o.borrow_mut().on_loop_filter_edited()
@@ -1508,7 +1562,7 @@ impl BrrSampleEditor {
             cb_callback(&mut editor.sample_source.wav_settings.ignore_gaussian_overflow);
 
             cb_callback(&mut editor.sample_source.brr_settings.looping_cb);
-            it_callback(&mut editor.sample_source.brr_settings.override_loop_point);
+            it_callback(&mut editor.sample_source.brr_settings.override_loop_point.0);
             cb_callback(&mut editor.sample_source.brr_settings.ignore_gaussian_overflow);
 
             tf_callback(
