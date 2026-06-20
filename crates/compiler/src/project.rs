@@ -47,11 +47,10 @@ impl From<BlockNumber> for brr::BlockNumber {
 //   1. DupeBlockHack cannot be used with loop_point_filter=BrrFilter::Filter0.
 //   2. Simpler JSON format (only 1 fields in `loop_setting`)
 //   3. Backwards compatible with the v0.0.3 LoopSetting serde JSON
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Debug)]
 #[serde(tag = "loop", content = "loop_setting")]
 // ::TODO move and/or rename::
-// ::TODO remove `pub`::
-pub enum LoopSetting {
+enum LoopSetting {
     /// This setting depends on the source file:
     ///     * wav files - The sample does not loop
     ///     * brr files - The sample loops if the brr file has a 2 byte loop header and the loop flag is set.
@@ -116,76 +115,11 @@ pub enum LoopSetting {
     DupeBlockHackFilter3(BlockNumber),
 }
 
-impl LoopSetting {
-    pub fn serialier_value(&self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::OverrideBrrLoopPoint(_) => "override_brr_loop_point",
-            Self::LoopWithFilter(_) => "loop_with_filter",
-            Self::LoopResetFilter(_) => "loop_reset_filter",
-            Self::LoopFilter1(_) => "loop_filter_1",
-            Self::LoopFilter2(_) => "loop_filter_2",
-            Self::LoopFilter3(_) => "loop_filter_3",
-            Self::DupeBlockHack(_) => "dupe_block_hack",
-            Self::DupeBlockHackFilter1(_) => "dupe_block_hack_filter_1)",
-            Self::DupeBlockHackFilter2(_) => "dupe_block_hack_filter_2)",
-            Self::DupeBlockHackFilter3(_) => "dupe_block_hack_filter_3)",
-        }
-    }
-
-    /// Returns true if the argument is loop point in samples
-    pub fn samples_argument(&self) -> bool {
-        match self {
-            Self::OverrideBrrLoopPoint(_)
-            | Self::LoopWithFilter(_)
-            | Self::LoopResetFilter(_)
-            | Self::LoopFilter1(_)
-            | Self::LoopFilter2(_)
-            | Self::LoopFilter3(_) => true,
-
-            Self::None
-            | Self::DupeBlockHack(_)
-            | Self::DupeBlockHackFilter1(_)
-            | Self::DupeBlockHackFilter2(_)
-            | Self::DupeBlockHackFilter3(_) => false,
-        }
-    }
-
-    /// Returns true if LoopSetting is dupe block hack and the argument is number of blocks.
-    pub fn is_dupe_block_hack(&self) -> bool {
-        match self {
-            Self::DupeBlockHack(_)
-            | Self::DupeBlockHackFilter1(_)
-            | Self::DupeBlockHackFilter2(_)
-            | Self::DupeBlockHackFilter3(_) => true,
-
-            Self::None
-            | Self::OverrideBrrLoopPoint(_)
-            | Self::LoopWithFilter(_)
-            | Self::LoopResetFilter(_)
-            | Self::LoopFilter1(_)
-            | Self::LoopFilter2(_)
-            | Self::LoopFilter3(_) => false,
-        }
-    }
-}
-
 // ::TODO move and/or rename::
-#[derive(Serialize, Clone, PartialEq, Debug)]
-#[serde(untagged)]
-pub enum InstrumentNoteRange {
-    Octave {
-        #[serde(rename = "first_octave")]
-        first: Octave,
-        #[serde(rename = "last_octave")]
-        last: Octave,
-    },
-    Note {
-        #[serde(rename = "first_note")]
-        first: Note,
-        #[serde(rename = "last_note")]
-        last: Note,
-    },
+#[derive(Debug)]
+enum InstrumentNoteRange {
+    Octave { first: Octave, last: Octave },
+    Note { first: Note, last: Note },
 }
 
 // Custom deserializer for better error handling
@@ -223,63 +157,51 @@ impl<'de> Deserialize<'de> for InstrumentNoteRange {
 }
 
 // ::TODO move and/or rename::
-// ::TODO remove `pub`::
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-pub struct Instrument {
-    pub name: Name,
+#[derive(Deserialize, Debug)]
+struct Instrument {
+    name: Name,
 
-    pub source: SourcePathBuf,
-    pub freq: f64,
-
-    #[serde(flatten)]
-    pub loop_setting: LoopSetting,
-
-    #[serde(default)]
-    pub evaluator: BrrEvaluator,
-
-    #[serde(default)]
-    pub ignore_gaussian_overflow: bool,
+    source: SourcePathBuf,
+    freq: f64,
 
     #[serde(flatten)]
-    pub note_range: InstrumentNoteRange,
+    loop_setting: LoopSetting,
 
-    pub envelope: Envelope,
+    #[serde(default)]
+    evaluator: BrrEvaluator,
 
-    pub comment: Option<String>,
-}
+    #[serde(default)]
+    ignore_gaussian_overflow: bool,
 
-impl Instrument {
-    pub fn wavelength(&self) -> f64 {
-        crate::pitch_table::SPC_SAMPLE_RATE as f64 / self.freq
-    }
+    #[serde(flatten)]
+    note_range: InstrumentNoteRange,
 
-    pub fn set_wavelength(&mut self, w: f64) {
-        self.freq = crate::pitch_table::SPC_SAMPLE_RATE as f64 / w;
-    }
+    envelope: Envelope,
+
+    comment: Option<String>,
 }
 
 // ::TODO move and/or rename::
-// ::TODO remove `pub`::
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-pub struct Sample {
-    pub name: Name,
+#[derive(Deserialize, Debug)]
+struct Sample {
+    name: Name,
 
-    pub source: SourcePathBuf,
+    source: SourcePathBuf,
 
     #[serde(flatten)]
-    pub loop_setting: LoopSetting,
+    loop_setting: LoopSetting,
 
     #[serde(default)]
-    pub evaluator: BrrEvaluator,
+    evaluator: BrrEvaluator,
 
     #[serde(default)]
-    pub ignore_gaussian_overflow: bool,
+    ignore_gaussian_overflow: bool,
 
-    pub sample_rates: Vec<u32>,
+    sample_rates: Vec<u32>,
 
-    pub envelope: Envelope,
+    envelope: Envelope,
 
-    pub comment: Option<String>,
+    comment: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Copy, PartialEq)]
@@ -785,18 +707,6 @@ pub(crate) trait NameGetter {
 impl NameGetter for Name {
     fn name(&self) -> &Name {
         self
-    }
-}
-
-impl NameGetter for Instrument {
-    fn name(&self) -> &Name {
-        &self.name
-    }
-}
-
-impl NameGetter for Sample {
-    fn name(&self) -> &Name {
-        &self.name
     }
 }
 

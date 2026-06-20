@@ -12,10 +12,7 @@ use crate::pitch_table::{
     brr_sample_pitches, maximize_pitch_note_range, merge_pitch_vec, sort_pitches_iterator,
     PitchTable, SamplePitches,
 };
-use crate::project::{
-    self, BrrEncoderSettings, BrrSamplePitches, Instrument, InstrumentNoteRange,
-    UniqueNamesProjectFile,
-};
+use crate::project::{self, BrrEncoderSettings, BrrSamplePitches, UniqueNamesProjectFile};
 
 use brr::{
     self, parse_brr_file, read_mono_pcm_wave_file, BrrFilter, BrrSample, MonoPcm16WaveFile,
@@ -439,15 +436,6 @@ pub fn build_sample_and_instrument_data(
             error.sample_errors.extend(e);
             Err(error)
         }
-    }
-}
-
-pub fn instrument_note_range(inst: &Instrument) -> RangeInclusive<Note> {
-    match inst.note_range {
-        InstrumentNoteRange::Octave { first, last } => {
-            Note::first_note_for_octave(first)..=Note::last_note_for_octave(last)
-        }
-        InstrumentNoteRange::Note { first, last } => first..=last,
     }
 }
 
