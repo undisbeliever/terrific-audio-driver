@@ -43,167 +43,6 @@ impl From<BlockNumber> for brr::BlockNumber {
     }
 }
 
-// I am including the filter as part of the enum item name for 3 reasons:
-//   1. DupeBlockHack cannot be used with loop_point_filter=BrrFilter::Filter0.
-//   2. Simpler JSON format (only 1 fields in `loop_setting`)
-//   3. Backwards compatible with the v0.0.3 LoopSetting serde JSON
-#[derive(Deserialize, Debug)]
-#[serde(tag = "loop", content = "loop_setting")]
-// ::TODO move and/or rename::
-enum LoopSetting {
-    /// This setting depends on the source file:
-    ///     * wav files - The sample does not loop
-    ///     * brr files - The sample loops if the brr file has a 2 byte loop header and the loop flag is set.
-    #[serde(rename = "none")]
-    None,
-
-    /// The sample is a looping BRR file
-    #[serde(rename = "override_brr_loop_point")]
-    OverrideBrrLoopPoint(SampleNumber),
-
-    /// Loop point in samples.
-    ///
-    /// This mode will not reset the BRR filter at the loop point.  It can create better sounding
-    /// sample, however most samples will not loop perfectly, which can add low-frequency
-    /// oscillation or glitches to the sample.
-    #[serde(rename = "loop_with_filter")]
-    LoopWithFilter(SampleNumber),
-
-    /// Resets the BRR filter at the loop point.
-    ///
-    /// The BRR block after the loop point will always use BRR filter 0, which ensures
-    /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
-    #[serde(rename = "loop_reset_filter")]
-    LoopResetFilter(SampleNumber),
-
-    /// Loop the sample and use BRR filter 1 at the loop-point.
-    /// Argument is loop point in samples.
-    #[serde(rename = "loop_filter_1")]
-    LoopFilter1(SampleNumber),
-
-    /// Loop the sample and use BRR filter 2 at the loop-point.
-    /// Argument is loop point in samples.
-    #[serde(rename = "loop_filter_2")]
-    LoopFilter2(SampleNumber),
-
-    /// Loop the sample and use BRR filter 3 at the loop-point.
-    /// Argument is loop point in samples.
-    #[serde(rename = "loop_filter_3")]
-    LoopFilter3(SampleNumber),
-
-    /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
-    ///  * Increases the sample size by `N * 9` bytes.
-    ///  * This mode will not reset the filter at the loop point.
-    ///  * Most samples created by this hack will not loop perfectly, which adds low-frequency oscillation to the sample.
-    ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
-    #[serde(rename = "dupe_block_hack")]
-    DupeBlockHack(BlockNumber),
-
-    // DupeBlockHack that uses loop-point BRR filter 1.
-    // (See `DupeBlockHack`)
-    #[serde(rename = "dupe_block_hack_filter_1")]
-    DupeBlockHackFilter1(BlockNumber),
-
-    // DupeBlockHack that uses loop-point BRR filter 2.
-    // (See `DupeBlockHack`)
-    #[serde(rename = "dupe_block_hack_filter_2")]
-    DupeBlockHackFilter2(BlockNumber),
-
-    // DupeBlockHack that uses loop-point BRR filter 3.
-    // (See `DupeBlockHack`)
-    #[serde(rename = "dupe_block_hack_filter_3")]
-    DupeBlockHackFilter3(BlockNumber),
-}
-
-// ::TODO move and/or rename::
-#[derive(Debug)]
-enum InstrumentNoteRange {
-    Octave { first: Octave, last: Octave },
-    Note { first: Note, last: Note },
-}
-
-// Custom deserializer for better error handling
-impl<'de> Deserialize<'de> for InstrumentNoteRange {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct T {
-            first_octave: Option<Octave>,
-            last_octave: Option<Octave>,
-            first_note: Option<Note>,
-            last_note: Option<Note>,
-        }
-
-        let tmp = T::deserialize(deserializer)?;
-
-        match (
-            tmp.first_octave,
-            tmp.last_octave,
-            tmp.first_note,
-            tmp.last_note,
-        ) {
-            (Some(first), Some(last), None, None) => Ok(Self::Octave { first, last }),
-            (None, None, Some(first), Some(last)) => Ok(Self::Note { first, last }),
-            (None, None, None, None) => Err(serde::de::Error::custom(
-                "missing `first_octave` & `last_octave` or `first_note` & `last_note` fields",
-            )),
-            _ => Err(serde::de::Error::custom(
-                "invalid instrument note range, cannot combine notes and octaves",
-            )),
-        }
-    }
-}
-
-// ::TODO move and/or rename::
-#[derive(Deserialize, Debug)]
-struct Instrument {
-    name: Name,
-
-    source: SourcePathBuf,
-    freq: f64,
-
-    #[serde(flatten)]
-    loop_setting: LoopSetting,
-
-    #[serde(default)]
-    evaluator: BrrEvaluator,
-
-    #[serde(default)]
-    ignore_gaussian_overflow: bool,
-
-    #[serde(flatten)]
-    note_range: InstrumentNoteRange,
-
-    envelope: Envelope,
-
-    comment: Option<String>,
-}
-
-// ::TODO move and/or rename::
-#[derive(Deserialize, Debug)]
-struct Sample {
-    name: Name,
-
-    source: SourcePathBuf,
-
-    #[serde(flatten)]
-    loop_setting: LoopSetting,
-
-    #[serde(default)]
-    evaluator: BrrEvaluator,
-
-    #[serde(default)]
-    ignore_gaussian_overflow: bool,
-
-    sample_rates: Vec<u32>,
-
-    envelope: Envelope,
-
-    comment: Option<String>,
-}
-
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Copy, PartialEq)]
 pub enum BrrEvaluator {
     #[serde(rename = "default")]
@@ -462,99 +301,6 @@ impl BrrSample {
     }
 }
 
-fn convert_old_source(
-    source: SourcePathBuf,
-    loop_setting: LoopSetting,
-    evaluator: BrrEvaluator,
-) -> BrrSampleSource {
-    match (source.extension(), loop_setting) {
-        (Some(BRR_EXTENSION), LoopSetting::None) => BrrSampleSource::BrrFile(BrrSource {
-            source,
-            loop_point: None,
-        }),
-        (Some(BRR_EXTENSION), LoopSetting::OverrideBrrLoopPoint(lp)) => {
-            BrrSampleSource::BrrFile(BrrSource {
-                source,
-                loop_point: Some(lp),
-            })
-        }
-        (_, loop_setting) => {
-            let (loop_point, loop_filter, dupe_block_hack) = match loop_setting {
-                LoopSetting::None => (None, None, None),
-                LoopSetting::OverrideBrrLoopPoint(lp) => {
-                    (Some(lp), Some(BrrLoopFilter::Reset), None)
-                }
-                LoopSetting::LoopWithFilter(lp) => (Some(lp), Some(BrrLoopFilter::Auto), None),
-                LoopSetting::LoopResetFilter(lp) => (Some(lp), Some(BrrLoopFilter::Reset), None),
-                LoopSetting::LoopFilter1(lp) => (Some(lp), Some(BrrLoopFilter::Filter1), None),
-                LoopSetting::LoopFilter2(lp) => (Some(lp), Some(BrrLoopFilter::Filter2), None),
-                LoopSetting::LoopFilter3(lp) => (Some(lp), Some(BrrLoopFilter::Filter3), None),
-                LoopSetting::DupeBlockHack(b) => {
-                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Auto), Some(b))
-                }
-                LoopSetting::DupeBlockHackFilter1(b) => {
-                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter1), Some(b))
-                }
-                LoopSetting::DupeBlockHackFilter2(b) => {
-                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter2), Some(b))
-                }
-                LoopSetting::DupeBlockHackFilter3(b) => {
-                    (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter3), Some(b))
-                }
-            };
-
-            BrrSampleSource::WaveFile(WaveSource {
-                source,
-                settings: BrrEncoderSettings {
-                    evaluator,
-                    loop_point,
-                    loop_filter,
-                    dupe_block_hack,
-                },
-            })
-        }
-    }
-}
-
-impl From<Instrument> for BrrSample {
-    fn from(value: Instrument) -> Self {
-        Self {
-            name: value.name,
-            source: convert_old_source(value.source, value.loop_setting, value.evaluator),
-            ignore_gaussian_overflow: value.ignore_gaussian_overflow,
-            pitches: Some(match value.note_range {
-                InstrumentNoteRange::Octave { first, last } => BrrSamplePitches::Octaves {
-                    tuning: SampleTuning::Frequency(value.freq),
-                    first,
-                    last,
-                },
-                InstrumentNoteRange::Note { first, last } => BrrSamplePitches::Notes {
-                    tuning: SampleTuning::Frequency(value.freq),
-                    first,
-                    last,
-                },
-            }),
-            envelope: value.envelope,
-            comment: value.comment.unwrap_or_default(),
-        }
-    }
-}
-
-impl From<Sample> for BrrSample {
-    fn from(value: Sample) -> Self {
-        Self {
-            name: value.name,
-            source: convert_old_source(value.source, value.loop_setting, value.evaluator),
-            ignore_gaussian_overflow: value.ignore_gaussian_overflow,
-            pitches: Some(BrrSamplePitches::SampleRates {
-                sample_rates: value.sample_rates,
-            }),
-            envelope: value.envelope,
-            comment: value.comment.unwrap_or_default(),
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
 pub struct DefaultSfxFlags {
     pub one_channel: bool,
@@ -625,11 +371,11 @@ impl<'de> Deserialize<'de> for Project {
             #[serde(default, rename = "_about")]
             about: About,
             #[serde(default)]
-            instruments: Vec<Instrument>,
+            instruments: Vec<version_0_3_0::Instrument>,
             #[serde(default)]
             brr_samples: Vec<BrrSample>,
             #[serde(default)]
-            samples: Vec<Sample>,
+            samples: Vec<version_0_3_0::Sample>,
             #[serde(default)]
             default_sfx_flags: DefaultSfxFlags,
             #[serde(default)]
@@ -927,5 +673,273 @@ pub fn validate_project_file_names(
         })
     } else {
         Err(ProjectFileErrors(errors))
+    }
+}
+
+/// .terrificaudio v0.3.0 sample and instrument data and conversion functions
+mod version_0_3_0 {
+    use super::{
+        BlockNumber, BrrEvaluator, Envelope, Name, Note, Octave, SampleNumber, SourcePathBuf,
+    };
+
+    use serde::Deserialize;
+
+    // I am including the filter as part of the enum item name for 3 reasons:
+    //   1. DupeBlockHack cannot be used with loop_point_filter=BrrFilter::Filter0.
+    //   2. Simpler JSON format (only 1 fields in `loop_setting`)
+    //   3. Backwards compatible with the v0.0.3 LoopSetting serde JSON
+    #[derive(Deserialize, Debug)]
+    #[serde(tag = "loop", content = "loop_setting")]
+    enum LoopSetting {
+        /// This setting depends on the source file:
+        ///     * wav files - The sample does not loop
+        ///     * brr files - The sample loops if the brr file has a 2 byte loop header and the loop flag is set.
+        #[serde(rename = "none")]
+        None,
+
+        /// The sample is a looping BRR file
+        #[serde(rename = "override_brr_loop_point")]
+        OverrideBrrLoopPoint(SampleNumber),
+
+        /// Loop point in samples.
+        ///
+        /// This mode will not reset the BRR filter at the loop point.  It can create better sounding
+        /// sample, however most samples will not loop perfectly, which can add low-frequency
+        /// oscillation or glitches to the sample.
+        #[serde(rename = "loop_with_filter")]
+        LoopWithFilter(SampleNumber),
+
+        /// Resets the BRR filter at the loop point.
+        ///
+        /// The BRR block after the loop point will always use BRR filter 0, which ensures
+        /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
+        #[serde(rename = "loop_reset_filter")]
+        LoopResetFilter(SampleNumber),
+
+        /// Loop the sample and use BRR filter 1 at the loop-point.
+        /// Argument is loop point in samples.
+        #[serde(rename = "loop_filter_1")]
+        LoopFilter1(SampleNumber),
+
+        /// Loop the sample and use BRR filter 2 at the loop-point.
+        /// Argument is loop point in samples.
+        #[serde(rename = "loop_filter_2")]
+        LoopFilter2(SampleNumber),
+
+        /// Loop the sample and use BRR filter 3 at the loop-point.
+        /// Argument is loop point in samples.
+        #[serde(rename = "loop_filter_3")]
+        LoopFilter3(SampleNumber),
+
+        /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
+        ///  * Increases the sample size by `N * 9` bytes.
+        ///  * This mode will not reset the filter at the loop point.
+        ///  * Most samples created by this hack will not loop perfectly, which adds low-frequency oscillation to the sample.
+        ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
+        #[serde(rename = "dupe_block_hack")]
+        DupeBlockHack(BlockNumber),
+
+        // DupeBlockHack that uses loop-point BRR filter 1.
+        // (See `DupeBlockHack`)
+        #[serde(rename = "dupe_block_hack_filter_1")]
+        DupeBlockHackFilter1(BlockNumber),
+
+        // DupeBlockHack that uses loop-point BRR filter 2.
+        // (See `DupeBlockHack`)
+        #[serde(rename = "dupe_block_hack_filter_2")]
+        DupeBlockHackFilter2(BlockNumber),
+
+        // DupeBlockHack that uses loop-point BRR filter 3.
+        // (See `DupeBlockHack`)
+        #[serde(rename = "dupe_block_hack_filter_3")]
+        DupeBlockHackFilter3(BlockNumber),
+    }
+
+    #[derive(Debug)]
+    enum InstrumentNoteRange {
+        Octave { first: Octave, last: Octave },
+        Note { first: Note, last: Note },
+    }
+
+    // Custom deserializer for better error handling
+    impl<'de> Deserialize<'de> for InstrumentNoteRange {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            #[derive(Deserialize)]
+            struct T {
+                first_octave: Option<Octave>,
+                last_octave: Option<Octave>,
+                first_note: Option<Note>,
+                last_note: Option<Note>,
+            }
+
+            let tmp = T::deserialize(deserializer)?;
+
+            match (
+                tmp.first_octave,
+                tmp.last_octave,
+                tmp.first_note,
+                tmp.last_note,
+            ) {
+                (Some(first), Some(last), None, None) => Ok(Self::Octave { first, last }),
+                (None, None, Some(first), Some(last)) => Ok(Self::Note { first, last }),
+                (None, None, None, None) => Err(serde::de::Error::custom(
+                    "missing `first_octave` & `last_octave` or `first_note` & `last_note` fields",
+                )),
+                _ => Err(serde::de::Error::custom(
+                    "invalid instrument note range, cannot combine notes and octaves",
+                )),
+            }
+        }
+    }
+
+    #[derive(Deserialize, Debug)]
+    pub(super) struct Instrument {
+        name: Name,
+
+        source: SourcePathBuf,
+        freq: f64,
+
+        #[serde(flatten)]
+        loop_setting: LoopSetting,
+
+        #[serde(default)]
+        evaluator: BrrEvaluator,
+
+        #[serde(default)]
+        ignore_gaussian_overflow: bool,
+
+        #[serde(flatten)]
+        note_range: InstrumentNoteRange,
+
+        envelope: Envelope,
+
+        comment: Option<String>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    pub(super) struct Sample {
+        name: Name,
+
+        source: SourcePathBuf,
+
+        #[serde(flatten)]
+        loop_setting: LoopSetting,
+
+        #[serde(default)]
+        evaluator: BrrEvaluator,
+
+        #[serde(default)]
+        ignore_gaussian_overflow: bool,
+
+        sample_rates: Vec<u32>,
+
+        envelope: Envelope,
+
+        comment: Option<String>,
+    }
+
+    fn convert_old_source(
+        source: SourcePathBuf,
+        loop_setting: LoopSetting,
+        evaluator: BrrEvaluator,
+    ) -> super::BrrSampleSource {
+        use super::{
+            BrrEncoderSettings, BrrLoopFilter, BrrSampleSource, BrrSource, WaveSource,
+            BRR_EXTENSION,
+        };
+
+        match (source.extension(), loop_setting) {
+            (Some(BRR_EXTENSION), LoopSetting::None) => BrrSampleSource::BrrFile(BrrSource {
+                source,
+                loop_point: None,
+            }),
+            (Some(BRR_EXTENSION), LoopSetting::OverrideBrrLoopPoint(lp)) => {
+                BrrSampleSource::BrrFile(BrrSource {
+                    source,
+                    loop_point: Some(lp),
+                })
+            }
+            (_, loop_setting) => {
+                let (loop_point, loop_filter, dupe_block_hack) = match loop_setting {
+                    LoopSetting::None => (None, None, None),
+                    LoopSetting::OverrideBrrLoopPoint(lp) => {
+                        (Some(lp), Some(BrrLoopFilter::Reset), None)
+                    }
+                    LoopSetting::LoopWithFilter(lp) => (Some(lp), Some(BrrLoopFilter::Auto), None),
+                    LoopSetting::LoopResetFilter(lp) => {
+                        (Some(lp), Some(BrrLoopFilter::Reset), None)
+                    }
+                    LoopSetting::LoopFilter1(lp) => (Some(lp), Some(BrrLoopFilter::Filter1), None),
+                    LoopSetting::LoopFilter2(lp) => (Some(lp), Some(BrrLoopFilter::Filter2), None),
+                    LoopSetting::LoopFilter3(lp) => (Some(lp), Some(BrrLoopFilter::Filter3), None),
+                    LoopSetting::DupeBlockHack(b) => {
+                        (Some(SampleNumber(0)), Some(BrrLoopFilter::Auto), Some(b))
+                    }
+                    LoopSetting::DupeBlockHackFilter1(b) => {
+                        (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter1), Some(b))
+                    }
+                    LoopSetting::DupeBlockHackFilter2(b) => {
+                        (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter2), Some(b))
+                    }
+                    LoopSetting::DupeBlockHackFilter3(b) => {
+                        (Some(SampleNumber(0)), Some(BrrLoopFilter::Filter3), Some(b))
+                    }
+                };
+
+                BrrSampleSource::WaveFile(WaveSource {
+                    source,
+                    settings: BrrEncoderSettings {
+                        evaluator,
+                        loop_point,
+                        loop_filter,
+                        dupe_block_hack,
+                    },
+                })
+            }
+        }
+    }
+
+    impl From<Instrument> for super::BrrSample {
+        fn from(value: Instrument) -> Self {
+            use super::{BrrSamplePitches, SampleTuning};
+
+            Self {
+                name: value.name,
+                source: convert_old_source(value.source, value.loop_setting, value.evaluator),
+                ignore_gaussian_overflow: value.ignore_gaussian_overflow,
+                pitches: Some(match value.note_range {
+                    InstrumentNoteRange::Octave { first, last } => BrrSamplePitches::Octaves {
+                        tuning: SampleTuning::Frequency(value.freq),
+                        first,
+                        last,
+                    },
+                    InstrumentNoteRange::Note { first, last } => BrrSamplePitches::Notes {
+                        tuning: SampleTuning::Frequency(value.freq),
+                        first,
+                        last,
+                    },
+                }),
+                envelope: value.envelope,
+                comment: value.comment.unwrap_or_default(),
+            }
+        }
+    }
+
+    impl From<Sample> for super::BrrSample {
+        fn from(value: Sample) -> Self {
+            Self {
+                name: value.name,
+                source: convert_old_source(value.source, value.loop_setting, value.evaluator),
+                ignore_gaussian_overflow: value.ignore_gaussian_overflow,
+                pitches: Some(super::BrrSamplePitches::SampleRates {
+                    sample_rates: value.sample_rates,
+                }),
+                envelope: value.envelope,
+                comment: value.comment.unwrap_or_default(),
+            }
+        }
     }
 }
