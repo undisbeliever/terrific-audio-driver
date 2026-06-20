@@ -643,13 +643,9 @@ impl InstrumentHintFreq {
     // ::TODO confirm 2 decimal units is enough accuracy::
     const FRACTIONAL_UNITS: u32 = 100;
 
-    pub fn from_freq(frequency: f64) -> Self {
-        let f = (frequency * Self::FRACTIONAL_UNITS as f64).round();
-        Self(f as u32)
-    }
-
     pub fn from_tuning(tuning: &SampleTuning) -> Self {
-        Self::from_freq(tuning.frequency())
+        let f = (tuning.frequency() * Self::FRACTIONAL_UNITS as f64).round();
+        Self(f as u32)
     }
 }
 

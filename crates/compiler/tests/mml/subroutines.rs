@@ -4,6 +4,10 @@
 
 use crate::*;
 
+fn instrument_hint_freq(f: f64) -> InstrumentHintFreq {
+    InstrumentHintFreq::from_tuning(&project::SampleTuning::Frequency(f))
+}
+
 #[test]
 fn call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
@@ -1005,8 +1009,8 @@ A @2 !s o4 g
         "A",
         6,
         BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
-            subroutine: InstrumentHintFreq::from_freq(1000.0),
-            instrument: InstrumentHintFreq::from_freq(2000.0),
+            subroutine: instrument_hint_freq(1000.0),
+            instrument: instrument_hint_freq(2000.0),
         }
         .into(),
     );
@@ -1023,8 +1027,8 @@ A @2 !s o4 c d e
         "A",
         6,
         BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
-            subroutine: InstrumentHintFreq::from_freq(1000.0),
-            instrument: InstrumentHintFreq::from_freq(2000.0),
+            subroutine: instrument_hint_freq(1000.0),
+            instrument: instrument_hint_freq(2000.0),
         }
         .into(),
     );
@@ -1042,8 +1046,8 @@ A @2 !sp
         "A",
         6,
         BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
-            subroutine: InstrumentHintFreq::from_freq(1000.0),
-            instrument: InstrumentHintFreq::from_freq(2000.0),
+            subroutine: instrument_hint_freq(1000.0),
+            instrument: instrument_hint_freq(2000.0),
         }
         .into(),
     );
@@ -1061,8 +1065,8 @@ A !s2
         "!s2",
         11,
         BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
-            subroutine: InstrumentHintFreq::from_freq(2000.0),
-            instrument: InstrumentHintFreq::from_freq(1000.0),
+            subroutine: instrument_hint_freq(2000.0),
+            instrument: instrument_hint_freq(1000.0),
         }
         .into(),
     );
