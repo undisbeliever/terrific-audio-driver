@@ -490,9 +490,9 @@ pub struct SfxCannotFitInSfxBuffer();
 
 #[derive(Debug)]
 pub enum PitchError {
-    NoNotes,
-    SampleRateTooHigh,
-    SampleRateTooLow,
+    NoPitchTableData,
+    TuningFrequencyTooHigh,
+    TuningFrequencyTooLow,
     FirstOctaveGreaterThanLastOctave,
     FirstNoteGreaterThanLastNote,
     FirstOctaveTooLow(RangeInclusive<u8>),
@@ -1750,9 +1750,9 @@ impl Display for SfxCannotFitInSfxBuffer {
 impl Display for PitchError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::NoNotes => write!(f, "sample has no notes"),
-            Self::SampleRateTooHigh => write!(f, "sample rate too high"),
-            Self::SampleRateTooLow => write!(f, "sample rate too low"),
+            Self::NoPitchTableData => write!(f, "sample has no pitch-table data"),
+            Self::TuningFrequencyTooHigh => write!(f, "tuning frequency is too high"),
+            Self::TuningFrequencyTooLow => write!(f, "tuning frequency is too low"),
             Self::FirstOctaveGreaterThanLastOctave => {
                 write!(f, "first octave must be <= last octave")
             }
@@ -1761,25 +1761,25 @@ impl Display for PitchError {
             }
             Self::FirstOctaveTooLow(r) => write!(
                 f,
-                "first octave too low (instrument tuning can play octaves {} - {})",
+                "first octave too low (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::LastOctaveTooHigh(r) => write!(
                 f,
-                "last octave too high (instrument tuning can play octaves {} - {})",
+                "last octave too high (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::FirstOctaveTooLowLastOctaveTooHigh(r) => write!(
                 f,
-                "first and last octave out of bounds (instrument tuning can play octaves {} - {})",
+                "first and last octave out of bounds (tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
             ),
             Self::InvalidNoteRange(r) => write!(
                 f,
-                "invalid note range (instrument tuning can only play notes {} - {})",
+                "invalid note range (tuning can only play notes {} - {})",
                 r.start().bytecode_argument_display(),
                 r.end().bytecode_argument_display()
             ),

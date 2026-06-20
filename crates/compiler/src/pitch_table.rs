@@ -108,7 +108,7 @@ pub(crate) fn brr_sample_pitches(input: &BrrSample) -> Result<SamplePitches, Pit
             }
         }
         Some(BrrSamplePitches::SampleRates { sample_rates }) => sample_pitches(sample_rates),
-        None => Err(PitchError::NoNotes),
+        None => Err(PitchError::NoPitchTableData),
     }
 }
 
@@ -132,11 +132,11 @@ fn note_pitches(
     octave_tuning: bool,
 ) -> Result<SamplePitches, PitchError> {
     if freq < MIN_SAMPLE_FREQ {
-        return Err(PitchError::SampleRateTooLow);
+        return Err(PitchError::TuningFrequencyTooLow);
     }
 
     if freq > MAX_SAMPLE_FREQ {
-        return Err(PitchError::SampleRateTooHigh);
+        return Err(PitchError::TuningFrequencyTooHigh);
     }
 
     assert!(!note_range.is_empty());
