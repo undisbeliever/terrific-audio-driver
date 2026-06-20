@@ -449,6 +449,7 @@ pub enum BrrError {
     IoError(std::sync::Arc<(PathString, io::Error)>),
     WaveFileError(std::sync::Arc<(PathString, brr::WavError)>),
 
+    NoFilename,
     UnknownFileType(PathString),
     BrrEncodeError(PathString, brr::EncodeError),
     BrrParseError(PathString, brr::ParseError),
@@ -1695,6 +1696,7 @@ impl Display for BrrError {
             Self::IoError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
             Self::WaveFileError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
 
+            Self::NoFilename => write!(f, "no filename"),
             Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p),
             Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p, e),
             Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p, e),

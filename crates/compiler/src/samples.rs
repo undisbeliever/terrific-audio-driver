@@ -87,12 +87,16 @@ impl SampleFileCache {
 
     pub fn load_brr_file(&mut self, source: &SourcePathBuf) -> &Result<ValidBrrFile, BrrError> {
         self.brr_files.entry(source.to_owned()).or_insert_with(|| {
-            match read_file_limited(source, &self.parent_path, MAX_BRR_SAMPLE_LOAD) {
-                Ok(data) => match parse_brr_file(&data) {
-                    Ok(b) => Ok(b),
-                    Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
-                },
-                Err(e) => Err(e),
+            if !source.is_empty() {
+                match read_file_limited(source, &self.parent_path, MAX_BRR_SAMPLE_LOAD) {
+                    Ok(data) => match parse_brr_file(&data) {
+                        Ok(b) => Ok(b),
+                        Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
+                    },
+                    Err(e) => Err(e),
+                }
+            } else {
+                Err(BrrError::NoFilename)
             }
         })
     }
@@ -102,16 +106,20 @@ impl SampleFileCache {
         source: &SourcePathBuf,
     ) -> &Result<MonoPcm16WaveFile, BrrError> {
         self.wav_files.entry(source.to_owned()).or_insert_with(|| {
-            let p = &source.to_path(&self.parent_path);
-            match fs::File::open(p) {
-                Ok(mut file) => match read_mono_pcm_wave_file(&mut file, MAX_WAV_SAMPLES) {
-                    Ok(w) => Ok(w),
-                    Err(e) => Err(BrrError::WaveFileError(Arc::from((
-                        source.to_path_string(),
-                        e,
-                    )))),
-                },
-                Err(e) => Err(BrrError::IoError(Arc::from((source.to_path_string(), e)))),
+            if !source.is_empty() {
+                let p = &source.to_path(&self.parent_path);
+                match fs::File::open(p) {
+                    Ok(mut file) => match read_mono_pcm_wave_file(&mut file, MAX_WAV_SAMPLES) {
+                        Ok(w) => Ok(w),
+                        Err(e) => Err(BrrError::WaveFileError(Arc::from((
+                            source.to_path_string(),
+                            e,
+                        )))),
+                    },
+                    Err(e) => Err(BrrError::IoError(Arc::from((source.to_path_string(), e)))),
+                }
+            } else {
+                Err(BrrError::NoFilename)
             }
         })
     }
