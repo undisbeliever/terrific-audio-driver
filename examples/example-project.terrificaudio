@@ -1,121 +1,162 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.3.0"
+    "version": "0.4.0-alpha"
   },
-  "instruments": [
+  "brr_samples": [
     {
       "name": "sine",
-      "source": "samples/sine.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack_filter_1",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sine.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "filter_1",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "square",
-      "source": "samples/square.wav",
-      "freq": 500.0,
-      "loop": "loop_reset_filter",
-      "loop_setting": 0,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/square.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "reset_filter"
+      },
       "ignore_gaussian_overflow": false,
-      "first_note": "c3",
-      "last_note": "a6",
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "notes",
+        "frequency": 500.0,
+        "first_note": "c3",
+        "last_note": "a6"
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "sawtooth",
-      "source": "samples/sawtooth.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sawtooth.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "triangle",
-      "source": "samples/triangle.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack_filter_1",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/triangle.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "filter_1",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "piano",
-      "source": "samples/nesdoug/PIANO_C5.brr",
-      "freq": 2000.0,
-      "loop": "none",
-      "evaluator": "default",
+      "source": {
+        "type": "brr",
+        "source": "samples/nesdoug/PIANO_C5.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
+      "pitches": {
+        "type": "octave",
+        "frequency": 2000.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
       "envelope": "adsr 12 2 2 16",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     },
     {
       "name": "violin",
-      "source": "samples/nesdoug/ViolinC4.brr",
-      "freq": 500.0,
-      "loop": "none",
-      "evaluator": "default",
+      "source": {
+        "type": "brr",
+        "source": "samples/nesdoug/ViolinC4.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 5,
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 5
+      },
       "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     },
     {
       "name": "violin_spicato",
-      "source": "samples/nesdoug/ViolinSpicatoB.brr",
-      "freq": 1000.0,
-      "loop": "none",
-      "evaluator": "default",
+      "source": {
+        "type": "brr",
+        "source": "samples/nesdoug/ViolinSpicatoB.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 5,
+      "pitches": {
+        "type": "octave",
+        "frequency": 1000.0,
+        "first_octave": 1,
+        "last_octave": 5
+      },
       "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
-    }
-  ],
-  "samples": [
+    },
     {
       "name": "conga",
-      "source": "samples/nesdoug/Conga.brr",
-      "loop": "none",
-      "evaluator": "default",
+      "source": {
+        "type": "brr",
+        "source": "samples/nesdoug/Conga.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "sample_rates": [
-        16000,
-        18000
-      ],
+      "pitches": {
+        "type": "samples",
+        "sample_rates": [
+          16000,
+          18000
+        ]
+      },
       "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     },
     {
       "name": "cowbell",
-      "source": "samples/nesdoug/Cowbell.brr",
-      "loop": "none",
-      "evaluator": "default",
+      "source": {
+        "type": "brr",
+        "source": "samples/nesdoug/Cowbell.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "sample_rates": [
-        32000
-      ],
+      "pitches": {
+        "type": "samples",
+        "sample_rates": [
+          32000
+        ]
+      },
       "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     }

@@ -1,126 +1,181 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.3.0"
+    "version": "0.4.0-alpha"
   },
-  "instruments": [
+  "brr_samples": [
     {
       "name": "sine",
-      "source": "samples/sine.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sine.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 4,
-      "last_octave": 6,
-      "envelope": "gain F127",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 4,
+        "last_octave": 6
+      },
+      "envelope": "gain F127"
     },
     {
       "name": "square",
-      "source": "samples/square.wav",
-      "freq": 500.0,
-      "loop": "loop_reset_filter",
-      "loop_setting": 0,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/square.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "reset_filter"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "square48",
-      "source": "samples/square48.wav",
-      "freq": 666.66666,
-      "loop": "loop_reset_filter",
-      "loop_setting": 0,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/square48.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "reset_filter"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
+      "pitches": {
+        "type": "octave",
+        "frequency": 666.66666,
+        "first_octave": 1,
+        "last_octave": 6
+      },
       "envelope": "adsr 12 1 1 16",
       "comment": "An instrument with a different tuning frequency"
     },
     {
       "name": "sawtooth",
-      "source": "samples/sawtooth.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sawtooth.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_note": "d4",
-      "last_note": "g4",
+      "pitches": {
+        "type": "notes",
+        "frequency": 500.0,
+        "first_note": "d4",
+        "last_note": "g4"
+      },
       "envelope": "adsr 12 1 1 16",
       "comment": "This instrument also tests InstrumentNoteRange::Note"
     },
     {
       "name": "triangle",
-      "source": "samples/triangle.wav",
-      "freq": 500.0,
-      "loop": "dupe_block_hack_filter_1",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/triangle.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "filter_1",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
-      "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "pitches": {
+        "type": "octave",
+        "frequency": 500.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
+      "envelope": "adsr 12 1 1 16"
     },
     {
       "name": "dummy_tuning_1",
-      "source": "samples/sine.wav",
-      "freq": 2094.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sine.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 0,
-      "last_octave": 7,
+      "pitches": {
+        "type": "octave",
+        "frequency": 2094.0,
+        "first_octave": 0,
+        "last_octave": 7
+      },
       "envelope": "gain F127",
       "comment": "Used to pad the pitch table to more than 340 entries.  Using a tuning slightly higher than C7 so dummy_tuning_1 is processed first."
     },
     {
       "name": "dummy_tuning_2",
-      "source": "samples/sine.wav",
-      "freq": 2100.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sine.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 0,
-      "last_octave": 7,
+      "pitches": {
+        "type": "octave",
+        "frequency": 2100.0,
+        "first_octave": 0,
+        "last_octave": 7
+      },
       "envelope": "gain F127",
       "comment": "Used to extend the pitch table beyond 256 entries."
     },
     {
       "name": "dummy_tuning_3",
-      "source": "samples/sine.wav",
-      "freq": 2150.0,
-      "loop": "dupe_block_hack",
-      "loop_setting": 2,
-      "evaluator": "default",
+      "source": {
+        "type": "wav",
+        "source": "samples/sine.wav",
+        "evaluator": "default",
+        "loop_point": 0,
+        "loop_filter": "with_filter",
+        "dupe_block_hack": 2
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 0,
-      "last_octave": 7,
+      "pitches": {
+        "type": "octave",
+        "frequency": 2150.0,
+        "first_octave": 0,
+        "last_octave": 7
+      },
       "envelope": "gain F127",
       "comment": "Used to extend the pitch table beyond 256 entries."
     },
     {
       "name": "biased_square",
-      "source": "samples/biased_square.brr",
-      "freq": 1000.0,
-      "loop": "none",
+      "source": {
+        "type": "brr",
+        "source": "samples/biased_square.brr"
+      },
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
+      "pitches": {
+        "type": "octave",
+        "frequency": 1000.0,
+        "first_octave": 1,
+        "last_octave": 6
+      },
       "envelope": "adsr 12 1 1 16",
       "comment": "Used to confirm the sample analyser does not output a 0Hz peak on biased samples"
     }
   ],
-  "samples": [],
   "default_sfx_flags": {
     "one_channel": true,
     "interruptible": true
