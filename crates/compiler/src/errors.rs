@@ -39,7 +39,6 @@ use crate::path::PathString;
 use crate::pitch_table::{
     InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate, MAX_N_PITCHES,
 };
-use crate::project::LoopSetting;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
@@ -454,9 +453,6 @@ pub enum BrrError {
     BrrEncodeError(PathString, brr::EncodeError),
     BrrParseError(PathString, brr::ParseError),
     FileTooLarge(PathString),
-
-    InvalidLoopSettingWav(LoopSetting),
-    InvalidLoopSettingBrr(LoopSetting),
 
     GaussianOverflowDetected,
 }
@@ -1701,13 +1697,6 @@ impl Display for BrrError {
             Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p, e),
             Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p, e),
             Self::FileTooLarge(p) => write!(f, "file too large: {}", p),
-
-            Self::InvalidLoopSettingWav(ls) => {
-                write!(f, "cannot use {} on wav files", ls.serialier_value())
-            }
-            Self::InvalidLoopSettingBrr(ls) => {
-                write!(f, "cannot use {} on brr files", ls.serialier_value())
-            }
 
             Self::GaussianOverflowDetected => {
                 write!(
