@@ -818,7 +818,10 @@ struct OldPitchValues {
     tuning: SampleTuning,
     first_note: Note,
     last_note: Note,
-    sample_rates: Vec<u32>,
+
+    // Using String as `PitchesEditor::update()` makes a `sample_rates_string()`
+    // only to throw it away, saving a `Vec<u32>` copy every update.
+    sample_rates: String,
 }
 
 impl Default for OldPitchValues {
@@ -827,7 +830,7 @@ impl Default for OldPitchValues {
             tuning: SampleTuning::Frequency(500.0),
             first_note: Note::C3,
             last_note: Note::B6,
-            sample_rates: Vec::new(),
+            sample_rates: String::new(),
         }
     }
 }
@@ -863,10 +866,12 @@ impl PitchesEditor {
         self.sample_rates.hide();
     }
 
-    fn update(&mut self, value: &Option<BrrSamplePitches>) {
+    fn update(&mut self, id: ItemId, value: &Option<BrrSamplePitches>) {
         // Always clear changed field (even when using sample-rates)
         self.tuning_frequency.clear_changed();
         self.tuning_wavelength.clear_changed();
+
+        let old_values = self.old_values.entry(id).or_default();
 
         match value {
             Some(BrrSamplePitches::Octaves {
@@ -874,6 +879,10 @@ impl PitchesEditor {
                 first,
                 last,
             }) => {
+                old_values.tuning = tuning.clone();
+                old_values.first_note = Note::first_note_for_octave(*first);
+                old_values.last_note = Note::last_note_for_octave(*last);
+
                 self.octaves_rb.set(true);
                 self.notes_rb.clear();
                 self.sample_rates_rb.clear();
@@ -894,6 +903,10 @@ impl PitchesEditor {
                 first,
                 last,
             }) => {
+                old_values.tuning = tuning.clone();
+                old_values.first_note = *first;
+                old_values.last_note = *last;
+
                 self.notes_rb.set(true);
                 self.octaves_rb.clear();
                 self.sample_rates_rb.clear();
@@ -911,12 +924,13 @@ impl PitchesEditor {
             }
 
             Some(BrrSamplePitches::SampleRates { sample_rates }) => {
+                old_values.sample_rates = Self::sample_rates_string(sample_rates);
+
                 self.sample_rates_rb.set(true);
                 self.octaves_rb.clear();
                 self.notes_rb.clear();
 
-                self.sample_rates_buffer
-                    .set_text(&Self::sample_rates_string(sample_rates));
+                self.sample_rates_buffer.set_text(&old_values.sample_rates);
 
                 self.tuning_group.hide();
                 self.sample_rates.show();
@@ -943,6 +957,19 @@ impl PitchesEditor {
         }
 
         out
+    }
+
+    fn read_sample_rates_str(s: &str) -> Option<Vec<u32>> {
+        let mut out = Vec::new();
+
+        for s in s.split_whitespace() {
+            match s.parse() {
+                Ok(s) => out.push(s),
+                Err(_) => return None,
+            }
+        }
+
+        Some(out)
     }
 
     fn read_or_reset(
@@ -1015,53 +1042,18 @@ impl PitchesEditor {
     }
 
     fn read_or_reset_sample_rates(&mut self, old: &[u32]) -> Option<Option<BrrSamplePitches>> {
-        let mut out = Vec::new();
-
-        for s in self.sample_rates_buffer.text().split_whitespace() {
-            match s.parse() {
-                Ok(s) => out.push(s),
-                Err(_) => {
-                    self.sample_rates_buffer
-                        .set_text(&Self::sample_rates_string(old));
-                    return None;
-                }
+        match Self::read_sample_rates_str(&self.sample_rates_buffer.text()) {
+            Some(sample_rates) => Some(Some(BrrSamplePitches::SampleRates { sample_rates })),
+            None => {
+                self.sample_rates_buffer
+                    .set_text(&Self::sample_rates_string(old));
+                None
             }
         }
-
-        Some(Some(BrrSamplePitches::SampleRates { sample_rates: out }))
     }
 
-    fn pitches_type_changed(
-        &mut self,
-        id: ItemId,
-        old: &Option<BrrSamplePitches>,
-    ) -> Option<BrrSamplePitches> {
+    fn pitches_type_changed(&mut self, id: ItemId) -> Option<BrrSamplePitches> {
         let old_values = self.old_values.entry(id).or_default();
-
-        match old {
-            Some(BrrSamplePitches::Octaves {
-                tuning,
-                first,
-                last,
-            }) => {
-                old_values.tuning = tuning.clone();
-                old_values.first_note = Note::first_note_for_octave(*first);
-                old_values.last_note = Note::last_note_for_octave(*last);
-            }
-            Some(BrrSamplePitches::Notes {
-                tuning,
-                first,
-                last,
-            }) => {
-                old_values.tuning = tuning.clone();
-                old_values.first_note = *first;
-                old_values.last_note = *last;
-            }
-            Some(BrrSamplePitches::SampleRates { sample_rates }) => {
-                old_values.sample_rates = sample_rates.clone();
-            }
-            None => (),
-        }
 
         match (
             self.octaves_rb.value(),
@@ -1079,7 +1071,8 @@ impl PitchesEditor {
                 last: old_values.last_note,
             }),
             (false, false, true) => Some(BrrSamplePitches::SampleRates {
-                sample_rates: old_values.sample_rates.clone(),
+                sample_rates: Self::read_sample_rates_str(&old_values.sample_rates)
+                    .unwrap_or_default(),
             }),
             _ => None,
         }
@@ -1633,7 +1626,7 @@ impl BrrSampleEditor {
 
         self.sample_source
             .update(id, &data.source, data.ignore_gaussian_overflow);
-        self.pitches.update(&data.pitches);
+        self.pitches.update(id, &data.pitches);
         self.envelope.update(&data.envelope);
 
         self.comment_buffer.set_text(&data.comment);
@@ -1719,7 +1712,7 @@ impl BrrSampleEditor {
 
     fn on_pitches_type_changed(&mut self) {
         if let Some((id, data)) = &self.data {
-            if let Some(p) = self.pitches.pitches_type_changed(*id, &data.pitches) {
+            if let Some(p) = self.pitches.pitches_type_changed(*id) {
                 let new_data = BrrSample {
                     pitches: Some(p),
                     ..data.clone()
