@@ -55,8 +55,11 @@ const MIN_WAVEFORM_WIDTH: usize = 192;
 /// Amount to scroll (in fractions of a screen) when scrolling the scroll wheel in the waveform widget
 const WAVEFORM_SCROLL: f64 = 1.0 / 32.0;
 
-/// Number of spectrum frequencies to test to the left and right of the cursor in the spectrum widget
-const SPECTRUM_CURSOR_PEAK_LEFT_RIGHT: usize = 12;
+// Number of pixels left/right of the cursor to test when finding the cursor peak frequency
+const CURSOR_PEAK_PIXELS_TO_TEST: f64 = 12.0;
+// Minimum frequency to the left/right of cursor to test when finding the cursor peak frequency
+const CURSOR_PEAK_MIN_FREQ_TO_TEST: f64 = 50.0;
+
 /// Maximum frequency to show in the spectrum widget
 const MAX_SPECTRUM_FREQ: f32 = 8000.0;
 
@@ -596,19 +599,24 @@ impl State {
         let x = event_x - self.spectrum.x() - Self::FRAME_MARGIN;
 
         if x_scale > 0.0 && x > 0 {
+            let data = spectrum.data();
+
+            // Assumes `spectrum.data()` is sorted and the frequency is evenly spaced.
+            let to_index = |f| {
+                let i = f / f64::from(spectrum.max_fr().val()) * (data.len() as f64);
+                (i as usize).clamp(0, data.len() - 1)
+            };
+
             let cursor_freq = f64::round(x as f64 / x_scale);
 
-            // Find closest peak near the mouse cursor.
-            // Assumes `spectrum.data()` is sorted and the frequency is evenly spaced.
-            let index =
-                cursor_freq / f64::from(spectrum.max_fr().val()) * (spectrum.data().len() as f64);
-            let index = (index as usize).clamp(
-                SPECTRUM_CURSOR_PEAK_LEFT_RIGHT,
-                spectrum.data().len() - SPECTRUM_CURSOR_PEAK_LEFT_RIGHT - 1,
-            );
-            let range = (index - SPECTRUM_CURSOR_PEAK_LEFT_RIGHT)
-                ..=(index + SPECTRUM_CURSOR_PEAK_LEFT_RIGHT);
-            let peak = spectrum.data()[range].iter().max_by_key(|s| s.1)?;
+            let freq_to_test =
+                (CURSOR_PEAK_PIXELS_TO_TEST / x_scale).clamp(CURSOR_PEAK_MIN_FREQ_TO_TEST, 500.0);
+
+            let index = to_index(cursor_freq);
+            let offset = to_index(freq_to_test);
+            let range = index.saturating_sub(offset)..(index + offset).min(data.len() - 1);
+
+            let peak = data[range].iter().max_by_key(|s| s.1)?;
             let peak_freq = f64::round(peak.0.val().into());
 
             Some((cursor_freq, peak_freq))
