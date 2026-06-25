@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::echo::{EchoBuffer, FirCoefficient};
+use compiler::echo::FirCoefficient;
 use compiler::invert_flags::InvertFlags;
 use compiler::mml::GlobalSettings;
 use compiler::notes::KeySignature;
-use compiler::songs::MetaData;
+use compiler::songs::{GlobalSongSettings, MetaData};
 use compiler::time::{Bpm, TickClock, ZenLen};
 use compiler::{Transpose, UnsignedValueNewType};
 
@@ -55,14 +55,14 @@ A r
             author: Some("song-author".to_owned()),
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
                 feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
-                invert: InvertFlags {
+                echo_invert: InvertFlags {
                     right: true,
                     left: false,
                     mono: false
@@ -139,14 +139,14 @@ A r
             author: Some("song-author".to_owned()),
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
                 feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
-                invert: InvertFlags {
+                echo_invert: InvertFlags {
                     right: true,
                     left: false,
                     mono: false
@@ -223,14 +223,14 @@ A r
             author: Some("song-author".to_owned()),
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
                 feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
-                invert: InvertFlags {
+                echo_invert: InvertFlags {
                     right: true,
                     left: false,
                     mono: false
@@ -309,14 +309,14 @@ A r
             author: Some("song-author".to_owned()),
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: (0x30u8 / 16).try_into().unwrap(),
                 edl: (0x10u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
                 feedback: (-18).try_into().unwrap(),
                 echo_volume_l: 0x21u8.try_into().unwrap(),
                 echo_volume_r: 0x1bu8.try_into().unwrap(),
-                invert: InvertFlags {
+                echo_invert: InvertFlags {
                     right: true,
                     left: false,
                     mono: false
@@ -399,11 +399,11 @@ A r
         &dummy_data,
     );
     assert_eq!(
-        s.metadata().echo_buffer.echo_volume_l,
+        s.metadata().song_globals.echo_volume_l,
         127u32.try_into().unwrap()
     );
     assert_eq!(
-        s.metadata().echo_buffer.echo_volume_r,
+        s.metadata().song_globals.echo_volume_r,
         127u32.try_into().unwrap()
     );
 
@@ -441,11 +441,11 @@ A r
         &dummy_data,
     );
     assert_eq!(
-        s.metadata().echo_buffer.echo_volume_l,
+        s.metadata().song_globals.echo_volume_l,
         0u32.try_into().unwrap()
     );
     assert_eq!(
-        s.metadata().echo_buffer.echo_volume_r,
+        s.metadata().song_globals.echo_volume_r,
         127u32.try_into().unwrap()
     );
 
@@ -496,7 +496,7 @@ A r
         &dummy_data,
     );
     assert_eq!(
-        s.metadata().echo_buffer.invert,
+        s.metadata().song_globals.echo_invert,
         InvertFlags {
             right: false,
             left: false,
@@ -513,7 +513,7 @@ A r
         &dummy_data,
     );
     assert_eq!(
-        s.metadata().echo_buffer.invert,
+        s.metadata().song_globals.echo_invert,
         InvertFlags {
             right: false,
             left: true,
@@ -530,7 +530,7 @@ A r
         &dummy_data,
     );
     assert_eq!(
-        s.metadata().echo_buffer.invert,
+        s.metadata().song_globals.echo_invert,
         InvertFlags {
             right: true,
             left: true,
@@ -561,7 +561,7 @@ A r
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().echo_buffer.max_edl.to_length().value(), 48);
+    assert_eq!(s.metadata().song_globals.max_edl.to_length().value(), 48);
 
     // If MaxEchoLength is unused, use `#EchoLength`
     let s = compile_mml(
@@ -572,7 +572,7 @@ A r
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().echo_buffer.max_edl.to_length().value(), 96);
+    assert_eq!(s.metadata().song_globals.max_edl.to_length().value(), 96);
 
     assert_one_header_error_in_mml(
         r#"
@@ -963,14 +963,14 @@ A r
             author: Some("song-author".to_owned()),
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
                 feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
-                invert: InvertFlags {
+                echo_invert: InvertFlags {
                     right: true,
                     left: false,
                     mono: false

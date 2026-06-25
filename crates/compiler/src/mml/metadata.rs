@@ -8,15 +8,14 @@ use std::collections::HashMap;
 
 use crate::bytecode::Transpose;
 use crate::echo::{
-    parse_fir_filter_string, EchoBuffer, EchoEdl, EchoFeedback, EchoLength, EchoVolume,
-    IDENTITY_FILTER,
+    parse_fir_filter_string, EchoEdl, EchoFeedback, EchoLength, EchoVolume, IDENTITY_FILTER,
 };
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::notes::KeySignature;
 use crate::number_parsing::{parse_svnt_allow_zero, parse_uvnt};
-use crate::songs::MetaData;
+use crate::songs::{GlobalSongSettings, MetaData};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange};
@@ -86,14 +85,14 @@ impl MetaData {
             author: None,
             copyright: None,
             license: None,
-            echo_buffer: EchoBuffer {
+            song_globals: GlobalSongSettings {
                 max_edl: EchoEdl::ZERO,
                 edl: EchoEdl::ZERO,
                 fir: IDENTITY_FILTER,
                 feedback: EchoFeedback::ZERO,
                 echo_volume_l: EchoVolume::ZERO,
                 echo_volume_r: EchoVolume::ZERO,
-                invert: InvertFlags::default(),
+                echo_invert: InvertFlags::default(),
             },
             tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
             spc_song_length: None,
@@ -233,17 +232,17 @@ impl HeaderState {
 
             Header::MaxEchoLength => {
                 let echo_length: EchoLength = parse_uvnt(value)?;
-                self.metadata.echo_buffer.max_edl = echo_length.to_edl();
+                self.metadata.song_globals.max_edl = echo_length.to_edl();
                 self.max_edl_set = true;
             }
             Header::EchoLength => {
                 let echo_length: EchoLength = parse_uvnt(value)?;
-                self.metadata.echo_buffer.edl = echo_length.to_edl();
+                self.metadata.song_globals.edl = echo_length.to_edl();
                 self.edl_pos = pos.clone();
             }
 
             Header::FirFilter => {
-                self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?;
+                self.metadata.song_globals.fir = parse_fir_filter_string(value)?;
                 self.fir_pos = pos.clone();
             }
             Header::DisableFirFilterLimit => match value.is_empty() {
@@ -252,19 +251,19 @@ impl HeaderState {
             },
 
             Header::EchoFeedback => match parse_i8wh(value) {
-                Ok(i) => self.metadata.echo_buffer.feedback = i,
+                Ok(i) => self.metadata.song_globals.feedback = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
 
             Header::EchoVolume => {
                 let (l, r) = parse_echo_volume(value)?;
-                self.metadata.echo_buffer.echo_volume_l = l;
-                self.metadata.echo_buffer.echo_volume_r = r;
+                self.metadata.song_globals.echo_volume_l = l;
+                self.metadata.song_globals.echo_volume_r = r;
             }
 
             Header::EchoInvert => {
                 let args: Vec<_> = value.split_ascii_whitespace().collect();
-                self.metadata.echo_buffer.invert = parse_invert_flag_arguments(&args)?;
+                self.metadata.song_globals.echo_invert = parse_invert_flag_arguments(&args)?;
             }
 
             Header::Tempo => {
@@ -351,7 +350,7 @@ pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlL
         }
     }
 
-    let eb = &mut header_state.metadata.echo_buffer;
+    let eb = &mut header_state.metadata.song_globals;
 
     if header_state.max_edl_set {
         if eb.edl.as_u8() > eb.max_edl.as_u8() {

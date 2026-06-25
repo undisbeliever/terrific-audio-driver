@@ -89,7 +89,7 @@ pub mod addresses {
         CHANNEL_PAN_EFFECT_COUNTER,
         CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
         CHANNEL_INVERT_FLAGS,
-        ECHO_VARIABLES,
+        SONG_GLOBAL_VARIABLES,
         COMMON_DATA_POINTERS,
         ECHO_DIRTY,
         MAX_EDL,
@@ -141,8 +141,8 @@ pub mod addresses {
     pub const MAIN_LOOP_CODE_RANGE: Range<u16> = MAINLOOP_CODE..PROCESS_MUSIC_CHANNELS_CODE;
 }
 
-pub const ECHO_VARIABLES_SIZE: usize =
-    (addresses::COMMON_DATA_POINTERS - addresses::ECHO_VARIABLES) as usize;
+pub const SONG_GLOBALS_SIZE: usize =
+    (addresses::COMMON_DATA_POINTERS - addresses::SONG_GLOBAL_VARIABLES) as usize;
 
 pub const TAD_IO_VERSION: u16 = _symbols::TAD_IO_VERSION;
 
@@ -251,7 +251,7 @@ pub(crate) const BLANK_SONG_BIN: [u8; 1] = [0];
 
 pub const SONG_HEADER_SIZE: usize = 16;
 pub const SONG_HEADER_ACTIVE_MUSIC_CHANNELS: usize = 0;
-pub const SONG_HEADER_ECHO: usize = 1;
+pub const SONG_HEADER_GLOBALS: usize = 1;
 pub const SONG_HEADER_ECHO_EDL: usize = 1;
 pub const SONG_HEADER_TICK_TIMER_OFFSET: usize = SONG_HEADER_SIZE - 2;
 pub const SONG_HEADER_N_SUBROUTINES_OFFSET: usize = SONG_HEADER_SIZE - 1;

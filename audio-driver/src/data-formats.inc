@@ -134,7 +134,7 @@ COMMON_DATA_POINTERS_SIZE = 10 * 2
 ; Song Data
 ; =========
 
-.struct EchoBufferSettings
+.struct GlobalSongSettings
     ; Echo buffer size AND maximum echo buffer size.
     ;
     ;      mmmmeeee
@@ -171,7 +171,7 @@ COMMON_DATA_POINTERS_SIZE = 10 * 2
 
     ; Echo invert flags.
     ; See `INVERT_FLAGS` for bit values.
-    invertFlags : u8
+    echoInvertFlags : u8
 .endstruct
 
 
@@ -185,7 +185,7 @@ COMMON_DATA_POINTERS_SIZE = 10 * 2
     activeMusicChannels : u8
 
 
-    echo: EchoBufferSettings
+    globals: GlobalSongSettings
 
 
     ; Length of a tick in 1/8000 cycles (song tempo).

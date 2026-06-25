@@ -414,15 +414,15 @@ impl GlobalValues {
         self.timer.update(state.timer_register);
         self.bpm.update(TimerBpm(state.timer_register));
 
-        self.echo_delay.update(Edl(state.echo.edl));
-        self.echo_feedback.update(state.echo.feedback);
+        self.echo_delay.update(Edl(state.song_globals.edl));
+        self.echo_feedback.update(state.song_globals.feedback);
 
-        self.echo_volume_l.update(state.echo.volume_l);
-        self.echo_volume_r.update(state.echo.volume_r);
+        self.echo_volume_l.update(state.song_globals.volume_l);
+        self.echo_volume_r.update(state.song_globals.volume_r);
         self.echo_invert
-            .update(DriverInvertFlags(state.echo.invert_flags));
+            .update(DriverInvertFlags(state.song_globals.invert_flags));
         for i in 0..FIR_FILTER_SIZE {
-            self.fir_filter[i].update(state.echo.fir_filter[i]);
+            self.fir_filter[i].update(state.song_globals.fir_filter[i]);
         }
     }
 

@@ -95,7 +95,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA_panEffect_halfWavelength", "CHANNEL_PAN_EFFECT_HALF_WAVELENGTH"),
     ("channelSoA_invertFlags", "CHANNEL_INVERT_FLAGS"),
 
-    ("echo", "ECHO_VARIABLES"),
+    ("songGlobals", "SONG_GLOBAL_VARIABLES"),
     ("commonData", "COMMON_DATA_POINTERS"),
     ("echoDirty", "ECHO_DIRTY"),
     ("maxEdl", "MAX_EDL"),

@@ -11,8 +11,8 @@ use compiler::{
     bytecode_interpreter::{self, SongInterpreter},
     common_audio_data::{build_common_audio_data, CommonAudioData},
     driver_constants::{
-        addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
-        N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
+        addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, N_MUSIC_CHANNELS,
+        SONG_GLOBALS_SIZE, S_SMP_TIMER_0_REGISTER,
     },
     project::{load_project_file, validate_project_file_names},
     samples::build_sample_and_instrument_data,
@@ -271,7 +271,7 @@ fn assert_bc_intrepreter_matches_emu(
         BC_TOTAL_STACK_SIZE,
         "bytecode stack",
     );
-    test_range(addresses::ECHO_VARIABLES, ECHO_VARIABLES_SIZE, "echo");
+    test_range(addresses::SONG_GLOBAL_VARIABLES, SONG_GLOBALS_SIZE, "echo");
 
     test_byte(addresses::MAX_EDL, "maxEdl");
 }

@@ -165,10 +165,10 @@ pub fn load_song_to_apu(
     song_addr: u16,
     flags: LoaderDataType,
 ) -> Result<(), LoadSongError> {
-    let echo_buffer = &song.metadata().echo_buffer;
+    let echo_buffer = &song.metadata().song_globals;
 
     let min_song_end_addr = usize::from(common_audio_data.min_song_data_addr()) + song.data().len();
-    let echo_buffer_size = echo_buffer.buffer_size();
+    let echo_buffer_size = echo_buffer.echo_buffer_size();
 
     if min_song_end_addr + echo_buffer_size > AUDIO_RAM_SIZE {
         return Err(LoadSongError::TooMuchData {
@@ -183,8 +183,8 @@ pub fn load_song_to_apu(
         common_audio_data,
         song.data(),
         song_addr,
-        song.metadata().echo_buffer.esa_register(),
-        song.metadata().echo_buffer.edl_register(),
+        song.metadata().song_globals.esa_register(),
+        song.metadata().song_globals.edl_register(),
         flags,
     )
 }

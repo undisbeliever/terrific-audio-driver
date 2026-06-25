@@ -352,16 +352,16 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
         ECHO_DIRTY__EDL_BIT = 4
 
 
-    ; Echo buffer settings
+    ; Global song variables (Echo buffer settings)
     ;
     ; MUST be last, used to determine when zeropage is cleared.
-    echo : EchoBufferSettings
+    songGlobals : GlobalSongSettings
 
 
     ; Common audio data pointers.
     ; See `audio-driver/src/data-formats.inc` for more details about these variables.
     ;
-    ; Also used to temporally store SongHeader fields after `SongHeader.echo` in the start of `Main`
+    ; Also used to temporally store SongHeader fields after `SongHeader.globals` in the start of `Main`
     commonData : CommonDataPointers
 .endvars
 
@@ -554,7 +554,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ; Confirm nSubroutines is the last field in the songHeader
     .assert offsetof(SongHeader, nSubroutines) + 1 == SONG_HEADER_SIZE
 
-    _songHeader = echo - offsetof(SongHeader, echo)
+    _songHeader = songGlobals - offsetof(SongHeader, globals)
     _activeMusicChannels = _songHeader + offsetof(SongHeader, activeMusicChannels)
     _songHeader_tickTimer = _songHeader + offsetof(SongHeader, tickTimer)
     _songHeader_nSubroutines = _songHeader + offsetof(SongHeader, nSubroutines)
@@ -566,8 +566,8 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
     ; Copy SongHeader data to `_songHeader` if `_activeMusicChannels` is non-zero
     ; Otherwise, fill `_songHeader` with zeros.
-    .assert offsetof(SongHeader, echo) == 1
-    mov Y, #offsetof(SongHeader, echo)
+    .assert offsetof(SongHeader, globals) == 1
+    mov Y, #offsetof(SongHeader, globals)
     EchoCopyLoop:
         mov A, _activeMusicChannels
         beq SkipHeaderByte
@@ -587,11 +587,11 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ;
     ; Assumes ECHO write is disabled.
 
-    ; Extract maximum EDL from EchoBufferSettings (high nibble of `echo.edl)
+    ; Extract maximum EDL from GlobalSongSettings (high nibble of `songGlobals.edl)
     ; and calculate echo start address
     ;
-    ; maxEdl = (echo.edl >> 4) & $0f
-    mov A, echo.edl
+    ; maxEdl = (songGlobals.edl >> 4) & $0f
+    mov A, songGlobals.edl
     xcn A
     and A, #$0f
     mov maxEdl, A
@@ -621,13 +621,13 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
 
     ; Mask and clamp EDL
-    mov A, echo.edl
+    mov A, songGlobals.edl
     and A, #$0f
     cmp A, maxEdl
     bcc EdlOk
         mov A, maxEdl
     EdlOk:
-    mov echo.edl, A
+    mov songGlobals.edl, A
 
     ; Set EDL
     .assert DSP_EDL == DSP_ESA | (1 << 4)
@@ -772,15 +772,15 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
         bpl CopyCommonDataLoop
 
 
-    ; If not in surround mode, set all `echo.invertFlags` bits to the mono-flag
+    ; If not in surround mode, set all `songGlobals.echoInvertFlags` bits to the mono-flag
     bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, IsSurround
         .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Assert masking is more efficient than bpl or shifts
-        mov A, echo.invertFlags
+        mov A, songGlobals.echoInvertFlags
         and A, #INVERT_FLAGS__MONO
         beq NoMonoInvert
             mov A, #$ff
         NoMonoInvert:
-        mov echo.invertFlags, A
+        mov songGlobals.echoInvertFlags, A
     IsSurround:
 
 
@@ -2080,7 +2080,7 @@ Return:
             mov A, #DSP_C0
             ; carry clear
             FirLoop:
-                mov Y, echo.firFilter + X
+                mov Y, songGlobals.firFilter + X
                 movw DSPADDR, YA
                 inc X
 
@@ -2095,7 +2095,7 @@ Return:
         bpl EvolUnchanged
             mov DSPADDR, #DSP_EVOL_L
 
-            mov A, echo.echoVolume_l
+            mov A, songGlobals.echoVolume_l
 
             ; Reading carry here saves a `CLC` instruction when averaging echo volumes
             mov1 C, loaderDataType, LoaderDataType__STEREO_FLAG_BIT
@@ -2105,10 +2105,10 @@ Return:
                 ; Calculate average echo volume.
                 ; Assumes echoVolume_l and echoVolume_r are both > 127.
                 ; carry clear
-                adc A, echo.echoVolume_r
+                adc A, songGlobals.echoVolume_r
                 lsr A
 
-                bbc echo.invertFlags, INVERT_FLAGS__MONO_BIT, NoMonoInvert
+                bbc songGlobals.echoInvertFlags, INVERT_FLAGS__MONO_BIT, NoMonoInvert
                     eor A, #$ff
                     inc A
                 NoMonoInvert:
@@ -2118,14 +2118,14 @@ Return:
 
 
             Stereo:
-                bbc echo.invertFlags, INVERT_FLAGS__LEFT_BIT, NoLeftInvert
+                bbc songGlobals.echoInvertFlags, INVERT_FLAGS__LEFT_BIT, NoLeftInvert
                     eor A, #$ff
                     inc A
                 NoLeftInvert:
                 mov DSPDATA, A
 
-                mov A, echo.echoVolume_r
-                bbc echo.invertFlags, INVERT_FLAGS__RIGHT_BIT, NoRightInvert
+                mov A, songGlobals.echoVolume_r
+                bbc songGlobals.echoInvertFlags, INVERT_FLAGS__RIGHT_BIT, NoRightInvert
                     eor A, #$ff
                     inc A
                 NoRightInvert:
@@ -2140,11 +2140,11 @@ Return:
 
         ; Always update echo feedback
         mov DSPADDR, #DSP_EFB
-        mov DSPDATA, echo.echoFeedback
+        mov DSPDATA, songGlobals.echoFeedback
 
         ; Always update echo delay
         mov DSPADDR, #DSP_EDL
-        mov DSPDATA, echo.edl
+        mov DSPDATA, songGlobals.edl
 
         mov echoDirty, #0
     End:
@@ -3982,7 +3982,7 @@ _subroutineId = zpTmp
 
     SetEchoInvert:
         ; set echo invert
-        mov echo.invertFlags, A
+        mov songGlobals.echoInvertFlags, A
         set1 echoDirty, ECHO_DIRTY__VOLUME_BIT
 
         jmp process_next_bytecode
@@ -4357,7 +4357,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .proc bc__set_echo_volume
     and A, #$7f
-    mov echo.echoVolume_l, A
+    mov songGlobals.echoVolume_l, A
 
     bra _bc__set_stereo_echo_volume_r
 .endproc
@@ -4369,7 +4369,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .proc bc__set_stereo_echo_volume
     and A, #$7f
-    mov echo.echoVolume_l, A
+    mov songGlobals.echoVolume_l, A
 
     ; Y = 0
     mov A, [instructionPtr] + Y
@@ -4388,7 +4388,7 @@ _subroutineId = zpTmp
 ; CAUTION: right is unchecked
 ; KEEP: X
 .proc _bc__set_stereo_echo_volume_r
-    mov echo.echoVolume_r, A
+    mov songGlobals.echoVolume_r, A
 
     set1 echoDirty, ECHO_DIRTY__VOLUME_BIT
 
@@ -4451,7 +4451,7 @@ _subroutineId = zpTmp
     ; Assumes _echoVolume_l[y] is <= 127
 
     clrc
-    adc A, echo.echoVolume_l + Y
+    adc A, songGlobals.echoVolume_l + Y
 
     bpl EndIf
         mov A, #0
@@ -4459,7 +4459,7 @@ _subroutineId = zpTmp
             mov A, #127
     EndIf:
 
-    mov echo.echoVolume_l + Y, A
+    mov songGlobals.echoVolume_l + Y, A
 
     ; Return (NOT A BYTECODE INSTRUCTION)
     ret
@@ -4471,12 +4471,12 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__set_fir_filter
-    mov echo.firFilter + 0, A
+    mov songGlobals.firFilter + 0, A
 
     mov Y, #6
     Loop:
         mov A, [instructionPtr] + Y
-        mov echo.firFilter + 1 + Y, A
+        mov songGlobals.firFilter + 1 + Y, A
         dec Y
         bpl Loop
 
@@ -4507,7 +4507,7 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__set_or_adjust_global_i8
-    .assert echo.firFilter + GLOBAL_I8_EFB_INDEX == echo.echoFeedback
+    .assert songGlobals.firFilter + GLOBAL_I8_EFB_INDEX == songGlobals.echoFeedback
     .assert MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM >> 1 == GLOBAL_I8_EFB_INDEX
 
     cmp A, #MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM + 1
@@ -4527,13 +4527,13 @@ _subroutineId = zpTmp
     bcs SetI8
         ; Adjust global i8
         ; carry clear
-        adc A, echo.firFilter + X
+        adc A, songGlobals.firFilter + X
         bvc SetI8
             mov A, #I8_MIN & $ff
             bcs SetI8
                 mov A, #I8_MAX
 SetI8:
-    mov echo.firFilter + X, A
+    mov songGlobals.firFilter + X, A
 
 
     cmp X, #GLOBAL_I8_EFB_INDEX
@@ -4567,7 +4567,7 @@ SetI8:
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__adjust_global_i8_limit
-    .assert echo.firFilter + GLOBAL_I8_EFB_INDEX == echo.echoFeedback
+    .assert songGlobals.firFilter + GLOBAL_I8_EFB_INDEX == songGlobals.echoFeedback
 
     cmp A, #GLOBAL_I8_EFB_INDEX + 1
     bcs _bc__adjust_global_i8_limit__out_of_bounds
@@ -4588,10 +4588,10 @@ SetI8:
         incw instructionPtr
 
         clrc
-        adc A, echo.firFilter + X
+        adc A, songGlobals.firFilter + X
         bvs WriteLimit
 
-        mov echo.firFilter + X, A
+        mov songGlobals.firFilter + X, A
 
         setc
         sbc A, [instructionPtr] + Y   ; limit
@@ -4605,10 +4605,10 @@ SetI8:
         incw instructionPtr
 
         clrc
-        adc A, echo.firFilter + X
+        adc A, songGlobals.firFilter + X
         bvs WriteLimit
 
-        mov echo.firFilter + X, A
+        mov songGlobals.firFilter + X, A
 
         ; using clc for a > comparison
         ; (SOURCE: http://6502.org/tutorials/compare_beyond.html#5.1)
@@ -4626,7 +4626,7 @@ SetI8:
 
         WriteLimit:
             mov A, [instructionPtr] + Y ; limit
-            mov echo.firFilter + X, A
+            mov songGlobals.firFilter + X, A
     End:
 
     incw instructionPtr
@@ -4698,7 +4698,7 @@ SetI8:
         mov A, maxEdl
     EndIf:
 
-    mov echo.edl, A
+    mov songGlobals.edl, A
 
     set1 echoDirty, ECHO_DIRTY__EDL_BIT
 .endinline
