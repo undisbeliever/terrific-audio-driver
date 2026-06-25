@@ -89,7 +89,7 @@ impl MetaData {
                 max_edl: EchoEdl::ZERO,
                 edl: EchoEdl::ZERO,
                 fir: IDENTITY_FILTER,
-                feedback: EchoFeedback::ZERO,
+                echo_feedback: EchoFeedback::ZERO,
                 echo_volume_l: EchoVolume::ZERO,
                 echo_volume_r: EchoVolume::ZERO,
                 echo_invert: InvertFlags::default(),
@@ -251,7 +251,7 @@ impl HeaderState {
             },
 
             Header::EchoFeedback => match parse_i8wh(value) {
-                Ok(i) => self.metadata.song_globals.feedback = i,
+                Ok(i) => self.metadata.song_globals.echo_feedback = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
 

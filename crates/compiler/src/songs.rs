@@ -124,7 +124,7 @@ pub struct GlobalSongSettings {
     pub max_edl: EchoEdl,
     pub edl: EchoEdl,
     pub fir: [FirCoefficient; FIR_FILTER_SIZE],
-    pub feedback: EchoFeedback,
+    pub echo_feedback: EchoFeedback,
     pub echo_volume_l: EchoVolume,
     pub echo_volume_r: EchoVolume,
     pub echo_invert: InvertFlags,
@@ -440,7 +440,7 @@ fn write_song_header(
     for (i, f) in echo_buffer.fir.iter().enumerate() {
         header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];
     }
-    header[EBS + 9] = echo_buffer.feedback.as_i8().to_le_bytes()[0];
+    header[EBS + 9] = echo_buffer.echo_feedback.as_i8().to_le_bytes()[0];
     header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
     header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
     header[EBS + 12] = echo_buffer.echo_invert.into_driver_value();

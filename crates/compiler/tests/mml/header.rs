@@ -59,7 +59,7 @@ A r
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
-                feedback: 12.try_into().unwrap(),
+                echo_feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
                 echo_invert: InvertFlags {
@@ -143,7 +143,7 @@ A r
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
-                feedback: 12.try_into().unwrap(),
+                echo_feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
                 echo_invert: InvertFlags {
@@ -227,7 +227,7 @@ A r
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
-                feedback: 12.try_into().unwrap(),
+                echo_feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
                 echo_invert: InvertFlags {
@@ -313,7 +313,7 @@ A r
                 max_edl: (0x30u8 / 16).try_into().unwrap(),
                 edl: (0x10u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
-                feedback: (-18).try_into().unwrap(),
+                echo_feedback: (-18).try_into().unwrap(),
                 echo_volume_l: 0x21u8.try_into().unwrap(),
                 echo_volume_r: 0x1bu8.try_into().unwrap(),
                 echo_invert: InvertFlags {
@@ -967,7 +967,7 @@ A r
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
-                feedback: 12.try_into().unwrap(),
+                echo_feedback: 12.try_into().unwrap(),
                 echo_volume_l: 34u8.try_into().unwrap(),
                 echo_volume_r: 56u8.try_into().unwrap(),
                 echo_invert: InvertFlags {

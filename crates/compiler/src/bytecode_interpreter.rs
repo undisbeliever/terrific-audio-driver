@@ -119,7 +119,7 @@ pub struct SongGlobalVariables {
     pub max_edl: u8,
     pub edl: u8,
     pub fir_filter: [i8; 8],
-    pub feedback: i8,
+    pub echo_feedback: i8,
     pub volume_l: u8,
     pub volume_r: u8,
     pub invert_flags: u8,
@@ -140,7 +140,7 @@ impl SongGlobalVariables {
         for (i, &f) in self.fir_filter.iter().enumerate() {
             out[i + 1] = to_u8(f);
         }
-        out[9] = to_u8(self.feedback);
+        out[9] = to_u8(self.echo_feedback);
         out[10] = self.volume_l;
         out[11] = self.volume_r;
         out[12] = fix_invert_flags(self.invert_flags, audio_mode);
@@ -182,7 +182,7 @@ impl GlobalState {
                 max_edl: song_globals.max_edl.as_u8(),
                 edl: song_globals.edl_register(),
                 fir_filter: song_globals.fir.map(|c| c.as_i8()),
-                feedback: song_globals.feedback.as_i8(),
+                echo_feedback: song_globals.echo_feedback.as_i8(),
                 volume_l: song_globals.echo_volume_l.as_u8(),
                 volume_r: song_globals.echo_volume_r.as_u8(),
                 invert_flags: song_globals.echo_invert.into_driver_value(),
@@ -1205,15 +1205,15 @@ impl ChannelState {
                     // set
                     match global.song_globals.fir_filter.get_mut(index) {
                         Some(e) => *e = value,
-                        None => global.song_globals.feedback = value,
+                        None => global.song_globals.echo_feedback = value,
                     }
                 } else {
                     // adjust
                     match global.song_globals.fir_filter.get_mut(index) {
                         Some(e) => *e = e.saturating_add(value),
                         None => {
-                            global.song_globals.feedback =
-                                global.song_globals.feedback.saturating_add(value)
+                            global.song_globals.echo_feedback =
+                                global.song_globals.echo_feedback.saturating_add(value)
                         }
                     }
                 }
@@ -1226,8 +1226,8 @@ impl ChannelState {
                 match global.song_globals.fir_filter.get_mut(usize::from(index)) {
                     Some(e) => *e = Self::adjust_i8_limit(*e, adjust, limit),
                     None => {
-                        global.song_globals.feedback =
-                            Self::adjust_i8_limit(global.song_globals.feedback, adjust, limit)
+                        global.song_globals.echo_feedback =
+                            Self::adjust_i8_limit(global.song_globals.echo_feedback, adjust, limit)
                     }
                 }
             }
@@ -2296,7 +2296,7 @@ mod test {
                 max_edl: 0,
                 edl: 0,
                 fir_filter: Default::default(),
-                feedback: 0,
+                echo_feedback: 0,
                 volume_l: 0,
                 volume_r: 0,
                 invert_flags: 0,
