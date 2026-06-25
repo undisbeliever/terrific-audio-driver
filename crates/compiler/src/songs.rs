@@ -31,6 +31,7 @@ use crate::project::{self, single_item_unique_names_list, UniqueNamesList};
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
+use crate::value_newtypes::i8_with_hex_byte_value_newtype;
 use crate::{command_compiler, mml, UnsignedValueNewType};
 
 use std::cmp::min;
@@ -119,12 +120,21 @@ pub struct MetaData {
     pub spc_fadeout_millis: Option<u32>,
 }
 
+i8_with_hex_byte_value_newtype!(
+    MainVolume,
+    MainVolumeOutOfRange,
+    MainVolumeOutOfRangeU32,
+    MainVolumeHexOutOfRange,
+    NoMainVolume
+);
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GlobalSongSettings {
     pub max_edl: EchoEdl,
     pub edl: EchoEdl,
     pub fir: [FirCoefficient; FIR_FILTER_SIZE],
     pub echo_feedback: EchoFeedback,
+    pub main_volume: MainVolume,
     pub echo_volume_l: EchoVolume,
     pub echo_volume_r: EchoVolume,
     pub echo_invert: InvertFlags,
@@ -441,11 +451,12 @@ fn write_song_header(
         header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];
     }
     header[EBS + 9] = echo_buffer.echo_feedback.as_i8().to_le_bytes()[0];
-    header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
-    header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
-    header[EBS + 12] = echo_buffer.echo_invert.into_driver_value();
+    header[EBS + 10] = echo_buffer.main_volume.as_i8().to_le_bytes()[0];
+    header[EBS + 11] = echo_buffer.echo_volume_l.as_u8();
+    header[EBS + 12] = echo_buffer.echo_volume_r.as_u8();
+    header[EBS + 13] = echo_buffer.echo_invert.into_driver_value();
 
-    const _: () = assert!(13 == SONG_GLOBALS_SIZE);
+    const _: () = assert!(14 == SONG_GLOBALS_SIZE);
     const _: () = assert!(EBS + SONG_GLOBALS_SIZE == SONG_HEADER_TICK_TIMER_OFFSET);
 
     header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.into_driver_value();

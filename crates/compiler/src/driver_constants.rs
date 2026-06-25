@@ -249,7 +249,7 @@ pub const MAX_SFX_SUBROUTINES: u8 = 255;
 
 pub(crate) const BLANK_SONG_BIN: [u8; 1] = [0];
 
-pub const SONG_HEADER_SIZE: usize = 16;
+pub const SONG_HEADER_SIZE: usize = 17;
 pub const SONG_HEADER_ACTIVE_MUSIC_CHANNELS: usize = 0;
 pub const SONG_HEADER_GLOBALS: usize = 1;
 pub const SONG_HEADER_ECHO_EDL: usize = 1;

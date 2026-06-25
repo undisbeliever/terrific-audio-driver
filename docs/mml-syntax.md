@@ -45,7 +45,9 @@ The following adjust default values:
 
 <br/>
 
-Echo values:
+Global settings:
+ * `#MainVolume` - Main volume (-128 to 127) (`MVOL_L` and `MVOL_R` S-DSP registers)
+    * This settings affects both left and right channels
  * `#EchoLength` - Echo buffer size in milliseconds.
     * This value must be a multiple of 16
     * The echo buffer requires `EchoLenth / 16 * 2048` bytes of Audio-RAM.

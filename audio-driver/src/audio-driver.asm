@@ -662,13 +662,6 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     movw DSPADDR, YA
 
 
-    ; Set main volume to full volume
-    mov Y, #$7f
-    mov A, #DSP_MVOL_L
-    movw DSPADDR, YA
-    mov A, #DSP_MVOL_R
-    movw DSPADDR, YA
-
     ; Set DSP directory table
     .assert lobyte(brrDirectory) == 0
     mov A, #DSP_DIR
@@ -1491,6 +1484,14 @@ _PlaySfx_Return = sfx__both_channels_active.Return
     and A, musicSfxChannelMask
     mov Y, A
     mov A, #DSP_KOFF
+    movw DSPADDR, YA
+
+
+    ; Set main volume
+    mov Y, songGlobals.mainVolume
+    mov A, #DSP_MVOL_L
+    movw DSPADDR, YA
+    mov A, #DSP_MVOL_R
     movw DSPADDR, YA
 
 

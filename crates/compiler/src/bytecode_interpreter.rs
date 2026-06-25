@@ -120,6 +120,7 @@ pub struct SongGlobalVariables {
     pub edl: u8,
     pub fir_filter: [i8; 8],
     pub echo_feedback: i8,
+    pub main_volume: i8,
     pub volume_l: u8,
     pub volume_r: u8,
     pub invert_flags: u8,
@@ -128,22 +129,23 @@ pub struct SongGlobalVariables {
 impl SongGlobalVariables {
     // Using raw numbers for array size so I get a compile error
     // when the audio-driver echo variable size changes.
-    fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 13] {
+    fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 14] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
 
         assert!(self.max_edl <= EchoEdl::MAX.as_u8());
         assert!(self.edl <= self.max_edl);
 
-        let mut out = [0; 13];
+        let mut out = [0; 14];
 
         out[0] = self.edl;
         for (i, &f) in self.fir_filter.iter().enumerate() {
             out[i + 1] = to_u8(f);
         }
         out[9] = to_u8(self.echo_feedback);
-        out[10] = self.volume_l;
-        out[11] = self.volume_r;
-        out[12] = fix_invert_flags(self.invert_flags, audio_mode);
+        out[10] = to_u8(self.main_volume);
+        out[11] = self.volume_l;
+        out[12] = self.volume_r;
+        out[13] = fix_invert_flags(self.invert_flags, audio_mode);
 
         out
     }
@@ -183,6 +185,7 @@ impl GlobalState {
                 edl: song_globals.edl_register(),
                 fir_filter: song_globals.fir.map(|c| c.as_i8()),
                 echo_feedback: song_globals.echo_feedback.as_i8(),
+                main_volume: song_globals.main_volume.as_i8(),
                 volume_l: song_globals.echo_volume_l.as_u8(),
                 volume_r: song_globals.echo_volume_r.as_u8(),
                 invert_flags: song_globals.echo_invert.into_driver_value(),
@@ -2297,6 +2300,7 @@ mod test {
                 edl: 0,
                 fir_filter: Default::default(),
                 echo_feedback: 0,
+                main_volume: i8::MAX,
                 volume_l: 0,
                 volume_r: 0,
                 invert_flags: 0,

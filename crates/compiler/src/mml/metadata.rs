@@ -15,7 +15,7 @@ use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::notes::KeySignature;
 use crate::number_parsing::{parse_svnt_allow_zero, parse_uvnt};
-use crate::songs::{GlobalSongSettings, MetaData};
+use crate::songs::{GlobalSongSettings, MainVolume, MetaData};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange};
@@ -86,6 +86,7 @@ impl MetaData {
             copyright: None,
             license: None,
             song_globals: GlobalSongSettings {
+                main_volume: MainVolume::MAX,
                 max_edl: EchoEdl::ZERO,
                 edl: EchoEdl::ZERO,
                 fir: IDENTITY_FILTER,
@@ -122,6 +123,7 @@ enum Header {
     Transpose,
     KeySignature,
     OldTranspose,
+    MainVolume,
     MaxEchoLength,
     EchoLength,
     FirFilter,
@@ -149,6 +151,8 @@ fn match_header(header: &str) -> Option<Header> {
         "#Transpose" | "#transpose" => Some(Header::Transpose),
         "#KeySignature" | "#keySignature" | "#keysignature" => Some(Header::KeySignature),
         "#OldTranspose" | "#oldTranspose" | "#oldtranspose" => Some(Header::OldTranspose),
+
+        "#MainVolume" | "#mainVolume" | "#mainvolume" => Some(Header::MainVolume),
 
         "#MaxEchoLength" | "#maxEchoLength" | "#maxecholength" => Some(Header::MaxEchoLength),
         "#EchoLength" | "#echoLength" | "#echolength" => Some(Header::EchoLength),
@@ -229,6 +233,8 @@ impl HeaderState {
                 }
                 self.metadata.mml_settings.signature = signature;
             }
+
+            Header::MainVolume => self.metadata.song_globals.main_volume = parse_i8wh(value)?,
 
             Header::MaxEchoLength => {
                 let echo_length: EchoLength = parse_uvnt(value)?;

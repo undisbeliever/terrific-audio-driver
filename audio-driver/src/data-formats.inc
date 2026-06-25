@@ -163,6 +163,10 @@ COMMON_DATA_POINTERS_SIZE = 10 * 2
     ; MUST be directly after `firFilter`.
     echoFeedback : i8
 
+    ; Main volume.  Written to the `MVOL_L` and `MVOL_R` S-DSP registers.
+    ; MUST be directly after `echoFeedback`
+    mainVolume : i8
+
     ; Echo volume.
     ; Must be in the range 0-127.
     ; If in mono mode, the average of the left and right channels will be used.
@@ -212,7 +216,7 @@ COMMON_DATA_POINTERS_SIZE = 10 * 2
     ; subroutineTable_h[nSubroutines]
 .endstruct
 
-SONG_HEADER_SIZE = 16
+SONG_HEADER_SIZE = 17
 
 
 ; Invert flags

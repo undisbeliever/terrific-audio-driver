@@ -292,6 +292,10 @@
       "source": "bc-interpreter-tests/adjust-global-i8-limit.mml"
     },
     {
+      "name": "main_volume",
+      "source": "bc-interpreter-tests/main-volume.mml"
+    },
+    {
       "name": "large_skip_last_loop",
       "source": "bc-interpreter-tests/large-skip-last-loop.mml"
     },

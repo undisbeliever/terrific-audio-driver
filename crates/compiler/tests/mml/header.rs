@@ -29,6 +29,7 @@ fn all_headers() {
 #Transpose +2
 #KeySignature +fc ; D Major
 #OldTranspose
+#MainVolume -100
 #MaxEchoLength 64
 #EchoLength 32
 #FirFilter 1 2 -3 -4 $5 $6 $77 $88
@@ -56,6 +57,7 @@ A r
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
             song_globals: GlobalSongSettings {
+                main_volume: (-100).try_into().unwrap(),
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
@@ -113,6 +115,7 @@ fn all_headers_lower_camel_case() {
 #transpose +2
 #keySignature +fc ; D Major
 #oldTranspose
+#mainVolume -100
 #maxEchoLength 64
 #echoLength 32
 #firFilter 1 2 -3 -4 $5 $6 $77 $88
@@ -140,6 +143,7 @@ A r
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
             song_globals: GlobalSongSettings {
+                main_volume: (-100).try_into().unwrap(),
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
@@ -197,6 +201,7 @@ fn all_headers_lowercase() {
 #transpose +2
 #keysignature +fc ; D Major
 #oldtranspose
+#mainvolume -100
 #maxecholength 64
 #echolength 32
 #firfilter 1 2 -3 -4 $5 $6 $77 $88
@@ -224,6 +229,7 @@ A r
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
             song_globals: GlobalSongSettings {
+                main_volume: (-100).try_into().unwrap(),
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
@@ -281,6 +287,7 @@ fn all_headers_hex() {
 #Transpose -$c
 #KeySignature +fc ; D Major
 #OldTranspose
+#MainVolume $9c
 #MaxEchoLength $30
 #EchoLength $10
 ; Cannot use negative hex numbers in FirFilter
@@ -310,6 +317,7 @@ A r
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
             song_globals: GlobalSongSettings {
+                main_volume: (-100).try_into().unwrap(),
                 max_edl: (0x30u8 / 16).try_into().unwrap(),
                 edl: (0x10u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
@@ -937,6 +945,7 @@ fn header_ends_with_space_bugfig() {
 #Transpose +2  
 #KeySignature +fc  
 #OldTranspose  
+#MainVolume -100  
 #MaxEchoLength 64  
 #EchoLength 32  
 #FirFilter 1 2 -3 -4 $5 $6 $77 $88  
@@ -964,6 +973,7 @@ A r
             copyright: Some("song-copyright".to_owned()),
             license: Some("song-license".to_owned()),
             song_globals: GlobalSongSettings {
+                main_volume: (-100).try_into().unwrap(),
                 max_edl: (64u8 / 16).try_into().unwrap(),
                 edl: (32u8 / 16).try_into().unwrap(),
                 fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
