@@ -159,7 +159,7 @@ The echo instructions can be used in sound effects to control echo using S-CPU 6
  * `set_echo_volume <0..127>` - Sets the left and right echo volume to the same value (`EVOL` registers)
  * `set_stereo_echo_volume <left 0..127> <right 0..127>` - Set the left and right echo volume (`EVOL` registers)
  * `adjust_echo_volume <-127..+127>` - Adds the parameter to the left and right echo volumes
- * `set_stereo_echo_volume <left -127..+127> <right -127..+127>` - Adds the stereo parameters the left and right echo volumes
+ * `adjust_stereo_echo_volume <left -127..+127> <right -127..+127>` - Adds the stereo parameters the left and right echo volumes
  * `set_echo_feedback <-128..127>` - Sets the echo feedback (`EFB` register)
  * `adjust_echo_feedback <-128..+127>` - Adds the parameter to the echo feedback
  * `adjust_echo_feedback_limit <rel -128..+127> <limit -128..127>`
