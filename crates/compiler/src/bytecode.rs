@@ -338,8 +338,8 @@ pub mod opcodes {
         ADJUST_ECHO_VOLUME,
         ADJUST_STEREO_ECHO_VOLUME,
         SET_FIR_FILTER,
-        SET_OR_ADJUST_ECHO_I8,
-        ADJUST_ECHO_I8_LIMIT,
+        SET_OR_ADJUST_GLOBAL_I8,
+        ADJUST_GLOBAL_I8_LIMIT,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -393,11 +393,11 @@ impl MiscInstruction {
     }
 }
 
-const ECHO_I8_EFB_INDEX: u8 = 8;
+const GLOBAL_I8_EFB_INDEX: u8 = 8;
 
-pub const MAX_SET_OR_ADJUST_ECHO_I8_PARAM: u8 = (ECHO_I8_EFB_INDEX << 1) | 1;
+pub const MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM: u8 = (GLOBAL_I8_EFB_INDEX << 1) | 1;
 
-const _: () = assert!(FirTap::MAX.as_u8() < ECHO_I8_EFB_INDEX);
+const _: () = assert!(FirTap::MAX.as_u8() < GLOBAL_I8_EFB_INDEX);
 
 pub(crate) const GOTO_RELATIVE_INSTRUCTION_SIZE: usize = 3;
 
@@ -3084,8 +3084,8 @@ impl<'a> Bytecode<'a> {
     pub fn set_echo_feedback(&mut self, efb: EchoFeedback) {
         emit_bytecode!(
             self,
-            opcodes::SET_OR_ADJUST_ECHO_I8,
-            (ECHO_I8_EFB_INDEX << 1) | 1,
+            opcodes::SET_OR_ADJUST_GLOBAL_I8,
+            (GLOBAL_I8_EFB_INDEX << 1) | 1,
             efb.as_i8()
         );
     }
@@ -3094,8 +3094,8 @@ impl<'a> Bytecode<'a> {
         if adjust.value() != 0 {
             emit_bytecode!(
                 self,
-                opcodes::SET_OR_ADJUST_ECHO_I8,
-                ECHO_I8_EFB_INDEX << 1,
+                opcodes::SET_OR_ADJUST_GLOBAL_I8,
+                GLOBAL_I8_EFB_INDEX << 1,
                 adjust.as_i8()
             );
         }
@@ -3109,8 +3109,8 @@ impl<'a> Bytecode<'a> {
         if adjust.as_i8() != 0 {
             emit_bytecode!(
                 self,
-                opcodes::ADJUST_ECHO_I8_LIMIT,
-                ECHO_I8_EFB_INDEX,
+                opcodes::ADJUST_GLOBAL_I8_LIMIT,
+                GLOBAL_I8_EFB_INDEX,
                 adjust.as_i8(),
                 limit.as_i8()
             );
@@ -3124,7 +3124,7 @@ impl<'a> Bytecode<'a> {
     pub fn set_fir_tap(&mut self, tap: FirTap, value: FirCoefficient) {
         emit_bytecode!(
             self,
-            opcodes::SET_OR_ADJUST_ECHO_I8,
+            opcodes::SET_OR_ADJUST_GLOBAL_I8,
             (tap.as_u8() << 1) | 1,
             value.as_i8()
         );
@@ -3134,7 +3134,7 @@ impl<'a> Bytecode<'a> {
         if adjust.as_i8() != 0 {
             emit_bytecode!(
                 self,
-                opcodes::SET_OR_ADJUST_ECHO_I8,
+                opcodes::SET_OR_ADJUST_GLOBAL_I8,
                 tap.as_u8() << 1,
                 adjust.as_i8()
             );
@@ -3150,7 +3150,7 @@ impl<'a> Bytecode<'a> {
         if adjust.as_i8() != 0 {
             emit_bytecode!(
                 self,
-                opcodes::ADJUST_ECHO_I8_LIMIT,
+                opcodes::ADJUST_GLOBAL_I8_LIMIT,
                 tap.as_u8(),
                 adjust.as_i8(),
                 limit.as_i8()

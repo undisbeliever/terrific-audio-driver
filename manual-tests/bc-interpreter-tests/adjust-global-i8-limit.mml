@@ -1,4 +1,4 @@
-#Title adjust_echo_i8_limit bc_interpreter test
+#Title adjust_global_i8_limit bc_interpreter test
 
 #EchoLength    48
 #EchoFeedback  80

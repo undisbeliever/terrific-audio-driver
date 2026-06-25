@@ -396,15 +396,15 @@ DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1
     ;         s = 0 = adjust value, 1 = set value
     ;  vvvvvvvv = value
     ;
-    ; If the first parameter byte is invalid (`> MAX_SET_OR_ADJUST_ECHO_I8_PARAM`)
-    ; `set_or_adjust_echo_i8` will set echo feedback.
-    bc__set_or_adjust_echo_i8
+    ; If the first parameter byte is invalid (`> MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM`)
+    ; `set_or_adjust_global_i8` will set echo feedback.
+    bc__set_or_adjust_global_i8
 
     ; parameter = u8 index, i8 adjust, i8 limit
     ;   if index < 8: sets FIR filter tap
     ;   if index >= 8: sets echo feedback
     ; comparison used will depend on the sign of adjust
-    bc__adjust_echo_i8_limit
+    bc__adjust_global_i8_limit
 .endftdef
 
 
@@ -485,7 +485,7 @@ DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1
 ; Do not enable PMOD on channels G & H to prevent conflicts with the sound-effect channels.
 ENABLE_PMOD_MASK = %00111110
 
-ECHO_I8_EFB_INDEX = 8
+GLOBAL_I8_EFB_INDEX = 8
 
-MAX_SET_OR_ADJUST_ECHO_I8_PARAM = (ECHO_I8_EFB_INDEX << 1) | 1
+MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM = (GLOBAL_I8_EFB_INDEX << 1) | 1
 

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
-use crate::bytecode::{InstrumentId, MiscInstruction, Pan, MAX_SET_OR_ADJUST_ECHO_I8_PARAM};
+use crate::bytecode::{InstrumentId, MiscInstruction, Pan, MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM};
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::AudioMode;
 use crate::driver_constants::ECHO_VARIABLES_SIZE;
@@ -1195,8 +1195,8 @@ impl ChannelState {
 
                 global.echo.fir_filter = filter;
             }
-            opcodes::SET_OR_ADJUST_ECHO_I8 => {
-                let param = min(read_pc(), MAX_SET_OR_ADJUST_ECHO_I8_PARAM);
+            opcodes::SET_OR_ADJUST_GLOBAL_I8 => {
+                let param = min(read_pc(), MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM);
                 let value = i8::from_le_bytes([read_pc()]);
 
                 let index = usize::from(param >> 1);
@@ -1215,7 +1215,7 @@ impl ChannelState {
                     }
                 }
             }
-            opcodes::ADJUST_ECHO_I8_LIMIT => {
+            opcodes::ADJUST_GLOBAL_I8_LIMIT => {
                 let index = read_pc();
                 let adjust = i8::from_le_bytes([read_pc()]);
                 let limit = i8::from_le_bytes([read_pc()]);
@@ -1363,8 +1363,8 @@ impl ChannelState {
             opcodes::ADJUST_ECHO_VOLUME => Some(2),
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
             opcodes::SET_FIR_FILTER => Some(9),
-            opcodes::SET_OR_ADJUST_ECHO_I8 => Some(3),
-            opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
+            opcodes::SET_OR_ADJUST_GLOBAL_I8 => Some(3),
+            opcodes::ADJUST_GLOBAL_I8_LIMIT => Some(4),
             opcodes::KEYON_NEXT_NOTE => Some(1),
 
             opcodes::MISCELLANEOUS => None,

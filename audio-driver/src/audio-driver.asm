@@ -4494,11 +4494,11 @@ _subroutineId = zpTmp
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.proc _bc__set_or_adjust_echo_i8__out_of_bounds
-    mov A, #MAX_SET_OR_ADJUST_ECHO_I8_PARAM
+.proc _bc__set_or_adjust_global_i8__out_of_bounds
+    mov A, #MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM
 
     ; fallthrough
-    .assert PC == bc__set_or_adjust_echo_i8
+    .assert PC == bc__set_or_adjust_global_i8
 .endproc
 
 
@@ -4506,12 +4506,12 @@ _subroutineId = zpTmp
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.proc bc__set_or_adjust_echo_i8
-    .assert echo.firFilter + ECHO_I8_EFB_INDEX == echo.echoFeedback
-    .assert MAX_SET_OR_ADJUST_ECHO_I8_PARAM >> 1 == ECHO_I8_EFB_INDEX
+.proc bc__set_or_adjust_global_i8
+    .assert echo.firFilter + GLOBAL_I8_EFB_INDEX == echo.echoFeedback
+    .assert MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM >> 1 == GLOBAL_I8_EFB_INDEX
 
-    cmp A, #MAX_SET_OR_ADJUST_ECHO_I8_PARAM + 1
-    bcs _bc__set_or_adjust_echo_i8__out_of_bounds
+    cmp A, #MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM + 1
+    bcs _bc__set_or_adjust_global_i8__out_of_bounds
 
     push X
 
@@ -4525,7 +4525,7 @@ _subroutineId = zpTmp
     incw instructionPtr
 
     bcs SetI8
-        ; Adjust echo i8
+        ; Adjust global i8
         ; carry clear
         adc A, echo.firFilter + X
         bvc SetI8
@@ -4536,7 +4536,7 @@ SetI8:
     mov echo.firFilter + X, A
 
 
-    cmp X, #ECHO_I8_EFB_INDEX
+    cmp X, #GLOBAL_I8_EFB_INDEX
 
     pop X
 
@@ -4554,11 +4554,11 @@ SetI8:
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.proc _bc__adjust_echo_i8_limit__out_of_bounds
-    mov A, #ECHO_I8_EFB_INDEX
+.proc _bc__adjust_global_i8_limit__out_of_bounds
+    mov A, #GLOBAL_I8_EFB_INDEX
 
     ; fallthrough
-    .assert PC == bc__adjust_echo_i8_limit
+    .assert PC == bc__adjust_global_i8_limit
 .endproc
 
 
@@ -4566,11 +4566,11 @@ SetI8:
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.proc bc__adjust_echo_i8_limit
-    .assert echo.firFilter + ECHO_I8_EFB_INDEX == echo.echoFeedback
+.proc bc__adjust_global_i8_limit
+    .assert echo.firFilter + GLOBAL_I8_EFB_INDEX == echo.echoFeedback
 
-    cmp A, #ECHO_I8_EFB_INDEX + 1
-    bcs _bc__adjust_echo_i8_limit__out_of_bounds
+    cmp A, #GLOBAL_I8_EFB_INDEX + 1
+    bcs _bc__adjust_global_i8_limit__out_of_bounds
 
     push X
     mov X, A
@@ -4632,7 +4632,7 @@ SetI8:
     incw instructionPtr
 
 
-    cmp X, #ECHO_I8_EFB_INDEX
+    cmp X, #GLOBAL_I8_EFB_INDEX
     bcs FeedbackDirty
         set1 echoDirty, ECHO_DIRTY__FIR_FILTER_BIT
 
