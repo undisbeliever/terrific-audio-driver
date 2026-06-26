@@ -97,7 +97,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
 
     ("songGlobals", "SONG_GLOBAL_VARIABLES"),
     ("commonData", "COMMON_DATA_POINTERS"),
-    ("echoDirty", "ECHO_DIRTY"),
+    ("songGlobalsDirty", "SONG_GLOBALS_DIRTY"),
     ("maxEdl", "MAX_EDL"),
 
     ("globalVolume_music", "GLOBAL_VOLUME_MUSIC"),

@@ -336,20 +336,20 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     maxEdl : u8
 
 
-    ; Used to determine if the S-DSP echo registers need updating.
+    ; Used to determine if the S-DSP main-volume and echo registers need updating.
     ;
     ; (bit field)
     ;
     ; CAUTION: Also used to temporally store SongHeader.activeMusicChannels in the start of `Main`
-    echoDirty : u8
-        ECHO_DIRTY__FIR_FILTER_BIT = 7
-        ECHO_DIRTY__CLEAR_FIR_BIT = 0   ; Clear FIR filter before writing FIR filter
-        ECHO_DIRTY__VOLUME_BIT = 6
+    songGlobalsDirty : u8
+        SONG_GLOBALS_DIRTY__FIR_FILTER_BIT = 7
+        SONG_GLOBALS_DIRTY__CLEAR_FIR_BIT = 0   ; Clear FIR filter before writing FIR filter
+        SONG_GLOBALS_DIRTY__ECHO_VOLUME_BIT = 6
 
-        ; Not tested in `process_echo_registers`
-        ; Instead they will be written whenever echoDirty is non-zero
-        ECHO_DIRTY__FEEDBACK_BIT = 5
-        ECHO_DIRTY__EDL_BIT = 4
+        ; Not tested in `process_song_globals`
+        ; Instead they will be written whenever songGlobalsDirty is non-zero
+        SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT = 5
+        SONG_GLOBALS_DIRTY__EDL_BIT = 4
 
 
     ; Global song variables (Echo buffer settings)
@@ -779,7 +779,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
     ; Reset bit-masks
     mov A, #$ff
-    mov echoDirty, A
+    mov songGlobalsDirty, A
     mov io_musicChannelsMask, A
     mov musicSfxChannelMask, A
     mov volShadowDirty_music, A
@@ -1070,6 +1070,8 @@ CommandFunctionTable_SIZE = CommandFunctionTableEnd - CommandFunctionTable
 
 ; IN: Y = volume
 .proc cmd__set_main_volume
+    mov songGlobals.mainVolume, Y
+
     ; Write Y to MVOL_L and MVOL_R DSP registers
     mov A, #DSP_MVOL_L
     movw DSPADDR, YA
@@ -1487,15 +1489,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
     movw DSPADDR, YA
 
 
-    ; Set main volume
-    mov Y, songGlobals.mainVolume
-    mov A, #DSP_MVOL_L
-    movw DSPADDR, YA
-    mov A, #DSP_MVOL_R
-    movw DSPADDR, YA
-
-
-    process_echo_registers
+    process_song_globals
 
 
     mov volShadowDirty_tmp, volShadowDirty_music
@@ -2051,17 +2045,17 @@ Return:
 .endproc
 
 
-; Writes echo variables to the S-DSP echo registers if the `echoDirty` bits are set
-.inline process_echo_registers
-    mov A, echoDirty
+; Writes echo and mvol variables to the S-DSP echo registers if the `songGlobalsDirty` bits are set
+.inline process_song_globals
+    mov A, songGlobalsDirty
     beq End
-        .assert ECHO_DIRTY__FIR_FILTER_BIT == 7
+        .assert SONG_GLOBALS_DIRTY__FIR_FILTER_BIT == 7
         bpl FirUnchanged
             .assert DSP_C1 - DSP_C0 == $10
             .assert DSP_C7 < $80
             .assert DSP_C7 + $10 >= $80
 
-            .assert ECHO_DIRTY__CLEAR_FIR_BIT == 0
+            .assert SONG_GLOBALS_DIRTY__CLEAR_FIR_BIT == 0
             lsr A
             bcc NoClear
                 ; Clear FIR filter
@@ -2088,10 +2082,10 @@ Return:
                 adc A, #$10
                 bpl FirLoop
 
-            mov A, echoDirty
+            mov A, songGlobalsDirty
         FirUnchanged:
 
-        .assert ECHO_DIRTY__VOLUME_BIT == 6
+        .assert SONG_GLOBALS_DIRTY__ECHO_VOLUME_BIT == 6
         asl A
         bpl EvolUnchanged
             mov DSPADDR, #DSP_EVOL_L
@@ -2147,7 +2141,14 @@ Return:
         mov DSPADDR, #DSP_EDL
         mov DSPDATA, songGlobals.edl
 
-        mov echoDirty, #0
+        ; Always set main volume
+        mov Y, songGlobals.mainVolume
+        mov A, #DSP_MVOL_L
+        movw DSPADDR, YA
+        mov A, #DSP_MVOL_R
+        movw DSPADDR, YA
+
+        mov songGlobalsDirty, #0
     End:
 .endinline
 
@@ -3984,7 +3985,7 @@ _subroutineId = zpTmp
     SetEchoInvert:
         ; set echo invert
         mov songGlobals.echoInvertFlags, A
-        set1 echoDirty, ECHO_DIRTY__VOLUME_BIT
+        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__ECHO_VOLUME_BIT
 
         jmp process_next_bytecode
 .endproc
@@ -4391,7 +4392,7 @@ _subroutineId = zpTmp
 .proc _bc__set_stereo_echo_volume_r
     mov songGlobals.echoVolume_r, A
 
-    set1 echoDirty, ECHO_DIRTY__VOLUME_BIT
+    set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__ECHO_VOLUME_BIT
 
     jmp process_next_bytecode
 .endproc
@@ -4437,7 +4438,7 @@ _subroutineId = zpTmp
     inc Y
     call _bc__adjust_echo_volume_channel
 
-    set1 echoDirty, ECHO_DIRTY__VOLUME_BIT
+    set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__ECHO_VOLUME_BIT
 
     jmp process_next_bytecode
 .endproc
@@ -4486,7 +4487,7 @@ _subroutineId = zpTmp
     ; Y = 0
     addw YA, instructionPtr
 
-    or echoDirty, #(1 << ECHO_DIRTY__FIR_FILTER_BIT) | (1 << ECHO_DIRTY__CLEAR_FIR_BIT)
+    or songGlobalsDirty, #(1 << SONG_GLOBALS_DIRTY__FIR_FILTER_BIT) | (1 << SONG_GLOBALS_DIRTY__CLEAR_FIR_BIT)
 
     jmp process_bytecode
 .endproc
@@ -4542,12 +4543,12 @@ SetI8:
     pop X
 
     bcs FeedbackDirty
-        set1 echoDirty, ECHO_DIRTY__FIR_FILTER_BIT
+        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__FIR_FILTER_BIT
         jmp process_next_bytecode
 
 
     FeedbackDirty:
-        set1 echoDirty, ECHO_DIRTY__FEEDBACK_BIT
+        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT
         jmp process_next_bytecode
 .endproc
 
@@ -4635,14 +4636,14 @@ SetI8:
 
     cmp X, #GLOBAL_I8_EFB_INDEX
     bcs FeedbackDirty
-        set1 echoDirty, ECHO_DIRTY__FIR_FILTER_BIT
+        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__FIR_FILTER_BIT
 
         pop X
         jmp process_next_bytecode
 
 
     FeedbackDirty:
-        set1 echoDirty, ECHO_DIRTY__FEEDBACK_BIT
+        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT
 
         pop X
         jmp process_next_bytecode
@@ -4701,7 +4702,7 @@ SetI8:
 
     mov songGlobals.edl, A
 
-    set1 echoDirty, ECHO_DIRTY__EDL_BIT
+    set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EDL_BIT
 .endinline
 
 

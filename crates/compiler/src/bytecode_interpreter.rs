@@ -2265,7 +2265,7 @@ impl InterpreterOutput {
 
             {
                 let song_globals_addr = usize::from(addresses::SONG_GLOBAL_VARIABLES);
-                let echo_dirty = usize::from(addresses::ECHO_DIRTY);
+                let song_globals_dirty = usize::from(addresses::SONG_GLOBALS_DIRTY);
                 let max_edl_addr = usize::from(addresses::MAX_EDL);
 
                 let song_globals: [u8; SONG_GLOBALS_SIZE] =
@@ -2275,8 +2275,8 @@ impl InterpreterOutput {
 
                 apuram[max_edl_addr] = self.song_globals.max_edl;
 
-                // mark echo DSP registers out of date
-                apuram[echo_dirty] = 0xff;
+                // mark mvol/echo DSP registers out of date
+                apuram[song_globals_dirty] = 0xff;
             }
         }
 

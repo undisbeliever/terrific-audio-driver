@@ -91,7 +91,7 @@ pub mod addresses {
         CHANNEL_INVERT_FLAGS,
         SONG_GLOBAL_VARIABLES,
         COMMON_DATA_POINTERS,
-        ECHO_DIRTY,
+        SONG_GLOBALS_DIRTY,
         MAX_EDL,
         MAIN_CLEAR_ECHO_BUFFER_START,
         MAIN_CLEAR_ECHO_BUFFER_END,
