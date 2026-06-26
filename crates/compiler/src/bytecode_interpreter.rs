@@ -127,6 +127,14 @@ pub struct SongGlobalVariables {
 }
 
 impl SongGlobalVariables {
+    fn global_i8_mut(&mut self, bc_arg: u8) -> &mut i8 {
+        match bc_arg {
+            i @ ..=7 => &mut self.fir_filter[usize::from(i)],
+            8 => &mut self.echo_feedback,
+            9.. => &mut self.main_volume,
+        }
+    }
+
     // Using raw numbers for array size so I get a compile error
     // when the audio-driver echo variable size changes.
     fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 14] {
@@ -1202,23 +1210,14 @@ impl ChannelState {
                 let param = min(read_pc(), MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM);
                 let value = i8::from_le_bytes([read_pc()]);
 
-                let index = usize::from(param >> 1);
+                let g = global.song_globals.global_i8_mut(param >> 1);
 
                 if param & 1 == 1 {
                     // set
-                    match global.song_globals.fir_filter.get_mut(index) {
-                        Some(e) => *e = value,
-                        None => global.song_globals.echo_feedback = value,
-                    }
+                    *g = value;
                 } else {
                     // adjust
-                    match global.song_globals.fir_filter.get_mut(index) {
-                        Some(e) => *e = e.saturating_add(value),
-                        None => {
-                            global.song_globals.echo_feedback =
-                                global.song_globals.echo_feedback.saturating_add(value)
-                        }
-                    }
+                    *g = g.saturating_add(value);
                 }
             }
             opcodes::ADJUST_GLOBAL_I8_LIMIT => {
@@ -1226,13 +1225,9 @@ impl ChannelState {
                 let adjust = i8::from_le_bytes([read_pc()]);
                 let limit = i8::from_le_bytes([read_pc()]);
 
-                match global.song_globals.fir_filter.get_mut(usize::from(index)) {
-                    Some(e) => *e = Self::adjust_i8_limit(*e, adjust, limit),
-                    None => {
-                        global.song_globals.echo_feedback =
-                            Self::adjust_i8_limit(global.song_globals.echo_feedback, adjust, limit)
-                    }
-                }
+                let g = global.song_globals.global_i8_mut(index);
+
+                *g = Self::adjust_i8_limit(*g, adjust, limit);
             }
 
             opcodes::MISCELLANEOUS => {

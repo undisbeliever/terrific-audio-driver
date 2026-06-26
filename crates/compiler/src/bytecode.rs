@@ -20,6 +20,7 @@ use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::project::{self, BrrSamplePitches, UniqueNamesList};
+use crate::songs::MainVolume;
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -180,6 +181,17 @@ impl NoiseFrequency {
 
 impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
+}
+
+i8_value_newtype!(
+    RelativeMainVolume,
+    RelativeMainVolumeOutOfRange,
+    NoRelativeMainVolume,
+    NoRelativeMainVolumeSign
+);
+
+impl RelativeMainVolume {
+    pub const ZERO: Self = Self(0);
 }
 
 i8_value_newtype!(
@@ -394,8 +406,9 @@ impl MiscInstruction {
 }
 
 const GLOBAL_I8_EFB_INDEX: u8 = 8;
+const GLOBAL_I8_MAIN_VOLUME_INDEX: u8 = 9;
 
-pub const MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM: u8 = (GLOBAL_I8_EFB_INDEX << 1) | 1;
+pub const MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM: u8 = (GLOBAL_I8_MAIN_VOLUME_INDEX << 1) | 1;
 
 const _: () = assert!(FirTap::MAX.as_u8() < GLOBAL_I8_EFB_INDEX);
 
@@ -3039,6 +3052,38 @@ impl<'a> Bytecode<'a> {
     ) -> Result<(), BytecodeError> {
         self.set_instrument_and_gain(self._find_instrument(name)?, gain);
         Ok(())
+    }
+
+    pub fn set_main_volume(&mut self, efb: MainVolume) {
+        emit_bytecode!(
+            self,
+            opcodes::SET_OR_ADJUST_GLOBAL_I8,
+            (GLOBAL_I8_MAIN_VOLUME_INDEX << 1) | 1,
+            efb.as_i8()
+        );
+    }
+
+    pub fn adjust_main_volume(&mut self, adjust: RelativeMainVolume) {
+        if adjust.value() != 0 {
+            emit_bytecode!(
+                self,
+                opcodes::SET_OR_ADJUST_GLOBAL_I8,
+                GLOBAL_I8_MAIN_VOLUME_INDEX << 1,
+                adjust.as_i8()
+            );
+        }
+    }
+
+    pub fn adjust_main_volume_limit(&mut self, adjust: RelativeMainVolume, limit: MainVolume) {
+        if adjust.as_i8() != 0 {
+            emit_bytecode!(
+                self,
+                opcodes::ADJUST_GLOBAL_I8_LIMIT,
+                GLOBAL_I8_MAIN_VOLUME_INDEX,
+                adjust.as_i8(),
+                limit.as_i8()
+            );
+        }
     }
 
     pub fn set_echo_volume(&mut self, evol: EchoVolume) {

@@ -1427,6 +1427,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.set_song_tick_clock(tick_clock)?;
             }
 
+            &Command::SetMainVolume(mvol) => self.bc.set_main_volume(mvol),
+            &Command::RelativeMainVolume(adjust) => self.bc.adjust_main_volume(adjust),
+            &Command::RelativeMainVolumeWithLimit(adjust, limit) => {
+                self.bc.adjust_main_volume_limit(adjust, limit)
+            }
+
             &Command::SetEchoVolume(evol) => self.bc.set_echo_volume(evol),
             &Command::SetStereoEchoVolume(left, right) => {
                 self.bc.set_stereo_echo_volume(left, right)

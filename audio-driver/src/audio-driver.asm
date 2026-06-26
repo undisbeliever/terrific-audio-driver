@@ -4510,7 +4510,8 @@ _subroutineId = zpTmp
 ; KEEP: X
 .proc bc__set_or_adjust_global_i8
     .assert songGlobals.firFilter + GLOBAL_I8_EFB_INDEX == songGlobals.echoFeedback
-    .assert MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM >> 1 == GLOBAL_I8_EFB_INDEX
+    .assert songGlobals.firFilter + GLOBAL_I8_MAIN_VOLUME_INDEX == songGlobals.mainVolume
+    .assert MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM >> 1 == GLOBAL_I8_MAIN_VOLUME_INDEX
 
     cmp A, #MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM + 1
     bcs _bc__set_or_adjust_global_i8__out_of_bounds
@@ -4542,12 +4543,11 @@ SetI8:
 
     pop X
 
-    bcs FeedbackDirty
+    bcs EfbOrMvolDirty
         set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__FIR_FILTER_BIT
         jmp process_next_bytecode
 
-
-    FeedbackDirty:
+    EfbOrMvolDirty:
         set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT
         jmp process_next_bytecode
 .endproc
@@ -4557,7 +4557,7 @@ SetI8:
 ; IN: Y = 0
 ; KEEP: X
 .proc _bc__adjust_global_i8_limit__out_of_bounds
-    mov A, #GLOBAL_I8_EFB_INDEX
+    mov A, #MAX_GLOBAL_I8_INDEX
 
     ; fallthrough
     .assert PC == bc__adjust_global_i8_limit
@@ -4570,8 +4570,9 @@ SetI8:
 ; KEEP: X
 .proc bc__adjust_global_i8_limit
     .assert songGlobals.firFilter + GLOBAL_I8_EFB_INDEX == songGlobals.echoFeedback
+    .assert songGlobals.firFilter + MAX_GLOBAL_I8_INDEX == songGlobals.mainVolume
 
-    cmp A, #GLOBAL_I8_EFB_INDEX + 1
+    cmp A, #MAX_GLOBAL_I8_INDEX + 1
     bcs _bc__adjust_global_i8_limit__out_of_bounds
 
     push X
@@ -4635,14 +4636,14 @@ SetI8:
 
 
     cmp X, #GLOBAL_I8_EFB_INDEX
-    bcs FeedbackDirty
+    bcs EfbOrMvolDirty
         set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__FIR_FILTER_BIT
 
         pop X
         jmp process_next_bytecode
 
 
-    FeedbackDirty:
+    EfbOrMvolDirty:
         set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT
 
         pop X

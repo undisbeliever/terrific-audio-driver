@@ -616,14 +616,23 @@ The Following commands affect **all channels**:
 
 <br/>
 
-Global echo commands:
- * CAUTION: hexadecimal numbers in echo commands are byte values.  For example `\efb $c0` is the same as `\efb -64`.
+Global setting commands:
+ * CAUTION: hexadecimal numbers in global commands are byte values.  For example `\efb $c0` is the same as `\efb -64`.
  * **WARNING:** These commands modify the echo S-DSP registers without any checks.
    * Excessive echo feedback will continue to get louder and louder, exploding your song.
    * An overflowing FIR filter can pop.  Excessive filter feedback will continue to get louder and louder, exploding your song.
    * Headphone users should turn down their volume when playing with echo filters/feedback.
 
 <br/>
+
+ * `\mvol <-128..127>` - Sets the main volume
+    * CAUTION: Echo volume is separate from main volume.
+      The echo buffer will be unchanged and audible when main volume is 0.
+    * CAUTION: The `SET_MAIN_VOLUME` IO command can change the main volume.
+ * `\mvol+ <1..127>[,max]` - Increment main volume
+    * If `max` is set, the main volume be <= `max`.
+ * `\mvol- <1..128>[,min]` - Decrement main volume
+    * If `min` is set, the main volume be >= `min`.
 
  * `\evol <0..127>` - Set the left and right global echo volume to the same value
  * `\evol <left 0..127>,<right 0..127>` - Set the left and right global echo volume

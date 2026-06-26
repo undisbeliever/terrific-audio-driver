@@ -75,6 +75,8 @@ TadCommand .block
     ; CAUTION: Echo volume is separate from main volume.
     ; The echo buffer will be unchanged and audible when main-volume is 0.
     ; This command is not recommended with songs that use echo.
+    ;
+    ; CAUTION: The song can change the main volume.
     SET_MAIN_VOLUME = 10
 
     ; Enables or disables music channels.

@@ -595,3 +595,101 @@ fn merge_adjust_pan_overflow_panic_bugfix() {
     assert_line_matches_line("px+64 p+2147483647", "p128");
     assert_line_matches_line("px-64 p-2147483647", "p0");
 }
+
+#[test]
+fn set_main_volume() {
+    assert_line_matches_bytecode(r"\mvol 100", &["set_main_volume $64"]);
+    assert_line_matches_bytecode(r"\mvol $64", &["set_main_volume 100"]);
+
+    assert_line_matches_bytecode(r"\mvol $ff", &["set_main_volume -1"]);
+
+    assert_line_matches_bytecode(r"\mvol 0", &["set_main_volume 0"]);
+
+    assert_line_matches_bytecode(r"\mvol -128", &["set_main_volume -128"]);
+    assert_one_error_in_mml_line(
+        r"\mvol -129",
+        7,
+        ValueError::MainVolumeOutOfRange(-129).into(),
+    );
+
+    assert_line_matches_bytecode(r"\mvol 127", &["set_main_volume 127"]);
+    assert_one_error_in_mml_line(
+        r"\mvol 128",
+        7,
+        ValueError::MainVolumeOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\mvol +127", &["set_main_volume +127"]);
+    assert_one_error_in_mml_line(
+        r"\mvol +128",
+        7,
+        ValueError::MainVolumeOutOfRange(128).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\mvol 2147483647",
+        7,
+        ValueError::MainVolumeOutOfRangeU32(i32::MAX.try_into().unwrap()).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\mvol 2147483648",
+        7,
+        ValueError::MainVolumeOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\mvol", 1, ValueError::NoMainVolume.into());
+}
+
+#[test]
+fn increment_main_volume() {
+    assert_line_matches_bytecode(r"\mvol+ 10", &["adjust_main_volume +10"]);
+
+    assert_line_matches_bytecode(r"\mvol+ 0", &[]);
+
+    assert_line_matches_bytecode(r"\mvol+ 127", &["adjust_main_volume +127"]);
+    assert_one_error_in_mml_line(
+        r"\mvol+ 128",
+        8,
+        ValueError::RelativeMainVolumeOutOfRange(128).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\mvol+ 2147483647",
+        8,
+        ValueError::RelativeMainVolumeOutOfRange(i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\mvol+ 2147483648",
+        8,
+        ValueError::RelativeMainVolumeOutOfRangeU32(0x8000_0000).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\mvol+", 1, ValueError::NoRelativeMainVolume.into());
+}
+
+#[test]
+fn decrement_main_volume() {
+    assert_line_matches_bytecode(r"\mvol- 10", &["adjust_main_volume -10"]);
+
+    assert_line_matches_bytecode(r"\mvol- 0", &[]);
+
+    assert_line_matches_bytecode(r"\mvol- 128", &["adjust_main_volume -128"]);
+    assert_one_error_in_mml_line(
+        r"\mvol- 129",
+        8,
+        ValueError::RelativeMainVolumeOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\mvol- 2147483647",
+        8,
+        ValueError::RelativeMainVolumeOutOfRange(-i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\mvol- 2147483648",
+        8,
+        ValueError::RelativeMainVolumeOutOfRangeU32(0x8000_0000).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\mvol-", 1, ValueError::NoRelativeMainVolume.into());
+}

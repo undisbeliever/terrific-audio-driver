@@ -15,7 +15,8 @@ Audio driver changes:
  * The 256 pitch table entry limit has been removed.
    The pitch table offset is now 16-bit.
  * The instrument ID is now equal to the S-DSP `VxSRCN` BRR sample index.
- * The `echo_i8` bytecode instructions have been renamed to `global_i8`
+ * Added main-volume setting to the song-data and bytecode
+    * The `echo_i8` bytecode instructions have been renamed to `global_i8`
 
 Project Changes:
  * Instruments and samples have been merged to a new `BrrSample` data structure.
@@ -40,6 +41,12 @@ MML Changes:
  * The MML compiler now merges `@` instrument and `G` GAIN envelope commands
    into a single `set_instrument_and_gain` bytecode instruction.
  * Added the `#MainVolume` MML header
+ * Added `\mvol`, `\mvol+` and `\mvol-` MML commands (set/increment/decrement main volume)
+
+Bytecode assembly changes:
+ * Added `set_main_volume`
+ * Added `adjust_main_volume`
+ * Added `adjust_main_volume_limit`
 
 
 Version 0.3.0

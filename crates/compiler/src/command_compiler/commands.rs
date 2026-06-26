@@ -10,9 +10,10 @@ use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency,
     Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
     PlayNoteTicks, PlayPitchPitch, RelativeEchoFeedback, RelativeEchoVolume,
-    RelativeFirCoefficient, RelativePan, RelativeTranspose, Transpose, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    RelativeFirCoefficient, RelativeMainVolume, RelativePan, RelativeTranspose, Transpose,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks,
 };
 use crate::command_compiler::analysis::SubroutineAnalysis;
 use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
@@ -25,7 +26,7 @@ use crate::invert_flags::InvertFlags;
 use crate::mml::{CursorTracker, Section};
 use crate::notes::Note;
 use crate::pitch_table::PlayPitchFrequency;
-use crate::songs::MetaData;
+use crate::songs::{MainVolume, MetaData};
 use crate::time::{Bpm, CommandTicks, TickClock};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::{FilePos, FilePosRange};
@@ -368,6 +369,10 @@ pub(crate) enum Command<'a> {
 
     SetSongTempo(Bpm),
     SetSongTickClock(TickClock),
+
+    SetMainVolume(MainVolume),
+    RelativeMainVolume(RelativeMainVolume),
+    RelativeMainVolumeWithLimit(RelativeMainVolume, MainVolume),
 
     SetEchoVolume(EchoVolume),
     SetStereoEchoVolume(EchoVolume, EchoVolume),

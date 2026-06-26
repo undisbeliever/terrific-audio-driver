@@ -89,6 +89,9 @@ pub enum Token<'a> {
     Comma,
     Divider,
 
+    Mvol,
+    MvolPlus,
+    MvolMinus,
     Evol,
     Efb,
     EfbPlus,
@@ -571,6 +574,9 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
             match scanner.read_while(|b: u8| !b.is_ascii_whitespace()) {
                 "asm" => Token::StartBytecodeAsm,
+                "mvol" => Token::Mvol,
+                "mvol+" => Token::MvolPlus,
+                "mvol-" => Token::MvolMinus,
                 "evol" => Token::Evol,
                 "efb" => Token::Efb,
                 "efb+" => Token::EfbPlus,

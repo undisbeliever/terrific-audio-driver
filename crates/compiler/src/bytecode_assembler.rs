@@ -7,7 +7,7 @@
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
     PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
-    RelativeFirCoefficient, VibratoPitchOffsetPerTick,
+    RelativeFirCoefficient, RelativeMainVolume, VibratoPitchOffsetPerTick,
 };
 use crate::command_compiler::commands::{LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::FIR_FILTER_SIZE;
@@ -17,6 +17,7 @@ use crate::errors::{BytecodeError, ChannelError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
 use crate::number_parsing::{parse_svnt, parse_svnt_allow_zero, parse_u32, parse_uvnt};
+use crate::songs::MainVolume;
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
 };
@@ -373,6 +374,19 @@ fn skip_last_loop_argument(args: &[&str]) -> Result<&'static SkipLastLoopAnalysi
     Ok(SkipLastLoopAnalysis::BLANK)
 }
 
+fn main_volume_argument(args: &[&str]) -> Result<MainVolume, ChannelError> {
+    let feedback = one_argument(args)?;
+
+    Ok(parse_i8wh(feedback)?)
+}
+
+fn adjust_main_volume_limit_arguments(
+    args: &[&str],
+) -> Result<(RelativeMainVolume, MainVolume), ChannelError> {
+    let (rel, limit) = two_arguments(args)?;
+    Ok((parse_svnt(rel)?, parse_i8wh(limit)?))
+}
+
 fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
     let feedback = one_argument(args)?;
 
@@ -573,6 +587,10 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        call_subroutine 1 one_argument call_subroutine_str,
 
        set_song_tick_clock 1 one_uvnt_argument,
+
+       set_main_volume 1 main_volume_argument,
+       adjust_main_volume 1 one_svnt_argument,
+       adjust_main_volume_limit 2 adjust_main_volume_limit_arguments,
 
        set_echo_volume 1 one_uvnt_argument,
        set_stereo_echo_volume 2 two_uvnt_arguments,
