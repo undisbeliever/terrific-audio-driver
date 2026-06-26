@@ -121,8 +121,8 @@ pub struct SongGlobalVariables {
     pub fir_filter: [i8; 8],
     pub echo_feedback: i8,
     pub main_volume: i8,
-    pub volume_l: u8,
-    pub volume_r: u8,
+    pub echo_volume_l: u8,
+    pub echo_volume_r: u8,
     pub invert_flags: u8,
 }
 
@@ -143,8 +143,8 @@ impl SongGlobalVariables {
         }
         out[9] = to_u8(self.echo_feedback);
         out[10] = to_u8(self.main_volume);
-        out[11] = self.volume_l;
-        out[12] = self.volume_r;
+        out[11] = self.echo_volume_l;
+        out[12] = self.echo_volume_r;
         out[13] = fix_invert_flags(self.invert_flags, audio_mode);
 
         out
@@ -186,8 +186,8 @@ impl GlobalState {
                 fir_filter: song_globals.fir.map(|c| c.as_i8()),
                 echo_feedback: song_globals.echo_feedback.as_i8(),
                 main_volume: song_globals.main_volume.as_i8(),
-                volume_l: song_globals.echo_volume_l.as_u8(),
-                volume_r: song_globals.echo_volume_r.as_u8(),
+                echo_volume_l: song_globals.echo_volume_l.as_u8(),
+                echo_volume_r: song_globals.echo_volume_r.as_u8(),
                 invert_flags: song_globals.echo_invert.into_driver_value(),
             },
         }
@@ -1154,27 +1154,27 @@ impl ChannelState {
             opcodes::SET_ECHO_VOLUME => {
                 let v = read_pc();
 
-                global.song_globals.volume_l = v & ECHO_VOLUME_MASK;
-                global.song_globals.volume_r = v & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_l = v & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_r = v & ECHO_VOLUME_MASK;
             }
             opcodes::SET_STEREO_ECHO_VOLUME => {
                 let l = read_pc();
                 let r = read_pc();
 
-                global.song_globals.volume_l = l & ECHO_VOLUME_MASK;
-                global.song_globals.volume_r = r & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_l = l & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_r = r & ECHO_VOLUME_MASK;
             }
             opcodes::ADJUST_ECHO_VOLUME => {
                 let a = i8::from_le_bytes([read_pc()]);
 
-                global.song_globals.volume_l = global
+                global.song_globals.echo_volume_l = global
                     .song_globals
-                    .volume_l
+                    .echo_volume_l
                     .saturating_add_signed(a)
                     .clamp(0, EchoVolume::MAX.as_u8());
-                global.song_globals.volume_r = global
+                global.song_globals.echo_volume_r = global
                     .song_globals
-                    .volume_r
+                    .echo_volume_r
                     .saturating_add_signed(a)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
@@ -1182,14 +1182,14 @@ impl ChannelState {
                 let l = i8::from_le_bytes([read_pc()]);
                 let r = i8::from_le_bytes([read_pc()]);
 
-                global.song_globals.volume_l = global
+                global.song_globals.echo_volume_l = global
                     .song_globals
-                    .volume_l
+                    .echo_volume_l
                     .saturating_add_signed(l)
                     .clamp(0, EchoVolume::MAX.as_u8());
-                global.song_globals.volume_r = global
+                global.song_globals.echo_volume_r = global
                     .song_globals
-                    .volume_r
+                    .echo_volume_r
                     .saturating_add_signed(r)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
@@ -2301,8 +2301,8 @@ mod test {
                 fir_filter: Default::default(),
                 echo_feedback: 0,
                 main_volume: i8::MAX,
-                volume_l: 0,
-                volume_r: 0,
+                echo_volume_l: 0,
+                echo_volume_r: 0,
                 invert_flags: 0,
             },
         }

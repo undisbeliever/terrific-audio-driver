@@ -417,8 +417,8 @@ impl GlobalValues {
         self.echo_delay.update(Edl(state.song_globals.edl));
         self.echo_feedback.update(state.song_globals.echo_feedback);
 
-        self.echo_volume_l.update(state.song_globals.volume_l);
-        self.echo_volume_r.update(state.song_globals.volume_r);
+        self.echo_volume_l.update(state.song_globals.echo_volume_l);
+        self.echo_volume_r.update(state.song_globals.echo_volume_r);
         self.echo_invert
             .update(DriverInvertFlags(state.song_globals.invert_flags));
         for i in 0..FIR_FILTER_SIZE {
