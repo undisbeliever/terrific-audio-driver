@@ -24,8 +24,8 @@ use compiler::notes::Note;
 use compiler::path::SourcePathBuf;
 use compiler::pitch_table::default_octaves_for_tuning_frequency;
 use compiler::project::{
-    self, BrrEncoderSettings, BrrEvaluator, BrrLoopFilter, BrrSample, BrrSamplePitches,
-    BrrSampleSource, BrrSource, SampleNumber, SampleTuning, WaveSource,
+    self, BlockNumber, BrrEncoderSettings, BrrEvaluator, BrrLoopFilter, BrrSample,
+    BrrSamplePitches, BrrSampleSource, BrrSource, SampleNumber, SampleTuning, WaveSource,
 };
 use compiler::songs::SongAramSize;
 use fltk::enums::Event;
@@ -660,13 +660,111 @@ impl LoopPointWidget {
     }
 }
 
+struct DupeBlockHackWidget {
+    input: IntInput,
+    decrement: Button,
+    increment: Button,
+}
+
+impl DupeBlockHackWidget {
+    fn new(x: i32, y: i32, width: i32, height: i32, title: &str, tooltip: &str) -> Self {
+        let bw = height;
+        let x2 = x + width - bw;
+        let x1 = x2 - bw;
+
+        let mut input = IntInput::new(x, y, x1 - x, height, title);
+        input.set_tooltip(tooltip);
+
+        let mut decrement = Button::new(x1, y, bw, height, "-");
+        decrement.clear_visible_focus();
+
+        let mut increment = Button::new(x2, y, bw, height, "+");
+        increment.clear_visible_focus();
+
+        Self {
+            input,
+            decrement,
+            increment,
+        }
+    }
+
+    fn setup_callbacks(&mut self, editor: Rc<RefCell<BrrSampleEditor>>) {
+        self.input.handle({
+            let e = editor.clone();
+            move |_widget, ev| BrrSampleEditor::widget_event_handler(&e, ev)
+        });
+
+        self.decrement.set_callback({
+            let e = editor.clone();
+            let mut input = self.input.clone();
+            move |_button| {
+                if let Ok(v) = input.value().parse::<usize>() {
+                    let v = v.saturating_sub(1);
+                    input.set_value(&v.to_string());
+
+                    e.borrow_mut().on_finished_editing(None);
+                }
+                // Required as the button cannot be focused
+                let _ = input.take_focus();
+            }
+        });
+
+        self.increment.set_callback({
+            let e = editor.clone();
+            let mut input = self.input.clone();
+            move |_button| {
+                let v = input.value().parse::<usize>().unwrap_or(0);
+                let v = v.saturating_add(1);
+                input.set_value(&v.to_string());
+
+                e.borrow_mut().on_finished_editing(None);
+
+                // Required as the button cannot be focused
+                let _ = input.take_focus();
+            }
+        });
+    }
+
+    fn clear_and_deactivate(&mut self) {
+        self.input.set_value("");
+        self.input.deactivate();
+        self.increment.deactivate();
+        self.decrement.deactivate();
+    }
+
+    fn set_active(&mut self, a: bool) {
+        self.input.set_active(a);
+        self.increment.set_active(a);
+        self.decrement.set_active(a);
+    }
+
+    fn clear_value(&mut self) {
+        self.input.set_value("");
+    }
+
+    fn set_value(&mut self, value: Option<BlockNumber>) {
+        match value {
+            Some(BlockNumber(0)) => self.clear_value(),
+            Some(v) => self.input.set_value(&v.0.to_string()),
+            None => self.clear_value(),
+        }
+    }
+
+    fn read_or_reset(&mut self, old_value: &Option<BlockNumber>) -> Option<Option<BlockNumber>> {
+        match InputHelper::read_or_reset(&mut self.input, old_value) {
+            Some(Some(BlockNumber(0))) => Some(None),
+            dbh => dbh,
+        }
+    }
+}
+
 struct BrrEncoderSettingsEditor {
     group: Group,
 
     looping_cb: CheckButton,
     loop_point: LoopPointWidget,
     loop_filter: Choice,
-    dupe_block_hack: IntInput,
+    dupe_block_hack: DupeBlockHackWidget,
 
     evaluator: Choice,
     ignore_gaussian_overflow: CheckButton,
@@ -679,10 +777,9 @@ impl BrrEncoderSettingsEditor {
         self.looping_cb.clear();
         self.loop_point.clear_and_deactivate();
         self.loop_filter.deactivate();
-        self.dupe_block_hack.deactivate();
+        self.dupe_block_hack.clear_and_deactivate();
 
         self.loop_filter.set_value(-1);
-        self.dupe_block_hack.set_value("");
         self.evaluator.set_value(-1);
         self.ignore_gaussian_overflow.set(ignore_gaussian_overflow);
     }
@@ -705,7 +802,7 @@ impl BrrEncoderSettingsEditor {
             Some(lf) => LoopFilterChoice::from_data(lf).to_i32(),
             None => -1,
         });
-        InputHelper::set_widget_value(&mut self.dupe_block_hack, &value.dupe_block_hack);
+        self.dupe_block_hack.set_value(value.dupe_block_hack);
 
         self.evaluator
             .set_value(BrrEvaluatorChoice::from_data(value.evaluator).to_i32());
@@ -722,12 +819,9 @@ impl BrrEncoderSettingsEditor {
 
                 let mut loop_filter = LoopFilterChoice::read_widget(&self.loop_filter).to_data();
 
-                let dupe_block_hack =
-                    InputHelper::read_or_reset(&mut self.dupe_block_hack, &old.dupe_block_hack);
+                let dupe_block_hack = self.dupe_block_hack.read_or_reset(&old.dupe_block_hack);
 
-                if dupe_block_hack.flatten().is_some_and(|b| b.0 > 0)
-                    && loop_filter == BrrLoopFilter::Reset
-                {
+                if dupe_block_hack.flatten().is_some() && loop_filter == BrrLoopFilter::Reset {
                     self.loop_filter.set_value(LoopFilterChoice::Auto.to_i32());
                     loop_filter = BrrLoopFilter::Auto;
                 }
@@ -736,7 +830,7 @@ impl BrrEncoderSettingsEditor {
                     evaluator,
                     loop_point: Some(loop_point.unwrap_or(SampleNumber(0))),
                     loop_filter: Some(loop_filter),
-                    dupe_block_hack: dupe_block_hack?.filter(|dbh| dbh.0 != 0),
+                    dupe_block_hack: dupe_block_hack?,
                 })
             }
             false => Some(BrrEncoderSettings {
@@ -750,7 +844,7 @@ impl BrrEncoderSettingsEditor {
 
     fn on_loop_filter_edited(&mut self) {
         if self.loop_filter.value() == LoopFilterChoice::ResetFilter.to_i32() {
-            self.dupe_block_hack.set_value("");
+            self.dupe_block_hack.clear_value();
         }
     }
 }
@@ -1358,13 +1452,18 @@ impl BrrSampleEditor {
                 loop_filter.set_tooltip("BRR Filter to use at the loop point");
                 loop_filter.add_choice(LoopFilterChoice::CHOICES);
 
-                let mut dupe_block_hack =
-                    IntInput::new(c2, y + 3 * r, c4 - c2, h, "Dupe block hack: ");
-                dupe_block_hack.set_tooltip(concat![
-                    "Number of blocks to duplicate at the end of the sample.\n",
-                    "May improve the quality of small looping samples.\n",
-                    "Can add low-frequency oscillation or noise to the sample.",
-                ]);
+                let dupe_block_hack = DupeBlockHackWidget::new(
+                    c2,
+                    y + 3 * r,
+                    c4 - c2,
+                    h,
+                    "Dupe block hack: ",
+                    concat![
+                        "Number of blocks to duplicate at the end of the sample.\n",
+                        "May improve the quality of small looping samples.\n",
+                        "Can add low-frequency oscillation or noise to the sample.",
+                    ],
+                );
 
                 let mut evaluator = Choice::new(c1, y + 4 * r, inner_w, h, "Evaluator: ");
                 evaluator
@@ -1578,12 +1677,6 @@ impl BrrSampleEditor {
                     move |_widget, ev| Self::widget_event_handler(&e, ev)
                 })
             };
-            let it_callback = |w: &mut IntInput| {
-                w.handle({
-                    let e = out.clone();
-                    move |_widget, ev| Self::widget_event_handler(&e, ev)
-                })
-            };
             let tf_callback = |w: &mut FloatInput, field: EditTuningField| {
                 w.handle({
                     let e = out.clone();
@@ -1620,7 +1713,11 @@ impl BrrSampleEditor {
                 let o = out.clone();
                 move |_| o.borrow_mut().on_loop_filter_edited()
             });
-            it_callback(&mut editor.sample_source.wav_settings.dupe_block_hack);
+            editor
+                .sample_source
+                .wav_settings
+                .dupe_block_hack
+                .setup_callbacks(out.clone());
             ch_callback(&mut editor.sample_source.wav_settings.evaluator);
             cb_callback(&mut editor.sample_source.wav_settings.ignore_gaussian_overflow);
 
