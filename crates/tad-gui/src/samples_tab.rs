@@ -558,35 +558,94 @@ impl BrrEvaluatorChoice {
 
 // Cannot use `fltk::misc::Spinner`.
 // For some strange reason the value decrements when I press tab.
-// ::TODO figure out why a Spinner does not work::
-struct LoopPointWidget(IntInput);
+struct LoopPointWidget {
+    input: IntInput,
+    decrement: Button,
+    increment: Button,
+}
 
 impl LoopPointWidget {
     fn new(x: i32, y: i32, width: i32, height: i32, title: &str, tooltip: &str) -> Self {
-        let mut s = IntInput::new(x, y, width, height, title);
-        s.set_tooltip(tooltip);
+        let bw = height;
+        let x2 = x + width - bw;
+        let x1 = x2 - bw;
 
-        Self(s)
+        let mut input = IntInput::new(x, y, x1 - x, height, title);
+        input.set_tooltip(tooltip);
+
+        let mut decrement = Button::new(x1, y, bw, height, "-");
+        decrement.clear_visible_focus();
+
+        let mut increment = Button::new(x2, y, bw, height, "+");
+        increment.clear_visible_focus();
+
+        Self {
+            input,
+            decrement,
+            increment,
+        }
+    }
+
+    fn setup_callbacks(&mut self, editor: Rc<RefCell<BrrSampleEditor>>) {
+        self.input.handle({
+            let e = editor.clone();
+            move |_widget, ev| BrrSampleEditor::widget_event_handler(&e, ev)
+        });
+
+        self.decrement.set_callback({
+            let e = editor.clone();
+            let mut input = self.input.clone();
+            move |_button| {
+                if let Ok(sn) = input.value().parse::<usize>() {
+                    let sn = sn.saturating_sub(1) & !15;
+                    input.set_value(&sn.to_string());
+
+                    e.borrow_mut().on_finished_editing(None);
+                }
+                // Required as the button cannot be focused
+                let _ = input.take_focus();
+            }
+        });
+
+        self.increment.set_callback({
+            let e = editor.clone();
+            let mut input = self.input.clone();
+            move |_button| {
+                if let Ok(sn) = input.value().parse::<usize>() {
+                    // Round up to the next multiple of 16
+                    let sn = sn.saturating_add(16 + 15) & !15;
+                    input.set_value(&sn.to_string());
+
+                    e.borrow_mut().on_finished_editing(None);
+                }
+                // Required as the button cannot be focused
+                let _ = input.take_focus();
+            }
+        });
     }
 
     fn clear_and_deactivate(&mut self) {
-        self.0.set_value("");
-        self.0.deactivate();
+        self.input.set_value("");
+        self.input.deactivate();
+        self.increment.deactivate();
+        self.decrement.deactivate();
     }
 
     fn set_active(&mut self, a: bool) {
-        self.0.set_active(a)
+        self.input.set_active(a);
+        self.increment.set_active(a);
+        self.decrement.set_active(a);
     }
 
     fn set_value(&mut self, value: Option<SampleNumber>) {
         match value {
-            Some(v) => self.0.set_value(&v.0.to_string()),
-            None => self.0.set_value(""),
+            Some(v) => self.input.set_value(&v.0.to_string()),
+            None => self.input.set_value(""),
         }
     }
 
     fn read_or_reset(&mut self, old_value: &Option<SampleNumber>) -> Option<SampleNumber> {
-        match self.0.value().parse::<usize>() {
+        match self.input.value().parse::<usize>() {
             Ok(sn) if sn <= 0x10000 => {
                 // Round up to the next multiple of 16
                 let sn = (sn + 15) & !15;
@@ -1552,7 +1611,11 @@ impl BrrSampleEditor {
 
             in_callback(&mut editor.name);
             cb_callback(&mut editor.sample_source.wav_settings.looping_cb);
-            it_callback(&mut editor.sample_source.wav_settings.loop_point.0);
+            editor
+                .sample_source
+                .wav_settings
+                .loop_point
+                .setup_callbacks(out.clone());
             editor.sample_source.wav_settings.loop_filter.set_callback({
                 let o = out.clone();
                 move |_| o.borrow_mut().on_loop_filter_edited()
@@ -1562,7 +1625,11 @@ impl BrrSampleEditor {
             cb_callback(&mut editor.sample_source.wav_settings.ignore_gaussian_overflow);
 
             cb_callback(&mut editor.sample_source.brr_settings.looping_cb);
-            it_callback(&mut editor.sample_source.brr_settings.override_loop_point.0);
+            editor
+                .sample_source
+                .brr_settings
+                .override_loop_point
+                .setup_callbacks(out.clone());
             cb_callback(&mut editor.sample_source.brr_settings.ignore_gaussian_overflow);
 
             tf_callback(
