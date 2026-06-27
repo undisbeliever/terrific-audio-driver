@@ -54,16 +54,14 @@ struct Args {
         short = 'l',
         long,
         value_name = "N",
-        help = "loop point (sample number)",
-        conflicts_with = "dupe_block_hack"
+        help = "loop point (sample number)"
     )]
     loop_point: Option<usize>,
 
     #[arg(
         long,
         value_name = "N",
-        help = "Dupe-block-hack (number of blocks to duplicate)",
-        conflicts_with = "loop_point"
+        help = "Dupe-block-hack (number of blocks to duplicate)"
     )]
     dupe_block_hack: Option<usize>,
 

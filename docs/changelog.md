@@ -48,6 +48,9 @@ Bytecode assembly changes:
  * Added `adjust_main_volume`
  * Added `adjust_main_volume_limit`
 
+BRR Encoder changes:
+ * Dupe-block-hack now accepts non-zero loop points
+
 
 Version 0.3.0
 =============
