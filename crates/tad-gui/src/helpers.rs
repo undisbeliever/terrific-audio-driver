@@ -8,12 +8,10 @@ use compiler::notes::Note;
 use compiler::project::{BlockNumber, SampleNumber};
 use compiler::{envelope::Adsr, envelope::Gain, identifier::Name, notes::Octave};
 
-use fltk::button::CheckButton;
 use fltk::enums::{Align, Event, Key};
 use fltk::frame::Frame;
-use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
-use fltk::prelude::{GroupExt, InputExt, WidgetExt};
+use fltk::prelude::{InputExt, WidgetExt};
 
 use std::path::PathBuf;
 
@@ -285,84 +283,4 @@ pub fn input_height(w: &impl WidgetExt) -> i32 {
     fltk::draw::set_font(w.label_font(), w.label_size());
     let min_line_spacing = fltk::draw::height();
     min_line_spacing + min_line_spacing / 2
-}
-
-pub struct InputForm {
-    group: Flex,
-
-    row_height: i32,
-    left_column_width: i32,
-    n_rows: i32,
-}
-
-impl InputForm {
-    pub fn new(ch_units: i32) -> Self {
-        let group = Flex::default().column();
-
-        let left_column_width = ch_units_to_width(&group, ch_units);
-        let row_height = input_height(&group);
-
-        Self {
-            group,
-            left_column_width,
-            row_height,
-            n_rows: 0,
-        }
-    }
-
-    /// returns (Flex, form height)
-    pub fn end(self) -> (Flex, i32) {
-        let form_height = self.row_height * self.n_rows + self.group.pad() * (self.n_rows - 1);
-
-        self.group.end();
-
-        (self.group, form_height)
-    }
-
-    #[allow(dead_code)]
-    pub fn add_checkbox_left(&mut self, text: &str) -> CheckButton {
-        let w = CheckButton::default().with_label(text);
-        self.group.fixed(&w, self.row_height);
-
-        self.n_rows += 1;
-
-        w
-    }
-
-    #[allow(dead_code)]
-    pub fn add_checkbox_right(&mut self, text: &str) -> CheckButton {
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let f = Frame::default();
-        r.fixed(&f, self.left_column_width);
-
-        let w = CheckButton::default().with_label(text);
-        self.group.fixed(&w, self.row_height);
-
-        r.end();
-
-        self.n_rows += 1;
-
-        w
-    }
-
-    pub fn add_input<T>(&mut self, text: &str) -> T
-    where
-        T: WidgetExt + Default,
-    {
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let l = label(text);
-        r.fixed(&l, self.left_column_width);
-
-        let w = T::default();
-
-        r.end();
-
-        self.n_rows += 1;
-
-        w
-    }
 }

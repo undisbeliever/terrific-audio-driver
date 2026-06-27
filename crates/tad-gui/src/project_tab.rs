@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Color};
-use fltk::group::Flex;
+use fltk::group::{Flex, Group};
 use fltk::output::Output;
 use fltk::prelude::*;
 use fltk::{app, draw};
@@ -173,9 +173,7 @@ pub struct ProjectTab {
 
     pub song_table: ListEditorTable<SongMapping>,
 
-    sound_effects_file: Output,
-
-    pub memory_stats: MemoryStats,
+    pub info: ProjectInformation,
 }
 
 impl Tab for ProjectTab {
@@ -194,7 +192,7 @@ impl Tab for ProjectTab {
 
 impl ProjectTab {
     pub fn new(data: &ProjectData, sender: app::Sender<GuiMessage>) -> Self {
-        let mut group = Flex::default_fill().row();
+        let mut group = Flex::default().size_of_parent().row();
 
         let mut sfx_sidebar = Flex::default().column();
         group.fixed(&sfx_sidebar, ch_units_to_width(&sfx_sidebar, 30));
@@ -210,37 +208,26 @@ impl ProjectTab {
 
         let song_table = ListEditorTable::new_with_data(&mut right, &data.project_songs, sender);
 
-        let mut sfx_file_flex = Flex::default().row();
-        right.fixed(&sfx_file_flex, input_height(&sfx_file_flex));
-
-        let sfx_file_label = label("Sound Effects File: ");
-        sfx_file_flex.fixed(&sfx_file_label, ch_units_to_width(&sfx_file_label, 18));
-
-        let mut sound_effects_file = Output::default();
-        sound_effects_file.set_color(Color::Background);
-        if let Some(p) = &data.sound_effects_file {
-            sound_effects_file.set_value(p.as_str());
-        }
-
-        sfx_file_flex.end();
-
-        let memory_stats = MemoryStats::new(&mut right, 18);
+        let mut info = ProjectInformation::new(&mut right, 20);
 
         right.end();
 
         group.end();
 
+        if let Some(p) = &data.sound_effects_file {
+            info.sound_effects_file.set_value(p.as_str());
+        }
+
         Self {
             group,
             sfx_export_order,
             song_table,
-            sound_effects_file,
-            memory_stats,
+            info,
         }
     }
 
     pub fn sfx_file_changed(&mut self, source: &SourcePathBuf) {
-        self.sound_effects_file.set_value(source.as_str());
+        self.info.sound_effects_file.set_value(source.as_str());
     }
 }
 
@@ -315,7 +302,9 @@ impl DefaultSfxFlagsWidget {
     }
 }
 
-pub struct MemoryStats {
+pub struct ProjectInformation {
+    sound_effects_file: Output,
+
     samples_out: Output,
     sfx_out: Output,
     largest_song_out: Output,
@@ -328,33 +317,52 @@ pub struct MemoryStats {
     largest_song_size: usize,
 }
 
-impl MemoryStats {
+impl ProjectInformation {
     const DRIVER_SIZE: usize = compiler::driver_constants::addresses::COMMON_DATA as usize;
     const AUDIO_RAM_SIZE: usize = compiler::driver_constants::AUDIO_RAM_SIZE;
 
-    fn new(parent: &mut Flex, width_ch_units: i32) -> Self {
-        let mut form = InputForm::new(width_ch_units);
+    fn new(parent: &mut Flex, label_ch_units: i32) -> Self {
+        let row_height = input_height(parent);
+        let group_height = row_height * 6;
 
-        let mut driver_out = form.add_input::<Output>("Audio Driver:");
+        let label_w = ch_units_to_width(parent, label_ch_units);
+        let output_w = label_w * 2;
+
+        let mut group = Group::new(0, 0, label_w + output_w, group_height, None);
+
+        let o = |r, label| {
+            let mut o = Output::new(label_w, r * row_height, output_w, row_height, label);
+            o.set_color(Color::Background);
+            o
+        };
+
+        let sound_effects_file = o(0, "Sound Effects File: ");
+        let mut driver_out = o(1, "Audio Driver: ");
+        let samples_out = o(2, "Samples: ");
+        let sfx_out = o(3, "Sound effects: ");
+        let largest_song_out = o(4, "Largest song:");
+        let free_space_out = o(5, "Free space:");
+
+        group.end();
+        parent.fixed(&group, group_height);
+
         Self::output_bytes(&mut driver_out, Self::DRIVER_SIZE);
-        driver_out.set_color(Color::Background);
 
-        let mut samples_out = form.add_input::<Output>("Samples:");
-        samples_out.set_color(Color::Background);
+        group.resize_callback({
+            let mut children: Vec<_> = (0..group.children())
+                .filter_map(|i| group.child(i))
+                .collect();
 
-        let mut sfx_out = form.add_input::<Output>("Sound effects:");
-        sfx_out.set_color(Color::Background);
-
-        let mut largest_song_out = form.add_input::<Output>("Largest song:");
-        largest_song_out.set_color(Color::Background);
-
-        let mut free_space_out = form.add_input::<Output>("Free space:");
-        free_space_out.set_color(Color::Background);
-
-        let (group, form_height) = form.end();
-        parent.fixed(&group, form_height);
+            move |_group, x, _y, w, _h| {
+                for c in &mut children {
+                    c.resize(x + label_w, c.y(), w - label_w, row_height);
+                }
+            }
+        });
 
         Self {
+            sound_effects_file,
+
             samples_out,
             sfx_out,
             largest_song_out,

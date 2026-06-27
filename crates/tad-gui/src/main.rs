@@ -850,7 +850,7 @@ impl Project {
             }
 
             CompilerOutput::CommonAudioData(cad) => {
-                self.project_tab.memory_stats.cad_output_changed(&cad);
+                self.project_tab.info.cad_output_changed(&cad);
                 self.tab_manager
                     .set_tab_label_color(&mut self.samples_tab, cad.is_ok_or_none());
 
@@ -859,13 +859,13 @@ impl Project {
             }
 
             CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {
-                self.project_tab.memory_stats.set_n_missing_sfx(n_missing);
+                self.project_tab.info.set_n_missing_sfx(n_missing);
                 self.sound_effects_tab.n_missing_sfx_changed(n_missing);
 
                 self.update_sfx_tab_color();
             }
             CompilerOutput::LargestSongSize(size) => {
-                self.project_tab.memory_stats.set_largest_song(&size);
+                self.project_tab.info.set_largest_song(&size);
                 self.samples_tab.set_largest_song(size);
             }
 
