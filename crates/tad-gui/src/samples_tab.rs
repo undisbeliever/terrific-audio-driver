@@ -602,8 +602,6 @@ impl LoopPointWidget {
 
                     e.borrow_mut().on_finished_editing(None);
                 }
-                // Required as the button cannot be focused
-                let _ = input.take_focus();
             }
         });
 
@@ -618,8 +616,6 @@ impl LoopPointWidget {
 
                     e.borrow_mut().on_finished_editing(None);
                 }
-                // Required as the button cannot be focused
-                let _ = input.take_focus();
             }
         });
     }
@@ -704,8 +700,6 @@ impl DupeBlockHackWidget {
 
                     e.borrow_mut().on_finished_editing(None);
                 }
-                // Required as the button cannot be focused
-                let _ = input.take_focus();
             }
         });
 
@@ -718,9 +712,6 @@ impl DupeBlockHackWidget {
                 input.set_value(&v.to_string());
 
                 e.borrow_mut().on_finished_editing(None);
-
-                // Required as the button cannot be focused
-                let _ = input.take_focus();
             }
         });
     }
