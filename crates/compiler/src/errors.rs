@@ -11,9 +11,9 @@ use crate::bytecode::{
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoSlideTicks,
     PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient,
-    RelativePan, RelativeVolume, Transpose, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
-    VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
-    VolumeSlideAmount, VolumeSlideTicks,
+    RelativeMainVolume, RelativePan, RelativeVolume, Transpose, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::command_compiler::channel_bc_generator::MAX_NO_LOOP_TICKS;
 use crate::command_compiler::commands::{
@@ -39,6 +39,7 @@ use crate::path::PathString;
 use crate::pitch_table::{
     InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate, MAX_N_PITCHES,
 };
+use crate::songs::MainVolume;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
@@ -186,6 +187,7 @@ pub enum ValueError {
     NoRelativeTransposeSign,
     NoDetuneValueSign,
     NoDetuneCentsSign,
+    NoRelativeMainVolumeSign,
     NoRelativeEchoVolumeSign,
     NoRelativeEchoFeedbackSign,
     NoRelativeFirCoefficientSign,
@@ -217,6 +219,12 @@ pub enum ValueError {
     MissingDefaultLength,
 
     CannotConvertBpmToTickClock,
+
+    MainVolumeOutOfRange(i32),
+    MainVolumeOutOfRangeU32(u32),
+    MainVolumeHexOutOfRange(u32),
+    RelativeMainVolumeOutOfRange(i32),
+    RelativeMainVolumeOutOfRangeU32(u32),
 
     EchoEdlLargerThanMaxEdl { edl: EchoEdl, max_edl: EchoEdl },
     EchoEdlOutOfRange(u32),
@@ -292,6 +300,8 @@ pub enum ValueError {
     NoEchoVolume,
     NoRelativeEchoVolume,
     NoEchoFeedback,
+    NoMainVolume,
+    NoRelativeMainVolume,
     NoFirTap,
     NoRelativeEchoFeedback,
     NoFirCoefficient,
@@ -1145,6 +1155,9 @@ impl Display for ValueError {
             Self::NoDetuneCentsSign => {
                 write!(f, "missing + or - in detune cents")
             }
+            Self::NoRelativeMainVolumeSign => {
+                write!(f, "missing + or - in relative main volume")
+            }
             Self::NoRelativeEchoVolumeSign => {
                 write!(f, "missing + or - in relative echo volume")
             }
@@ -1195,6 +1208,18 @@ impl Display for ValueError {
             Self::MissingDefaultLength => write!(f, "missing length"),
 
             Self::CannotConvertBpmToTickClock => write!(f, "cannot convert BPM to tick clock"),
+
+            Self::MainVolumeOutOfRange(v) => out_of_range!("main volume", v, MainVolume),
+            Self::MainVolumeOutOfRangeU32(v) => out_of_range!("main volume", v, MainVolume),
+            Self::MainVolumeHexOutOfRange(v) => {
+                write!(f, "cannot parse main volume: ${v:x} is not a byte value")
+            }
+            Self::RelativeMainVolumeOutOfRange(v) => {
+                out_of_range!("relative main volume", v, RelativeMainVolume)
+            }
+            Self::RelativeMainVolumeOutOfRangeU32(v) => {
+                out_of_range!("relative main volume", v, RelativeMainVolume)
+            }
 
             Self::EchoEdlLargerThanMaxEdl { edl, max_edl } => {
                 write!(
@@ -1333,6 +1358,8 @@ impl Display for ValueError {
             Self::NoEchoVolume => write!(f, "no echo volume value"),
             Self::NoRelativeEchoVolume => write!(f, "no relative echo volume"),
             Self::NoEchoFeedback => write!(f, "no echo feedback value"),
+            Self::NoMainVolume => write!(f, "no main volume value"),
+            Self::NoRelativeMainVolume => write!(f, "no relative main volume"),
             Self::NoFirTap => write!(f, "no fir tap"),
             Self::NoRelativeEchoFeedback => write!(f, "no relative echo feedback"),
             Self::NoFirCoefficient => write!(f, "no fir coefficient"),

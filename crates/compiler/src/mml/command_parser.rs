@@ -16,10 +16,10 @@ use crate::project::UniqueNamesList;
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
     PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
-    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, Transpose, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, RelativeMainVolume,
+    Transpose, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::command_compiler::commands::{
     ChannelCommands, Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato,
@@ -2277,76 +2277,99 @@ fn parse_efb<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     Command::SetEchoFeedback(parse_i8wh_newtype(pos, p))
 }
 
-fn parse_efb_plus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
-    let value_pos = p.peek_pos();
-
-    let rel: RelativeEchoFeedback = match_next_token!(p,
-        &Token::Number(n) | &Token::HexNumber(n) => {
-            match i32::try_from(n) {
-                Ok(i) => match i.try_into() {
-                    Ok(i) => i,
-                    Err(e) => {
-                        p.add_error(value_pos, e.into());
-                        RelativeEchoFeedback::ZERO
-                    }
-                },
-                Err(_) => {
-                    p.add_error(value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into());
-                    RelativeEchoFeedback::ZERO
-                }
-            }
-        },
-        #_ => {
-            p.add_error(pos, ValueError::NoRelativeEchoFeedback.into());
-            RelativeEchoFeedback::ZERO
-        }
-    );
-
-    let pos = p.peek_pos();
-
-    if next_token_matches!(p, Token::Comma) {
-        let limit = parse_i8wh_newtype(pos, p);
-        Command::RelativeEchoFeedbackWithLimit(rel, limit)
-    } else {
-        Command::RelativeEchoFeedback(rel)
-    }
+fn parse_mvol<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
+    Command::SetMainVolume(parse_i8wh_newtype(pos, p))
 }
 
-fn parse_efb_minus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
-    let value_pos = p.peek_pos();
+macro_rules! global_i8_commands {
+    ($plus_fn:ident, $minus_fn:ident, $Rel:ident, $CommandWithLimit:ident, $OutOfRangeError:ident) => {
+    fn $plus_fn<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
+        let value_pos = p.peek_pos();
 
-    let rel: RelativeEchoFeedback = match_next_token!(p,
-        &Token::Number(n) | &Token::HexNumber(n) => {
-            match i32::try_from(n) {
-                // `-i`` is safe, `-i32::MAX` is in bounds
-                Ok(i) => match (-i).try_into() {
-                    Ok(i) => i,
-                    Err(e) => {
-                        p.add_error(value_pos, e.into());
-                        RelativeEchoFeedback::ZERO
+        let rel: $Rel = match_next_token!(p,
+            &Token::Number(n) | &Token::HexNumber(n) => {
+                match i32::try_from(n) {
+                    Ok(i) => match i.try_into() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            p.add_error(value_pos, e.into());
+                            $Rel::ZERO
+                        }
+                    },
+                    Err(_) => {
+                        p.add_error(value_pos, ValueError::$OutOfRangeError(n).into());
+                        $Rel::ZERO
                     }
-                },
-                Err(_) => {
-                    p.add_error(value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into());
-                    RelativeEchoFeedback::ZERO
                 }
+            },
+            #_ => {
+                p.add_error(pos, $Rel::MISSING_ERROR.into());
+                $Rel::ZERO
             }
-        },
-        #_ => {
-            p.add_error(pos, ValueError::NoRelativeEchoFeedback.into());
-            RelativeEchoFeedback::ZERO
+        );
+
+        let pos = p.peek_pos();
+
+        if next_token_matches!(p, Token::Comma) {
+            let limit = parse_i8wh_newtype(pos, p);
+            Command::$CommandWithLimit(rel, limit)
+        } else {
+            Command::$Rel(rel)
         }
-    );
-
-    let pos = p.peek_pos();
-
-    if next_token_matches!(p, Token::Comma) {
-        let limit = parse_i8wh_newtype(pos, p);
-        Command::RelativeEchoFeedbackWithLimit(rel, limit)
-    } else {
-        Command::RelativeEchoFeedback(rel)
     }
+
+    fn $minus_fn<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
+        let value_pos = p.peek_pos();
+
+        let rel: $Rel = match_next_token!(p,
+            &Token::Number(n) | &Token::HexNumber(n) => {
+                match i32::try_from(n) {
+                    // `-i`` is safe, `-i32::MAX` is in bounds
+                    Ok(i) => match (-i).try_into() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            p.add_error(value_pos, e.into());
+                            $Rel::ZERO
+                        }
+                    },
+                    Err(_) => {
+                        p.add_error(value_pos, ValueError::$OutOfRangeError(n).into());
+                        $Rel::ZERO
+                    }
+                }
+            },
+            #_ => {
+                p.add_error(pos, $Rel::MISSING_ERROR.into());
+                $Rel::ZERO
+            }
+        );
+
+        let pos = p.peek_pos();
+
+        if next_token_matches!(p, Token::Comma) {
+            let limit = parse_i8wh_newtype(pos, p);
+            Command::$CommandWithLimit(rel, limit)
+        } else {
+            Command::$Rel(rel)
+        }
+    }
+
+    };
 }
+global_i8_commands!(
+    parse_efb_plus,
+    parse_efb_minus,
+    RelativeEchoFeedback,
+    RelativeEchoFeedbackWithLimit,
+    RelativeEchoFeedbackOutOfRangeU32
+);
+global_i8_commands!(
+    parse_mvol_plus,
+    parse_mvol_minus,
+    RelativeMainVolume,
+    RelativeMainVolumeWithLimit,
+    RelativeMainVolumeOutOfRangeU32
+);
 
 fn parse_ftap<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
@@ -2601,6 +2624,10 @@ fn parse_non_mergeable_token<'a>(
         Token::RelativeTranspose => parse_relative_transpose(pos, p),
         Token::DetuneOrGainModeD => parse_detune(pos, p),
         Token::DetuneCents => parse_detune_cents(pos, p),
+
+        Token::Mvol => parse_mvol(pos, p),
+        Token::MvolPlus => parse_mvol_plus(pos, p),
+        Token::MvolMinus => parse_mvol_minus(pos, p),
 
         Token::Evol => parse_evol(pos, p),
         Token::Efb => parse_efb(pos, p),

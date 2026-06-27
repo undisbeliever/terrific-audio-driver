@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
-use crate::bytecode::{InstrumentId, MiscInstruction, Pan, MAX_SET_OR_ADJUST_ECHO_I8_PARAM};
+use crate::bytecode::{InstrumentId, MiscInstruction, Pan, MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM};
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::AudioMode;
-use crate::driver_constants::ECHO_VARIABLES_SIZE;
+use crate::driver_constants::SONG_GLOBALS_SIZE;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
     BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS, STARTING_VOLUME,
@@ -115,35 +115,45 @@ struct Channel {
 }
 
 #[derive(Clone)]
-pub struct EchoVariables {
+pub struct SongGlobalVariables {
     pub max_edl: u8,
     pub edl: u8,
     pub fir_filter: [i8; 8],
-    pub feedback: i8,
-    pub volume_l: u8,
-    pub volume_r: u8,
+    pub echo_feedback: i8,
+    pub main_volume: i8,
+    pub echo_volume_l: u8,
+    pub echo_volume_r: u8,
     pub invert_flags: u8,
 }
 
-impl EchoVariables {
+impl SongGlobalVariables {
+    fn global_i8_mut(&mut self, bc_arg: u8) -> &mut i8 {
+        match bc_arg {
+            i @ ..=7 => &mut self.fir_filter[usize::from(i)],
+            8 => &mut self.echo_feedback,
+            9.. => &mut self.main_volume,
+        }
+    }
+
     // Using raw numbers for array size so I get a compile error
     // when the audio-driver echo variable size changes.
-    fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 13] {
+    fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 14] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
 
         assert!(self.max_edl <= EchoEdl::MAX.as_u8());
         assert!(self.edl <= self.max_edl);
 
-        let mut out = [0; 13];
+        let mut out = [0; 14];
 
         out[0] = self.edl;
         for (i, &f) in self.fir_filter.iter().enumerate() {
             out[i + 1] = to_u8(f);
         }
-        out[9] = to_u8(self.feedback);
-        out[10] = self.volume_l;
-        out[11] = self.volume_r;
-        out[12] = fix_invert_flags(self.invert_flags, audio_mode);
+        out[9] = to_u8(self.echo_feedback);
+        out[10] = to_u8(self.main_volume);
+        out[11] = self.echo_volume_l;
+        out[12] = self.echo_volume_r;
+        out[13] = fix_invert_flags(self.invert_flags, audio_mode);
 
         out
     }
@@ -163,29 +173,30 @@ struct InterpreterOutput {
     song_tick_counter: u16,
     tick_clock: u8,
 
-    echo: EchoVariables,
+    song_globals: SongGlobalVariables,
 }
 
 #[derive(Clone)]
 pub struct GlobalState {
     pub timer_register: u8,
-    pub echo: EchoVariables,
+    pub song_globals: SongGlobalVariables,
 }
 
 impl GlobalState {
     fn new(tick_clock: TickClock, song_data: &SongData) -> Self {
-        let echo = &song_data.metadata().echo_buffer;
+        let song_globals = &song_data.metadata().song_globals;
 
         Self {
             timer_register: tick_clock.into_driver_value(),
-            echo: EchoVariables {
-                max_edl: echo.max_edl.as_u8(),
-                edl: echo.edl_register(),
-                fir_filter: echo.fir.map(|c| c.as_i8()),
-                feedback: echo.feedback.as_i8(),
-                volume_l: echo.echo_volume_l.as_u8(),
-                volume_r: echo.echo_volume_r.as_u8(),
-                invert_flags: echo.invert.into_driver_value(),
+            song_globals: SongGlobalVariables {
+                max_edl: song_globals.max_edl.as_u8(),
+                edl: song_globals.edl_register(),
+                fir_filter: song_globals.fir.map(|c| c.as_i8()),
+                echo_feedback: song_globals.echo_feedback.as_i8(),
+                main_volume: song_globals.main_volume.as_i8(),
+                echo_volume_l: song_globals.echo_volume_l.as_u8(),
+                echo_volume_r: song_globals.echo_volume_r.as_u8(),
+                invert_flags: song_globals.echo_invert.into_driver_value(),
             },
         }
     }
@@ -975,7 +986,7 @@ impl ChannelState {
                 if flags & 0x80 != 0 {
                     self.invert_flags = flags << 1;
                 } else {
-                    global.echo.invert_flags = flags << 1;
+                    global.song_globals.invert_flags = flags << 1;
                 }
             }
 
@@ -1151,27 +1162,27 @@ impl ChannelState {
             opcodes::SET_ECHO_VOLUME => {
                 let v = read_pc();
 
-                global.echo.volume_l = v & ECHO_VOLUME_MASK;
-                global.echo.volume_r = v & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_l = v & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_r = v & ECHO_VOLUME_MASK;
             }
             opcodes::SET_STEREO_ECHO_VOLUME => {
                 let l = read_pc();
                 let r = read_pc();
 
-                global.echo.volume_l = l & ECHO_VOLUME_MASK;
-                global.echo.volume_r = r & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_l = l & ECHO_VOLUME_MASK;
+                global.song_globals.echo_volume_r = r & ECHO_VOLUME_MASK;
             }
             opcodes::ADJUST_ECHO_VOLUME => {
                 let a = i8::from_le_bytes([read_pc()]);
 
-                global.echo.volume_l = global
-                    .echo
-                    .volume_l
+                global.song_globals.echo_volume_l = global
+                    .song_globals
+                    .echo_volume_l
                     .saturating_add_signed(a)
                     .clamp(0, EchoVolume::MAX.as_u8());
-                global.echo.volume_r = global
-                    .echo
-                    .volume_r
+                global.song_globals.echo_volume_r = global
+                    .song_globals
+                    .echo_volume_r
                     .saturating_add_signed(a)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
@@ -1179,54 +1190,44 @@ impl ChannelState {
                 let l = i8::from_le_bytes([read_pc()]);
                 let r = i8::from_le_bytes([read_pc()]);
 
-                global.echo.volume_l = global
-                    .echo
-                    .volume_l
+                global.song_globals.echo_volume_l = global
+                    .song_globals
+                    .echo_volume_l
                     .saturating_add_signed(l)
                     .clamp(0, EchoVolume::MAX.as_u8());
-                global.echo.volume_r = global
-                    .echo
-                    .volume_r
+                global.song_globals.echo_volume_r = global
+                    .song_globals
+                    .echo_volume_r
                     .saturating_add_signed(r)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
             opcodes::SET_FIR_FILTER => {
                 let filter = std::array::from_fn(|_i| i8::from_le_bytes([read_pc()]));
 
-                global.echo.fir_filter = filter;
+                global.song_globals.fir_filter = filter;
             }
-            opcodes::SET_OR_ADJUST_ECHO_I8 => {
-                let param = min(read_pc(), MAX_SET_OR_ADJUST_ECHO_I8_PARAM);
+            opcodes::SET_OR_ADJUST_GLOBAL_I8 => {
+                let param = min(read_pc(), MAX_SET_OR_ADJUST_GLOBAL_I8_PARAM);
                 let value = i8::from_le_bytes([read_pc()]);
 
-                let index = usize::from(param >> 1);
+                let g = global.song_globals.global_i8_mut(param >> 1);
 
                 if param & 1 == 1 {
                     // set
-                    match global.echo.fir_filter.get_mut(index) {
-                        Some(e) => *e = value,
-                        None => global.echo.feedback = value,
-                    }
+                    *g = value;
                 } else {
                     // adjust
-                    match global.echo.fir_filter.get_mut(index) {
-                        Some(e) => *e = e.saturating_add(value),
-                        None => global.echo.feedback = global.echo.feedback.saturating_add(value),
-                    }
+                    *g = g.saturating_add(value);
                 }
             }
-            opcodes::ADJUST_ECHO_I8_LIMIT => {
+            opcodes::ADJUST_GLOBAL_I8_LIMIT => {
                 let index = read_pc();
                 let adjust = i8::from_le_bytes([read_pc()]);
                 let limit = i8::from_le_bytes([read_pc()]);
 
-                match global.echo.fir_filter.get_mut(usize::from(index)) {
-                    Some(e) => *e = Self::adjust_i8_limit(*e, adjust, limit),
-                    None => {
-                        global.echo.feedback =
-                            Self::adjust_i8_limit(global.echo.feedback, adjust, limit)
-                    }
-                }
+                let g = global.song_globals.global_i8_mut(index);
+
+                *g = Self::adjust_i8_limit(*g, adjust, limit);
             }
 
             opcodes::MISCELLANEOUS => {
@@ -1242,7 +1243,7 @@ impl ChannelState {
                     }
                     MiscInstruction::SetEchoDelay => {
                         let edl = read_pc();
-                        global.echo.edl = min(edl, global.echo.max_edl);
+                        global.song_globals.edl = min(edl, global.song_globals.max_edl);
                     }
                 }
             }
@@ -1363,8 +1364,8 @@ impl ChannelState {
             opcodes::ADJUST_ECHO_VOLUME => Some(2),
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
             opcodes::SET_FIR_FILTER => Some(9),
-            opcodes::SET_OR_ADJUST_ECHO_I8 => Some(3),
-            opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
+            opcodes::SET_OR_ADJUST_GLOBAL_I8 => Some(3),
+            opcodes::ADJUST_GLOBAL_I8_LIMIT => Some(4),
             opcodes::KEYON_NEXT_NOTE => Some(1),
 
             opcodes::MISCELLANEOUS => None,
@@ -1670,11 +1671,11 @@ where
     }
 
     pub fn song_header_edl(&self) -> u8 {
-        self.global.echo.song_header_edl()
+        self.global.song_globals.song_header_edl()
     }
 
     pub fn esa_register(&self) -> u8 {
-        let echo_size = EchoEdl::try_from(self.global.echo.max_edl)
+        let echo_size = EchoEdl::try_from(self.global.song_globals.max_edl)
             .unwrap()
             .buffer_size();
 
@@ -1682,7 +1683,7 @@ where
     }
 
     pub fn edl_register(&self) -> u8 {
-        self.global.echo.edl
+        self.global.song_globals.edl
     }
 
     pub fn write_to_emulator(&self, emu: &mut impl ApuEmulator) {
@@ -1709,7 +1710,7 @@ where
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.song_addr,
             audio_mode: self.audio_mode,
-            echo: self.global.echo.clone(),
+            song_globals: self.global.song_globals.clone(),
         };
 
         o.write_to_emulator(emu);
@@ -2258,18 +2259,19 @@ impl InterpreterOutput {
             }
 
             {
-                let echo_addr = usize::from(addresses::ECHO_VARIABLES);
-                let echo_dirty = usize::from(addresses::ECHO_DIRTY);
+                let song_globals_addr = usize::from(addresses::SONG_GLOBAL_VARIABLES);
+                let song_globals_dirty = usize::from(addresses::SONG_GLOBALS_DIRTY);
                 let max_edl_addr = usize::from(addresses::MAX_EDL);
 
-                let echo_variables: [u8; ECHO_VARIABLES_SIZE] =
-                    self.echo.to_driver_data(self.audio_mode);
-                apuram[echo_addr..echo_addr + ECHO_VARIABLES_SIZE].copy_from_slice(&echo_variables);
+                let song_globals: [u8; SONG_GLOBALS_SIZE] =
+                    self.song_globals.to_driver_data(self.audio_mode);
+                apuram[song_globals_addr..song_globals_addr + SONG_GLOBALS_SIZE]
+                    .copy_from_slice(&song_globals);
 
-                apuram[max_edl_addr] = self.echo.max_edl;
+                apuram[max_edl_addr] = self.song_globals.max_edl;
 
-                // mark echo DSP registers out of date
-                apuram[echo_dirty] = 0xff;
+                // mark mvol/echo DSP registers out of date
+                apuram[song_globals_dirty] = 0xff;
             }
         }
 
@@ -2279,7 +2281,7 @@ impl InterpreterOutput {
 
 #[cfg(test)]
 mod test {
-    use super::{ChannelState, EchoVariables, GlobalState};
+    use super::{ChannelState, GlobalState, SongGlobalVariables};
     use crate::driver_constants::SONG_HEADER_SIZE;
     use crate::opcodes;
     use crate::songs::blank_song;
@@ -2288,13 +2290,14 @@ mod test {
     fn blank_global_state() -> GlobalState {
         GlobalState {
             timer_register: MIN_TICK_TIMER,
-            echo: EchoVariables {
+            song_globals: SongGlobalVariables {
                 max_edl: 0,
                 edl: 0,
                 fir_filter: Default::default(),
-                feedback: 0,
-                volume_l: 0,
-                volume_r: 0,
+                echo_feedback: 0,
+                main_volume: i8::MAX,
+                echo_volume_l: 0,
+                echo_volume_r: 0,
                 invert_flags: 0,
             },
         }

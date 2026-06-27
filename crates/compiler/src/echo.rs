@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::cmp::min;
 use std::time::Duration;
 
 use crate::driver_constants::{
@@ -12,7 +11,6 @@ use crate::driver_constants::{
     FIR_FILTER_SIZE,
 };
 use crate::errors::ValueError;
-use crate::invert_flags::InvertFlags;
 use crate::value_newtypes::{
     i8_with_hex_byte_value_newtype, parse_i8wh, u8_value_newtype, UnsignedValueNewType,
 };
@@ -117,43 +115,6 @@ impl TryFrom<u32> for EchoLength {
         }
 
         Ok(EchoLength(length_ms.try_into().unwrap()))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EchoBuffer {
-    pub max_edl: EchoEdl,
-    pub edl: EchoEdl,
-    pub fir: [FirCoefficient; FIR_FILTER_SIZE],
-    pub feedback: EchoFeedback,
-    pub echo_volume_l: EchoVolume,
-    pub echo_volume_r: EchoVolume,
-    pub invert: InvertFlags,
-}
-
-impl EchoBuffer {
-    pub fn test_fir_gain(&self) -> Result<(), ValueError> {
-        test_fir_filter_gain(&self.fir)
-    }
-
-    pub fn buffer_size(&self) -> usize {
-        self.buffer_size_u16().into()
-    }
-
-    pub fn buffer_size_u16(&self) -> u16 {
-        self.max_edl.buffer_size()
-    }
-
-    pub fn buffer_addr(&self) -> u16 {
-        u16::try_from(0x10000 - self.buffer_size()).unwrap()
-    }
-
-    pub fn esa_register(&self) -> u8 {
-        self.buffer_addr().to_le_bytes()[1]
-    }
-
-    pub fn edl_register(&self) -> u8 {
-        min(self.max_edl.as_u8(), self.edl.as_u8())
     }
 }
 

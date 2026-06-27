@@ -253,6 +253,11 @@ IoCommands__PAUSE = 0
     ;  * parameter0: signed i8 volume
     ;
     ; NOTE: The main volume is reset whenever a new song is loaded.
+    ;
+    ; CAUTION: Echo volume is separate from main volume.
+    ; The echo buffer will be unchanged and audible when main-volume is 0.
+    ;
+    ; CAUTION: The song can change the main volume.
     cmd__set_main_volume ; CMD 10
 
     ; Enables or disable music channels.

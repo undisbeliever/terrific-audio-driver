@@ -14,15 +14,16 @@ use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::{ChannelCommands, MmlInstrument};
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,
-    MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK,
-    SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO, SONG_HEADER_ECHO_EDL,
+    addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, FIR_FILTER_SIZE,
+    MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_GLOBALS_SIZE,
+    SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO_EDL, SONG_HEADER_GLOBALS,
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
-use crate::echo::{EchoBuffer, EchoEdl};
+use crate::echo::{self, EchoEdl, EchoFeedback, EchoVolume, FirCoefficient};
 use crate::envelope::{Envelope, Gain};
-use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
+use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError, ValueError};
 use crate::identifier::{ChannelId, MusicChannelIndex, Name};
+use crate::invert_flags::InvertFlags;
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::Note;
 use crate::pitch_table::PitchTable;
@@ -30,8 +31,10 @@ use crate::project::{self, single_item_unique_names_list, UniqueNamesList};
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
+use crate::value_newtypes::i8_with_hex_byte_value_newtype;
 use crate::{command_compiler, mml, UnsignedValueNewType};
 
+use std::cmp::min;
 use std::fmt::Debug;
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -103,7 +106,7 @@ pub struct MetaData {
     pub copyright: Option<String>,
     pub license: Option<String>,
 
-    pub echo_buffer: EchoBuffer,
+    pub song_globals: GlobalSongSettings,
 
     pub tick_clock: TickClock,
 
@@ -115,6 +118,52 @@ pub struct MetaData {
 
     /// SPC export fadeout length in milliseconds
     pub spc_fadeout_millis: Option<u32>,
+}
+
+i8_with_hex_byte_value_newtype!(
+    MainVolume,
+    MainVolumeOutOfRange,
+    MainVolumeOutOfRangeU32,
+    MainVolumeHexOutOfRange,
+    NoMainVolume
+);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalSongSettings {
+    pub max_edl: EchoEdl,
+    pub edl: EchoEdl,
+    pub fir: [FirCoefficient; FIR_FILTER_SIZE],
+    pub echo_feedback: EchoFeedback,
+    pub main_volume: MainVolume,
+    pub echo_volume_l: EchoVolume,
+    pub echo_volume_r: EchoVolume,
+    pub echo_invert: InvertFlags,
+}
+
+impl GlobalSongSettings {
+    pub fn test_fir_gain(&self) -> Result<(), ValueError> {
+        echo::test_fir_filter_gain(&self.fir)
+    }
+
+    pub fn echo_buffer_size(&self) -> usize {
+        self.echo_buffer_size_u16().into()
+    }
+
+    pub fn echo_buffer_size_u16(&self) -> u16 {
+        self.max_edl.buffer_size()
+    }
+
+    pub fn echo_buffer_addr(&self) -> u16 {
+        u16::try_from(0x10000 - self.echo_buffer_size()).unwrap()
+    }
+
+    pub fn esa_register(&self) -> u8 {
+        self.echo_buffer_addr().to_le_bytes()[1]
+    }
+
+    pub fn edl_register(&self) -> u8 {
+        min(self.max_edl.as_u8(), self.edl.as_u8())
+    }
 }
 
 #[derive(Clone)]
@@ -194,7 +243,7 @@ impl SongData {
 
         SongAramSize {
             data_size: data_size.try_into().unwrap_or(u16::MAX),
-            echo_buffer_size: self.metadata.echo_buffer.buffer_size_u16(),
+            echo_buffer_size: self.metadata.song_globals.echo_buffer_size_u16(),
         }
     }
 
@@ -393,21 +442,22 @@ fn write_song_header(
     header[SONG_HEADER_ACTIVE_MUSIC_CHANNELS] = active_music_channels;
 
     // Echo buffer settings
-    const EBS: usize = SONG_HEADER_ECHO;
-    let echo_buffer = &metadata.echo_buffer;
+    const EBS: usize = SONG_HEADER_GLOBALS;
+    let echo_buffer = &metadata.song_globals;
 
     const _: () = assert!(EBS == SONG_HEADER_ECHO_EDL);
     header[EBS] = (echo_buffer.max_edl.as_u8() << 4) | echo_buffer.edl.as_u8();
     for (i, f) in echo_buffer.fir.iter().enumerate() {
         header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];
     }
-    header[EBS + 9] = echo_buffer.feedback.as_i8().to_le_bytes()[0];
-    header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
-    header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
-    header[EBS + 12] = echo_buffer.invert.into_driver_value();
+    header[EBS + 9] = echo_buffer.echo_feedback.as_i8().to_le_bytes()[0];
+    header[EBS + 10] = echo_buffer.main_volume.as_i8().to_le_bytes()[0];
+    header[EBS + 11] = echo_buffer.echo_volume_l.as_u8();
+    header[EBS + 12] = echo_buffer.echo_volume_r.as_u8();
+    header[EBS + 13] = echo_buffer.echo_invert.into_driver_value();
 
-    const _: () = assert!(13 == ECHO_VARIABLES_SIZE);
-    const _: () = assert!(EBS + ECHO_VARIABLES_SIZE == SONG_HEADER_TICK_TIMER_OFFSET);
+    const _: () = assert!(14 == SONG_GLOBALS_SIZE);
+    const _: () = assert!(EBS + SONG_GLOBALS_SIZE == SONG_HEADER_TICK_TIMER_OFFSET);
 
     header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.into_driver_value();
     header[SONG_HEADER_N_SUBROUTINES_OFFSET] = n_subroutines.try_into().unwrap();
@@ -469,7 +519,7 @@ pub fn validate_song_size(
     common_data_size: usize,
 ) -> Result<(), SongTooLargeError> {
     let song_data_size = song.data().len();
-    let echo_buffer_size = song.metadata().echo_buffer.buffer_size();
+    let echo_buffer_size = song.metadata().song_globals.echo_buffer_size();
 
     // Loader can only transfer data that is a multiple of 2 bytes
     let common_data_size = common_data_size + (common_data_size % 2);
@@ -523,7 +573,7 @@ fn compile_song_commands(
         header_size,
         pitch_table,
         data_instruments,
-        song.metadata.echo_buffer.max_edl,
+        song.metadata.song_globals.max_edl,
         true,
     );
 

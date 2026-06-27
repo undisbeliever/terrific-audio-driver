@@ -156,6 +156,15 @@ The echo instructions can be used in sound effects to control echo using S-CPU 6
     * `tick_clock` must be >= 64 and <= 255.
     * Not available in sound effects.
 
+ * `set_main_volume <-128..127>` - Sets the main volume (`MVOL_L` & `MVOL_R` registers)
+    * CAUTION: Echo volume is separate from main volume.
+      The echo buffer will be unchanged and audible when main volume is 0.
+    * CAUTION: The `SET_MAIN_VOLUME` IO command can change the main volume.
+ * `adjust_main_volume <-128..+127>` - Adds the parameter to the main volume
+ * `adjust_main_volume_limit <rel -128..+127> <limit -128..127>`
+    * If `rel` is positive: the main volume be <= `max`.
+    * If `rel` is negative: the main volume be >= `min`.
+
  * `set_echo_volume <0..127>` - Sets the left and right echo volume to the same value (`EVOL` registers)
  * `set_stereo_echo_volume <left 0..127> <right 0..127>` - Set the left and right echo volume (`EVOL` registers)
  * `adjust_echo_volume <-127..+127>` - Adds the parameter to the left and right echo volumes

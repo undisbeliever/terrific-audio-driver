@@ -61,7 +61,7 @@ fn song_length(duration: Option<Duration>, metadata: &MetaData) -> u64 {
 
     match duration {
         Some(d) => {
-            let max_edl = metadata.echo_buffer.max_edl;
+            let max_edl = metadata.song_globals.max_edl;
             let rounded_up = d + max_edl.to_duration() + Duration::from_millis(999);
             rounded_up.as_secs()
         }

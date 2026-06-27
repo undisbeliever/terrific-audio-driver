@@ -288,8 +288,12 @@
       "source": "bc-interpreter-tests/echo-stress-test.mml"
     },
     {
-      "name": "adjust_echo_i8_limit",
-      "source": "bc-interpreter-tests/adjust-echo-i8-limit.mml"
+      "name": "adjust_global_i8_limit",
+      "source": "bc-interpreter-tests/adjust-global-i8-limit.mml"
+    },
+    {
+      "name": "main_volume",
+      "source": "bc-interpreter-tests/main-volume.mml"
     },
     {
       "name": "large_skip_last_loop",

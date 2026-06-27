@@ -1,0 +1,25 @@
+#Title Main Volume Test
+
+#MainVolume 32
+
+@1 square
+
+
+A @1 l8
+H l8
+
+
+; Slowly increment main volume over multiple ticks
+A cd efg ba gfe r
+H [ \mvol+ 1 w%1 ]96 w%24 r
+
+
+; Set main volume
+A cdef r
+H \mvol -64 rrrrr
+
+
+; Decrement main volume over multiple ticks
+A cd efg ba gfe
+H \mvol 127 [ \mvol- 6,0 w%6 ]20
+

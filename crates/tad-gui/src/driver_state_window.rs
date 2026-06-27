@@ -345,6 +345,7 @@ struct GlobalValues {
     echo_delay: Value<Edl>,
     echo_feedback: Value<i8>,
 
+    main_volume: Value<i8>,
     echo_volume_l: Value<u8>,
     echo_volume_r: Value<u8>,
     echo_invert: Value<DriverInvertFlags>,
@@ -374,10 +375,20 @@ impl GlobalValues {
         label(8, 0, "EFB");
         let echo_feedback = Value::new(row_x(9), col_y(0), width, height);
 
-        label(2, 1, "EVOL");
-        let echo_volume_l = Value::new(row_x(3), col_y(1), width / 2, height);
-        let echo_volume_r = Value::new(row_x(3) + width / 2, col_y(1), width / 2, height);
-        let echo_invert = Value::new(row_x(4), col_y(1), width / 2, height);
+        Frame::new(
+            row_x(2),
+            col_y(1),
+            width / 2 - label_padding,
+            height,
+            "MVOL",
+        )
+        .with_align(Align::Inside | Align::Right);
+        let main_volume = Value::new(row_x(2) + width / 2, col_y(1), width / 2, height);
+
+        label(3, 1, "EVOL");
+        let echo_volume_l = Value::new(row_x(4), col_y(1), width / 2, height);
+        let echo_volume_r = Value::new(row_x(4) + width / 2, col_y(1), width / 2, height);
+        let echo_invert = Value::new(row_x(5), col_y(1), width / 2, height);
 
         label(5, 1, "FIR");
         let fir_filter = {
@@ -399,6 +410,8 @@ impl GlobalValues {
             echo_delay,
             echo_feedback,
 
+            main_volume,
+
             echo_volume_l,
             echo_volume_r,
             echo_invert,
@@ -414,15 +427,17 @@ impl GlobalValues {
         self.timer.update(state.timer_register);
         self.bpm.update(TimerBpm(state.timer_register));
 
-        self.echo_delay.update(Edl(state.echo.edl));
-        self.echo_feedback.update(state.echo.feedback);
+        self.echo_delay.update(Edl(state.song_globals.edl));
+        self.echo_feedback.update(state.song_globals.echo_feedback);
 
-        self.echo_volume_l.update(state.echo.volume_l);
-        self.echo_volume_r.update(state.echo.volume_r);
+        self.main_volume.update(state.song_globals.main_volume);
+
+        self.echo_volume_l.update(state.song_globals.echo_volume_l);
+        self.echo_volume_r.update(state.song_globals.echo_volume_r);
         self.echo_invert
-            .update(DriverInvertFlags(state.echo.invert_flags));
+            .update(DriverInvertFlags(state.song_globals.invert_flags));
         for i in 0..FIR_FILTER_SIZE {
-            self.fir_filter[i].update(state.echo.fir_filter[i]);
+            self.fir_filter[i].update(state.song_globals.fir_filter[i]);
         }
     }
 
@@ -435,6 +450,8 @@ impl GlobalValues {
             self.bpm.clear();
             self.echo_delay.clear();
             self.echo_feedback.clear();
+
+            self.main_volume.clear();
 
             self.echo_volume_l.clear();
             self.echo_volume_r.clear();
