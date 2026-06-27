@@ -17,7 +17,8 @@ use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, FIR_FILTER_SIZE,
     MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_GLOBALS_SIZE,
     SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO_EDL, SONG_HEADER_GLOBALS,
-    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
+    SONG_HEADER_MAIN_VOLUME, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
+    SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::echo::{self, EchoEdl, EchoFeedback, EchoVolume, FirCoefficient};
 use crate::envelope::{Envelope, Gain};
@@ -377,6 +378,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 
     header[SONG_HEADER_ACTIVE_MUSIC_CHANNELS] = 1;
     header[SONG_HEADER_TICK_TIMER_OFFSET] = SFX_TICK_CLOCK;
+    header[SONG_HEADER_MAIN_VOLUME] = i8::MAX as u8;
     header[HEADER_SIZE - 2..].copy_from_slice(&SONG_DATA_OFFSET.to_le_bytes());
 
     SongData {
