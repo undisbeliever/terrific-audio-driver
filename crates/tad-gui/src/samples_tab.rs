@@ -44,7 +44,7 @@ use fltk::{
     button::{Button, CheckButton, RadioRoundButton},
     enums::{Align, Color, FrameType},
     frame::Frame,
-    group::{Flex, Group, Pack, PackType, Scroll, ScrollType, Wizard},
+    group::{Flex, Group, PackType, Scroll, ScrollType, Wizard},
     input::{Input, IntInput},
     menu::Choice,
     prelude::*,
@@ -1406,7 +1406,8 @@ impl BrrSampleEditor {
         let mut scrollgroup = Group::default().with_size(editor_width, r * 40 + s);
         scrollgroup.make_resizable(false);
 
-        let editor_group = Group::new(0, 0, editor_width, editor_height, None);
+        let mut editor_group = Group::new(0, 0, editor_width, editor_height, None);
+        editor_group.make_resizable(false);
 
         let name = Input::new(c1, 0, outer_w, h, "Name: ");
 
@@ -1421,14 +1422,18 @@ impl BrrSampleEditor {
             let source_fn = Output::new(c1, y, c3 - c1 - s, h, "Filename: ");
             let open_source = Button::new(c3, y, c4 - c3, h, "...");
 
-            let p = Pack::new(c1, y + r, inner_w, h, None).with_type(PackType::Horizontal);
-            let wav_source_rb = RadioRoundButton::new(0, 0, radio_w, h, "Wave file");
-            let brr_source_rb = RadioRoundButton::new(0, 0, radio_w, h, "BRR file");
-            p.end();
+            let rb_y = y + r;
+            let rb_group = Group::new(c1, rb_y, inner_w, h, None).with_type(PackType::Horizontal);
+            let rb = |c, title| RadioRoundButton::new(c1 + radio_w * c, rb_y, radio_w, r, title);
+
+            let wav_source_rb = rb(0, "Wave file");
+            let brr_source_rb = rb(1, "BRR file");
+
+            rb_group.end();
 
             let wav_settings = {
                 let y = y + 2 * r;
-                let g = Group::new(0, y, c4 - c0, 6 * r, None);
+                let g = Group::new(c0, y, c4 - c0, 6 * r, None);
 
                 let looping_cb = CheckButton::new(c1, y, c4 - c1, h, "Looping sample");
                 let loop_point = LoopPointWidget::new(
@@ -1482,7 +1487,7 @@ impl BrrSampleEditor {
 
             let brr_settings = {
                 let y = y + 2 * r;
-                let mut g = Group::new(0, y, c4 - c0, 3 * r, None);
+                let mut g = Group::new(c0, y, c4 - c0, 3 * r, None);
 
                 let override_loop_cb = CheckButton::new(c1, y, c4 - c1, h, "Override loop point");
                 let override_loop_point = LoopPointWidget::new(
@@ -1524,17 +1529,21 @@ impl BrrSampleEditor {
 
         let pitches = {
             let y = 11 * r;
-            let radio_w = ch_units_to_width(&scroll, 15);
 
             let mut g = Group::new(c0, y - 2 * s, c5 - c0, 4 * r + 3 * s, "Pitches:");
             g.set_frame(FrameType::EngravedBox);
             g.set_align(Align::TopLeft);
 
-            let p = Pack::new(c0 * 2, y, c4 - c0 * 2, h, None).with_type(PackType::Horizontal);
-            let octaves_rb = RadioRoundButton::new(0, 0, radio_w, h, "Octaves");
-            let notes_rb = RadioRoundButton::new(0, 0, radio_w, h, "Notes");
-            let sample_rates_rb = RadioRoundButton::new(0, 0, radio_w, h, "Sample Rates");
-            p.end();
+            let rb_x = c0 * 2;
+            let rb_group = Group::new(rb_x, y, c4 - rb_x, h, None);
+            let rb_w = rb_group.width() / 3;
+            let rb = |c, title| RadioRoundButton::new(rb_x + rb_w * c, y, rb_w, h, title);
+
+            let octaves_rb = rb(0, "Octaves");
+            let notes_rb = rb(1, "Notes");
+            let sample_rates_rb = rb(2, "Sample Rates");
+
+            rb_group.end();
 
             let label_w = ch_units_to_width(&scroll, 8);
             let input_w = c4 - c1 - label_w;
