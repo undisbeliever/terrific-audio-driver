@@ -4636,17 +4636,11 @@ SetI8:
 
 
     cmp X, #GLOBAL_I8_EFB_INDEX
-    bcs EfbOrMvolDirty
+
+    pop X
+
+    bcs bc__set_or_adjust_global_i8.EfbOrMvolDirty
         set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__FIR_FILTER_BIT
-
-        pop X
-        jmp process_next_bytecode
-
-
-    EfbOrMvolDirty:
-        set1 songGlobalsDirty, SONG_GLOBALS_DIRTY__EFB_OR_MVOL_BIT
-
-        pop X
         jmp process_next_bytecode
 .endproc
 
