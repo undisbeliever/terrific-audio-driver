@@ -124,7 +124,11 @@ pub enum ToCompiler {
 
     ProjectSongs(ItemChanged<project::Song>),
 
+    // CAUTION: The project's sfx/songs are not compiled until a `FinishedEditingBrrSample`
+    // message is sent.
     BrrSample(ItemChanged<project::BrrSample>),
+    // Sent when changes the selected sample or changes tab or opens the memory viewer
+    FinishedEditingBrrSample,
 
     FindSampleTuning(ItemId),
     FindNewSampleFileTuning(SourcePathBuf),
@@ -1527,7 +1531,7 @@ fn bg_thread(
 
     let mut sample_names = Arc::default();
 
-    // Used to test if a sound effect was edited in the sfx tab.
+    let mut combined_samples_out_of_date = true;
     let mut cad_with_sfx_out_of_date = true;
 
     let mut pending_combine_samples = false;
@@ -1595,6 +1599,7 @@ fn bg_thread(
                 songs.process_pf_song_message(&m, &pf_songs, &song_dependencies, &sender);
                 pf_songs.process_message(m);
             }
+
             ToCompiler::BrrSample(m) => {
                 let name_changed = brr_samples.item_changes_name(&m);
 
@@ -1605,14 +1610,19 @@ fn bg_thread(
                     sample_names = instrument_and_sample_names(&brr_samples);
                 }
                 song_dependencies = None;
-                pending_combine_samples = true;
+                combined_samples_out_of_date = true;
             }
             ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
                 let c = create_sample_compiler(&mut sample_file_cache, &fft_settings, &sender);
                 brr_samples.recompile_all_if(c, |inst| inst.source_path() == Some(&source_path));
 
                 song_dependencies = None;
-                pending_combine_samples = true;
+                combined_samples_out_of_date = true;
+            }
+            ToCompiler::FinishedEditingBrrSample => {
+                if combined_samples_out_of_date {
+                    pending_combine_samples = true;
+                }
             }
 
             ToCompiler::CompileSoundEffectSubroutines(m) => {
@@ -1816,6 +1826,8 @@ fn bg_thread(
             }
 
             sender.send_audio(AudioMessage::CommonAudioDataChanged(cad_no_sfx.clone()));
+
+            combined_samples_out_of_date = false;
 
             cad_with_sfx_buffer = None;
             pending_compile_all_sfx = true;

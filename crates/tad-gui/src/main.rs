@@ -408,9 +408,16 @@ impl Project {
             GuiMessage::BrrSample(m) => {
                 self.process_brr_sample_list_message(m);
             }
-            GuiMessage::UserChangedSelectedSample => self
-                .samples_tab
-                .selected_item_changed(&self.data.brr_samples),
+            GuiMessage::UserChangedSelectedSample => {
+                self.samples_tab
+                    .selected_item_changed(&self.data.brr_samples);
+
+                // Sent after samples tab changes so sfx/songs are compiled after
+                // the `SampleAnalyserSettingsChanged` message.
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::FinishedEditingBrrSample);
+            }
             GuiMessage::EditBrrSample(id, sample) => {
                 self.edit_brr_sample(id, sample);
             }
@@ -736,6 +743,10 @@ impl Project {
             }
 
             GuiMessage::ShowSampleSizes => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::FinishedEditingBrrSample);
+
                 self.samples_tab.show_sample_sizes_widget();
             }
             GuiMessage::OpenSampleFileDialog(id) => {
@@ -914,6 +925,10 @@ impl Project {
     }
 
     fn selected_tab_changed(&mut self, window: &mut fltk::window::Window) {
+        let _ = self
+            .compiler_sender
+            .send(ToCompiler::FinishedEditingBrrSample);
+
         if self.sfx_tab_selected {
             let _ = self
                 .compiler_sender
