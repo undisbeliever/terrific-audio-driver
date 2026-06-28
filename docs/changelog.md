@@ -2,8 +2,8 @@ Terrific Audio Driver Changelog
 ===============================
 
 
-Next Release
-============
+Version 0.4.0
+=============
 
 **BREAKING CHANGES:**:
  * The `.terrificaudio` file format has changed.
@@ -15,8 +15,8 @@ Audio driver changes:
  * The 256 pitch table entry limit has been removed.
    The pitch table offset is now 16-bit.
  * The instrument ID is now equal to the S-DSP `VxSRCN` BRR sample index.
- * Added main-volume setting to the song-data and bytecode
-    * The `echo_i8` bytecode instructions have been renamed to `global_i8`
+ * Added main-volume setting to the song-data and bytecode.
+    * The `echo_i8` bytecode instructions have been renamed to `global_i8`.
 
 Project Changes:
  * Instruments and samples have been merged to a new `BrrSample` data structure.
@@ -24,14 +24,14 @@ Project Changes:
     * TAD v0.4.0 projects are not compatible with 0.3.0 and below.
 
 GUI changes:
- * The samples tab has been rewritten
- * Added a "Open new sample" button to the samples tab (located above the sample list)
- * The samples tab now automatically tunes the sample after opening the source file
- * Added drag and drop files to the samples tab
-    * Dragging a single file onto the samples tab list will create a new sample using that file
+ * The samples tab has been rewritten.
+ * Added a "Open new sample" button to the samples tab (located above the sample list).
+ * The samples tab now automatically tunes the sample after opening the source file.
+ * Added drag and drop files to the samples tab.
+    * Dragging a single file onto the samples tab list will create a new sample using that file.
     * Files cannot be dragged into the editor widget.
- * The sample analyser window and samples tab have been merged
- * The sample analyser spectrum is now uses logarithmic scaling
+ * The sample analyser window and samples tab have been merged.
+ * The sample analyser spectrum now uses logarithmic scaling.
  * Fixed the sample analyser outputting a 0Hz peak on biased samples
    (ie, a square wave with no negative values).
 
@@ -40,16 +40,16 @@ MML Changes:
    into a single `set_instrument_and_adsr` bytecode instruction.
  * The MML compiler now merges `@` instrument and `G` GAIN envelope commands
    into a single `set_instrument_and_gain` bytecode instruction.
- * Added the `#MainVolume` MML header
- * Added `\mvol`, `\mvol+` and `\mvol-` MML commands (set/increment/decrement main volume)
+ * Added the `#MainVolume` MML header.
+ * Added `\mvol`, `\mvol+` and `\mvol-` MML commands (set/increment/decrement main volume).
 
 Bytecode assembly changes:
- * Added `set_main_volume`
- * Added `adjust_main_volume`
- * Added `adjust_main_volume_limit`
+ * Added `set_main_volume`.
+ * Added `adjust_main_volume`.
+ * Added `adjust_main_volume_limit`.
 
-BRR Encoder changes:
- * Dupe-block-hack now accepts non-zero loop points
+BRR encoder changes:
+ * Dupe-block-hack now accepts non-zero loop points.
 
 
 Version 0.3.0
