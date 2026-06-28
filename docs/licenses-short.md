@@ -129,17 +129,17 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs), MIT License
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs), MIT License
-  * [js-sys 0.3.102](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys), MIT License
+  * [js-sys 0.3.103](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys), MIT License
   * [pkg-config 0.3.33](https://github.com/rust-lang/pkg-config-rs), MIT License
-  * [wasm-bindgen-futures 0.4.75](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures), MIT License
-  * [wasm-bindgen-macro-support 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support), MIT License
-  * [wasm-bindgen-macro 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro), MIT License
-  * [wasm-bindgen-shared 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
-  * [wasm-bindgen 0.2.125](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
-  * [web-sys 0.3.102](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
+  * [wasm-bindgen-futures 0.4.76](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures), MIT License
+  * [wasm-bindgen-macro-support 0.2.126](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support), MIT License
+  * [wasm-bindgen-macro 0.2.126](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro), MIT License
+  * [wasm-bindgen-shared 0.2.126](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
+  * [wasm-bindgen 0.2.126](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
+  * [web-sys 0.3.103](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
   * [bitflags 2.13.0](https://github.com/bitflags/bitflags), MIT License
-  * [log 0.4.32](https://github.com/rust-lang/log), MIT License
+  * [log 0.4.33](https://github.com/rust-lang/log), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive), MIT License
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits), MIT License
@@ -225,7 +225,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [pin-project-lite 0.2.17](https://github.com/taiki-e/pin-project-lite), MIT License
   * [proc-macro-crate 3.5.0](https://github.com/bkchr/proc-macro-crate), MIT License
   * [proc-macro2 1.0.106](https://github.com/dtolnay/proc-macro2), MIT License
-  * [quote 1.0.45](https://github.com/dtolnay/quote), MIT License
+  * [quote 1.0.46](https://github.com/dtolnay/quote), MIT License
   * [rustversion 1.0.22](https://github.com/dtolnay/rustversion), MIT License
   * [scratch 1.0.9](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.228](https://github.com/serde-rs/serde), MIT License
