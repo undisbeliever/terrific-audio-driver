@@ -49,7 +49,7 @@ pub mod addresses {
         CHANNEL_VC_VOL_R,
         CHANNEL_VC_PITCH_L,
         CHANNEL_VC_PITCH_H,
-        CHANNEL_VC_SCRN,
+        CHANNEL_VC_SRCN,
         CHANNEL_VC_ADSR1,
         CHANNEL_VC_ADSR2_OR_GAIN,
         CHANNEL_VC_TEMP_GAIN,

@@ -218,7 +218,7 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
         channelSoA_virtualChannels_vol_r       : [u8 : N_CHANNELS]
         channelSoA_virtualChannels_pitch_l     : [u8 : N_CHANNELS]
         channelSoA_virtualChannels_pitch_h     : [u8 : N_CHANNELS]
-        channelSoA_virtualChannels_scrn        : [u8 : N_CHANNELS]
+        channelSoA_virtualChannels_srcn        : [u8 : N_CHANNELS]
         channelSoA_virtualChannels_adsr1       : [u8 : N_CHANNELS]
         ; If the MSB of adsr1 is set, this value is written to the ADSR2 register.
         ; If the MSB of adsr1 is clear, this value is written to the GAIN register.
@@ -1763,7 +1763,7 @@ _mutedChannels = zpTmp
             movw DSPADDR, YA
 
             dec A
-            mov Y, channelSoA_virtualChannels_scrn + X
+            mov Y, channelSoA_virtualChannels_srcn + X
             movw DSPADDR, YA
 
             dec A
@@ -2730,7 +2730,7 @@ _pitch_h = zpTmpWord.h
 
 
     ; calculate pitch address
-    mov Y, channelSoA_virtualChannels_scrn + X
+    mov Y, channelSoA_virtualChannels_srcn + X
 
     clrc
     adc A, channelSoA_transpose + X
@@ -2967,7 +2967,7 @@ _pitch_h = zpTmpWord.h
 
 
     ; calculate pitch address
-    mov Y, channelSoA_virtualChannels_scrn + X
+    mov Y, channelSoA_virtualChannels_srcn + X
 
     clrc
     adc A, channelSoA_transpose + X
@@ -3108,7 +3108,7 @@ _pitch_h = zpTmp3
 
 
     ; calculate pitch address
-    mov Y, channelSoA_virtualChannels_scrn + X
+    mov Y, channelSoA_virtualChannels_srcn + X
 
     clrc
     adc A, channelSoA_transpose + X
@@ -3648,7 +3648,7 @@ _subroutineId = zpTmp
 
     mov Y, A
 
-    mov channelSoA_virtualChannels_scrn + X, Y
+    mov channelSoA_virtualChannels_srcn + X, Y
 
     mov A, [commonData.instruments_adsr1] + Y
     mov channelSoA_virtualChannels_adsr1 + X, A
@@ -3670,7 +3670,7 @@ _subroutineId = zpTmp
 
     mov Y, A
 
-    mov channelSoA_virtualChannels_scrn + X, Y
+    mov channelSoA_virtualChannels_srcn + X, Y
 
 
     ; Read ADSR/GAIN from `instructionPtr`.

@@ -270,15 +270,15 @@ impl SampleSizesWidget {
             self.brr_sizes.clear();
 
             let mut prev_brr_start = 0;
-            for scrn in 0..cad.n_instruments_and_samples() {
-                if let Some(&brr_start) = d.brr_start_addrs.get(scrn) {
+            for srcn in 0..cad.n_instruments_and_samples() {
+                if let Some(&brr_start) = d.brr_start_addrs.get(srcn) {
                     let s = if brr_start > prev_brr_start {
                         prev_brr_start = brr_start;
 
                         let brr_end = d
                             .brr_start_addrs
                             .iter()
-                            .skip(scrn + 1)
+                            .skip(srcn + 1)
                             .find(|&&b| b > brr_start)
                             .unwrap_or(&d.instruments_samples_range.end);
 

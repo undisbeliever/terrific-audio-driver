@@ -342,8 +342,8 @@
       "source": "bug-tests/volume-pop-bug.mml"
     },
     {
-      "name": "keyoff_scrn_bug",
-      "source": "bug-tests/keyoff-scrn-bug.mml"
+      "name": "keyoff_srcn_bug",
+      "source": "bug-tests/keyoff-srcn-bug.mml"
     },
     {
       "name": "envelope_race_condition",

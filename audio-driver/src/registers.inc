@@ -66,7 +66,7 @@
     VxVOL_R     = $1    ; Right channel volume (signed)
     VxPITCH_L   = $2    ; Sample pitch low byte
     VxPITCH_H   = $3    ; Sample pitch high byte (6 bits)
-    VxSCRN      = $4    ; Sample source
+    VxSRCN      = $4    ; Sample source
     VxADSR1     = $5    ; ADSR settings
     VxADSR2     = $6    ; ADSR settings
     VxGAIN      = $7    ; Gain settings

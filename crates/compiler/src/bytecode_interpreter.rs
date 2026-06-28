@@ -48,7 +48,7 @@ struct VirtualChannel {
     // pitch is not fully emulated
     pitch_l: u8,
     pitch_h: u8,
-    scrn: u8,
+    srcn: u8,
     adsr1: u8,
     adsr2_or_gain: u8,
     temp_gain: u8,
@@ -1820,11 +1820,11 @@ fn build_channel(
         Err(_) => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
     };
 
-    let (scrn, inst_adsr_or_gain) = match c.instrument {
-        Some(scrn) => {
-            let i: usize = scrn.clamp(0, common.n_instruments).into();
+    let (srcn, inst_adsr_or_gain) = match c.instrument {
+        Some(srcn) => {
+            let i: usize = srcn.clamp(0, common.n_instruments).into();
             (
-                scrn,
+                srcn,
                 (
                     common.instruments_adsr1[i],
                     common.instruments_adsr2_or_gain[i],
@@ -1981,7 +1981,7 @@ fn build_channel(
             vol_r,
             pitch_l,
             pitch_h,
-            scrn,
+            srcn,
             adsr1,
             adsr2_or_gain,
             temp_gain,
@@ -2054,7 +2054,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             vol_r: (STARTING_VOLUME >> 2) as i8,
             pitch_l: 0,
             pitch_h: 0,
-            scrn: 0,
+            srcn: 0,
             adsr1: 0,
             adsr2_or_gain: 0,
             temp_gain: 0,
@@ -2246,7 +2246,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r.to_le_bytes()[0]);
                 soa_write_u8(addresses::CHANNEL_VC_PITCH_L, vc.pitch_l);
                 soa_write_u8(addresses::CHANNEL_VC_PITCH_H, vc.pitch_h);
-                soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
+                soa_write_u8(addresses::CHANNEL_VC_SRCN, vc.srcn);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);
                 soa_write_u8(addresses::CHANNEL_VC_TEMP_GAIN, vc.temp_gain);

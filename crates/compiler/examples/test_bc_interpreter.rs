@@ -160,7 +160,7 @@ fn assert_bc_intrepreter_matches_emu(
     test_channel_soa(addresses::CHANNEL_VC_VOL_L, "virtualChannels.vol_l");
     test_channel_soa(addresses::CHANNEL_VC_VOL_R, "virtualChannels.vol_r");
     // Not testing PITCH, bytecode_interpreter does not implement pitches.
-    test_channel_soa(addresses::CHANNEL_VC_SCRN, "virtualChannels.scrn");
+    test_channel_soa(addresses::CHANNEL_VC_SRCN, "virtualChannels.srcn");
     test_channel_soa(addresses::CHANNEL_VC_ADSR1, "virtualChannels.adsr1");
     test_channel_soa(
         addresses::CHANNEL_VC_ADSR2_OR_GAIN,

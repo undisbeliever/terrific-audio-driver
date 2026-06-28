@@ -53,7 +53,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA_virtualChannels_vol_r", "CHANNEL_VC_VOL_R"),
     ("channelSoA_virtualChannels_pitch_l", "CHANNEL_VC_PITCH_L"),
     ("channelSoA_virtualChannels_pitch_h", "CHANNEL_VC_PITCH_H"),
-    ("channelSoA_virtualChannels_scrn", "CHANNEL_VC_SCRN"),
+    ("channelSoA_virtualChannels_srcn", "CHANNEL_VC_SRCN"),
     ("channelSoA_virtualChannels_adsr1", "CHANNEL_VC_ADSR1"),
     ("channelSoA_virtualChannels_adsr2OrGain", "CHANNEL_VC_ADSR2_OR_GAIN"),
     ("channelSoA_virtualChannels_tempGain", "CHANNEL_VC_TEMP_GAIN"),
