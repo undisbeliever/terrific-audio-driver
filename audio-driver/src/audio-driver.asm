@@ -565,7 +565,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     mov _activeMusicChannels, A
 
     ; Copy SongHeader data to `_songHeader` if `_activeMusicChannels` is non-zero
-    ; Otherwise, fill `_songHeader` with zeros.
+    ; Otherwise, fill `_songHeader` with zeros and set mainVolume.
     .assert offsetof(SongHeader, globals) == 1
     mov Y, #offsetof(SongHeader, globals)
     EchoCopyLoop:
@@ -579,6 +579,12 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
         inc Y
         cmp Y, #SONG_HEADER_SIZE
         bcc EchoCopyLoop
+
+    ; Set mainVolume if the song has no music channels to make the sound effects audible
+    mov A, _activeMusicChannels
+    bne NoSetMainVolume
+        mov songGlobals.mainVolume, #127
+    NoSetMainVolume:
 
 
     ; Setup echo.

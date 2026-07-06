@@ -1,6 +1,10 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.4.1
+=============
+ * Fixed no sound effects when playing the blank song (song-id 0).
+
 
 Version 0.4.0
 =============
