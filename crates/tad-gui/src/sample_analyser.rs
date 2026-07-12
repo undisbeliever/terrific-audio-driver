@@ -587,13 +587,7 @@ impl State {
     }
 
     fn get_freq_for_curosr_x(&self, event_x: i32) -> Option<(f64, f64)> {
-        let spectrum = match &self.analysis {
-            Some(a) => match &a.spectrum {
-                Ok(s) => s,
-                Err(_) => return None,
-            },
-            None => return None,
-        };
+        let spectrum = self.analysis.as_ref()?.spectrum.as_ref().ok()?;
 
         let x_scale = self.spectrum_x_scale;
         let x = event_x - self.spectrum.x() - Self::FRAME_MARGIN;

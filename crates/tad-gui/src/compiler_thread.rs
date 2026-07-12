@@ -971,14 +971,8 @@ fn build_common_data_with_sfx_buffer(
     instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
 ) -> Option<Result<Arc<CommonAudioDataWithSfxBuffer>, CombineSamplesError>> {
-    let combined_samples = match dep {
-        Some(d) => &d.combined_samples,
-        None => return None,
-    };
-    let sfx_subroutines = match sfx_subroutines {
-        Some(sfx) => sfx,
-        None => return None,
-    };
+    let combined_samples = &dep.as_ref()?.combined_samples;
+    let sfx_subroutines = sfx_subroutines.as_deref()?;
 
     match build_cad_with_sfx_buffer(combined_samples, sfx_subroutines) {
         Ok(cad) => Some(Ok(Arc::new(CommonAudioDataWithSfxBuffer(
