@@ -77,10 +77,10 @@ struct WaveFile {
     data: Vec<u8>,
 }
 
-const WAVE_CHUNK_ID: [u8; 4] = [b'R', b'I', b'F', b'F'];
-const WAVE_ID: [u8; 4] = [b'W', b'A', b'V', b'E'];
-const FMT_CHUNK_ID: [u8; 4] = [b'f', b'm', b't', b' '];
-const DATA_CHUNK_ID: [u8; 4] = [b'd', b'a', b't', b'a'];
+const WAVE_CHUNK_ID: [u8; 4] = *b"RIFF";
+const WAVE_ID: [u8; 4] = *b"WAVE";
+const FMT_CHUNK_ID: [u8; 4] = *b"fmt ";
+const DATA_CHUNK_ID: [u8; 4] = *b"data";
 
 fn parse_fmt_chunk(data: &[u8]) -> Result<FmtChunk, WavError> {
     // There are different versions of fmt chunk.
