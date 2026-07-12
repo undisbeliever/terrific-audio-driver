@@ -1746,6 +1746,25 @@ Tad_AudioDriver_SIZE = .sizeof(Tad_AudioDriver_Bin)
     .assert DummyCommonAudioData & 1 = 0, lderror
     .assert DummySongData        & 1 = 1, lderror
 
+    pha
+    php
+        ; Assert m and x flags are correct
+        sep     #$20
+    .a8
+        lda     1,s
+        and     #$30
+        assert_a_eq     $20
+
+
+        ; Assert DB == $80
+        phb
+        pla
+        assert_a_eq     $80
+
+    plp
+.a8
+    pla
+
     cmp     #0
     bne     :+
         ldx     #.loword(DummyCommonAudioData)

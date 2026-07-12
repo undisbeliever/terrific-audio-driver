@@ -963,7 +963,9 @@ static u16 countTransfers_song1(void) {
     return counter;
 }
 
-void loadAudioData(u8 id) {
+// `loadAudioData_c()` is called by a `loadAudioData` assembly function
+// after the DB and register sizes match the expected values.
+void loadAudioData_c(u8 id) {
     switch(id) {
     case 0:
         loadAudioData_out.data = &DummyCommonAudioData_Part1;
