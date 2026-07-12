@@ -45,17 +45,18 @@ TAD_MAX_TRANSFER_PER_FRAME = 800
 
 
 TadState .block
-    NULL                                = $00
+    NULL                                = 0
     ; Waiting for loader to send the ready signal before loading common-audio-data
-    WAITING_FOR_LOADER_COMMON           = $7b
+    WAITING_FOR_LOADER_COMMON           = 2
     ; Waiting for loader to send the ready signal before loading song data
-    WAITING_FOR_LOADER_SONG             = $7c
+    WAITING_FOR_LOADER_SONG             = 4
     ; Loading common audio data.
-    LOADING_COMMON_AUDIO_DATA           = $7d
+    LOADING_COMMON_AUDIO_DATA           = 6
     ; Loading a song and the TadLoaderDataType.PLAY_SONG_FLAG was clear.
-    LOADING_SONG_DATA_PAUSED            = $7e
+    LOADING_SONG_DATA_PAUSED            = 8
     ; Loading a song and the TadLoaderDataType.PLAY_SONG_FLAG was set.
-    LOADING_SONG_DATA_PLAY              = $7f
+    LOADING_SONG_DATA_PLAY              = 10
+
     ; Song is loaded into Audio-RAM and the audio driver is paused.
     ; No play-sound-effect commands will be sent when the driver is paused.
     PAUSED                              = $80

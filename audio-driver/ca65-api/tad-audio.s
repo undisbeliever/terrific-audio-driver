@@ -319,17 +319,18 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 
 .enum TadState
-    NULL                                = $00
+    NULL                                = 0
     ;; Waiting for loader to send the ready signal before loading common-audio-data
-    WAITING_FOR_LOADER_COMMON           = $7b
+    WAITING_FOR_LOADER_COMMON           = 2
     ;; Waiting for loader to send the ready signal before loading song data
-    WAITING_FOR_LOADER_SONG             = $7c
+    WAITING_FOR_LOADER_SONG             = 4
     ;; Loading common audio data.
-    LOADING_COMMON_AUDIO_DATA           = $7d
+    LOADING_COMMON_AUDIO_DATA           = 6
     ;; Loading a song and the TadLoaderDataType::PLAY_SONG_FLAG was clear.
-    LOADING_SONG_DATA_PAUSED            = $7e
+    LOADING_SONG_DATA_PAUSED            = 8
     ;; Loading a song and the TadLoaderDataType::PLAY_SONG_FLAG was set.
-    LOADING_SONG_DATA_PLAY              = $7f
+    LOADING_SONG_DATA_PLAY              = 10
+
     ;; Song is loaded into Audio-RAM and the audio driver is paused.
     ;; No play-sound-effect commands will be sent when the driver is paused.
     PAUSED                              = $80
@@ -829,6 +830,7 @@ ReturnFalse:
     .assert TadState::WAITING_FOR_LOADER_SONG < TAD__FIRST_LOADING_STATE, error
     .assert (TadState::PAUSED & $7f) < TAD__FIRST_LOADING_STATE, error
     .assert (TadState::PLAYING & $7f) < TAD__FIRST_LOADING_STATE, error
+    .assert (TadState::PLAYING_SFX & $7f) < TAD__FIRST_LOADING_STATE, error
 
     lda     TadPrivate_state
     and     #$7f
@@ -1001,15 +1003,17 @@ ReturnFalse:
 .i16
 ; DB access lowram
 .proc Tad_Process : far
-    .assert TadState::PAUSED = $80, error
-    .assert TadState::PLAYING > $80, error
-    lda     TadPrivate_state
+    sep     #$30
+.i8
+
+    ; ASSUMES `TadPrivate_state` is always valid
+    .assert TadState::PAUSED >= $80, error
+    .assert TadState::PLAYING_SFX >= $80, error
+    .assert TadState::PLAYING >= $80, error
+    ldx     TadPrivate_state
     bpl     @NotLoaded
         ; Playing or paused state
-        sep     #$10
-    .i8
-        tax
-
+        ; Driver can accept IO commands
         lda     TadPrivate_previousCommand
         cmp     f:TadIO_ToScpu::COMMAND_ACK_PORT
         bne     @Return_I8
@@ -1020,9 +1024,9 @@ ReturnFalse:
             bpl     @SendCommand
 
             ; X = TadPrivate_state
-            .assert TadState::PAUSED < $81, error
-            .assert TadState::PLAYING >= $81, error
-            .assert TadState::PLAYING_SFX >= $81, error
+            .assert TadState::PAUSED - 1 < $80, error
+            .assert TadState::PLAYING - 1 >= $80, error
+            .assert TadState::PLAYING_SFX - 1 >= $80, error
             dex
             bpl     @Return_I8
                 ; Playing state
@@ -1044,30 +1048,28 @@ ReturnFalse:
         .i16
             rtl
 
-    @NotLoaded:
-        ; Song is not loaded into Audio-RAM
+@NotLoaded:
+    rep     #$10
+.i16
+    jmp     (.loword(_FunctionTable), x)
 
-        ; Test if state is WAITING_FOR_LOADER_* or LOADING_*
-        .assert TAD__FIRST_LOADING_STATE > TAD__FIRST_WAITING_STATE, error
-        .assert TAD__FIRST_LOADING_STATE = TadState::WAITING_FOR_LOADER_SONG + 1, error
-        cmp     #TAD__FIRST_LOADING_STATE
-        bcs     TadPrivate_Process_Loading
-        cmp     #TAD__FIRST_WAITING_STATE
-        bcs     TadPrivate_Process_WaitingForLoader
-
-    ; TadState is null
-    rtl
+_FunctionTable:
+    .addr   TadPrivate_Process_Null
+    .addr   TadPrivate_Process_WaitingForLoader_Common
+    .addr   TadPrivate_Process_WaitingForLoader_Song
+    .addr   TadPrivate_Process_LoadingCommonAudioData
+    .addr   TadPrivate_Process_LoadingSongData_Paused
+    .addr   TadPrivate_Process_LoadingSongData_Play
 .endproc
 
 
-
-;; Process the WAITING_FOR_LOADER_* states
+;; Process the WAITING_FOR_LOADER_COMMON state
 ;;
 ;; return using RTL
 .a8
 .i16
 ;; DB access lowram
-.proc TadPrivate_Process_WaitingForLoader ; RTL
+.proc TadPrivate_Process_WaitingForLoader_Common ; RTL
     phb
 
     ; Setting DB to access registers as it:
@@ -1079,87 +1081,20 @@ ReturnFalse:
     plb
 ; DB = $80
 
-    lda     TadPrivate_state
-    cmp     #TadState::WAITING_FOR_LOADER_COMMON
-    bne     @SongData
-        ; Common audio data
-        lda     #TadLoaderDataType::COMMON_DATA
-        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
-        bcc     @Return
+    lda     #TadLoaderDataType::COMMON_DATA
+    jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
+    bcc     @Return
+        lda     #0
+        jsl     LoadAudioData
 
+        ; A:X = data address
+        ; Y = data size
+        jsr     TadPrivate_Loader_SetDataToTransfer
+
+        ; Must set state AFTER the `LoadAudioData` call.
+        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         lda     #TadState::LOADING_COMMON_AUDIO_DATA
-        pha
-
-        lda     #0
-        bra     @LoadData
-
-    @SongData:
-        ; Songs
-
-        ; Tad_flags MUST NOT have the stereo/surround loader flag set
-        .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::STEREO_FLAG = 0, error
-        .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::SURROUND_FLAG = 0, error
-
-        ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
-        .assert TadFlags::RELOAD_COMMON_AUDIO_DATA = TadLoaderDataType::SONG_DATA_FLAG, error, "Cannot hide RELOAD_COMMON_AUDIO_DATA TadFlag with SONG_DATA_FLAG"
-
-        .assert TadFlags::PLAY_SONG_IMMEDIATELY = TadLoaderDataType::PLAY_SONG_FLAG, error
-        .assert TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START = TadLoaderDataType::RESET_GLOBAL_VOLUMES_FLAG, error
-
-        ; Clear unused TAD flags
-        lda     #$ff ^ TadFlags::_ALL_FLAGS
-        trb     Tad_flags
-
-        ; Convert `Tad_audioMode` to TadLoaderDataType and combine with TadFlags
-        .assert ((0 + 1) & 3) = TadLoaderDataType::SURROUND_FLAG, error ; mono
-        .assert ((1 + 1) & 3) = TadLoaderDataType::STEREO_FLAG, error ; stereo
-        .assert ((2 + 1) & 3) = TadLoaderDataType::STEREO_FLAG | TadLoaderDataType::SURROUND_FLAG, error ; surround
-        lda     Tad_audioMode
-        inc
-        and     #3
-
-        ora     Tad_flags
-        ora     #TadLoaderDataType::SONG_DATA_FLAG
-        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
-        bcc     @Return
-
-        ; Determine next state
-        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $40, error
-        .assert TadState::LOADING_SONG_DATA_PAUSED + 1 = TadState::LOADING_SONG_DATA_PLAY, error
-        lda     Tad_flags
-        asl
-        asl
-        lda     #0
-        ; carry = PLAY_SONG_IMMEDIATELY flag
-        adc     #TadState::LOADING_SONG_DATA_PAUSED
-        pha
-
-        ; Load next song
-        lda     TadPrivate_nextSong
-        beq     @UseBlankSong
-
-@LoadData:
-    jsl     LoadAudioData
-    bcs     :+
-        ; LoadAudioData returned false
-    @UseBlankSong:
-        ; The blank song is a single zero byte.
-        ; ::HACK use the 3rd byte of `ldy #1` (which is `0x00`) for the blank song data::
-        ldy     #1
-        @_BlankSongData = * - 1
-        lda     #.bankbyte(@_BlankSongData)
-        ldx     #.loword(@_BlankSongData)
-    :
-
-    ; STACK holds next state
-    ; A:X = data address
-    ; Y = data size
-    jsr     TadPrivate_Loader_SetDataToTransfer
-
-    ; Must set state AFTER the `LoadAudioData` call.
-    ; `LoadAudioData` might call `Tad_FinishLoadingData`.
-    pla
-    sta     TadPrivate_state
+        sta     TadPrivate_state
 
 @Return:
     plb
@@ -1168,53 +1103,148 @@ ReturnFalse:
 .endproc
 
 
-
-;; Process the LOADING_* states
+;; Process the WAITING_FOR_LOADER_SONG state
 ;;
 ;; return using RTL
 .a8
 .i16
 ;; DB access lowram
-.proc TadPrivate_Process_Loading ; RTL
-    jsr     TadPrivate_Loader_TransferData
+.proc TadPrivate_Process_WaitingForLoader_Song ; RTL
+    phb
+
+    ; Setting DB to access registers as it:
+    ;  * Simplifies `TadPrivate_Loader_CheckReadyAndSendLoaderDataType`
+    ;  * Ensures `LoadAudioData` is called with a fixed data bank
+    ;    (NOTE: `LoadAudioData` is tagged `DB access registers`)
+    lda     #$80
+    pha
+    plb
+; DB = $80
+
+    ; Tad_flags MUST NOT have the stereo/surround loader flag set
+    .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::STEREO_FLAG = 0, error
+    .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::SURROUND_FLAG = 0, error
+
+    ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
+    .assert TadFlags::RELOAD_COMMON_AUDIO_DATA = TadLoaderDataType::SONG_DATA_FLAG, error, "Cannot hide RELOAD_COMMON_AUDIO_DATA TadFlag with SONG_DATA_FLAG"
+
+    .assert TadFlags::PLAY_SONG_IMMEDIATELY = TadLoaderDataType::PLAY_SONG_FLAG, error
+    .assert TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START = TadLoaderDataType::RESET_GLOBAL_VOLUMES_FLAG, error
+
+    ; Clear unused TAD flags
+    lda     #$ff ^ TadFlags::_ALL_FLAGS
+    trb     Tad_flags
+
+    ; Convert `Tad_audioMode` to TadLoaderDataType and combine with TadFlags
+    .assert ((0 + 1) & 3) = TadLoaderDataType::SURROUND_FLAG, error ; mono
+    .assert ((1 + 1) & 3) = TadLoaderDataType::STEREO_FLAG, error ; stereo
+    .assert ((2 + 1) & 3) = TadLoaderDataType::STEREO_FLAG | TadLoaderDataType::SURROUND_FLAG, error ; surround
+    lda     Tad_audioMode
+    inc
+    and     #3
+
+    ora     Tad_flags
+    ora     #TadLoaderDataType::SONG_DATA_FLAG
+    jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
     bcc     @Return
-        ; Data loaded successfully
-        lda     TadPrivate_state
-        cmp     #TadState::LOADING_COMMON_AUDIO_DATA
-        bne     @Song
-            ; Common audio data was just transferred
-            ; Loader is still active
-            lda     #TadState::WAITING_FOR_LOADER_SONG
-            bra     @EndIf
+        ; Determine next state
+        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $40, error
+        lda     #TadState::LOADING_SONG_DATA_PLAY
+        bit     Tad_flags
+        bvs     :+
+            lda     #TadState::LOADING_SONG_DATA_PAUSED
+        :
+        pha
 
-        @Song:
-            ; song data was loaded into Audio-RAM
-            ; Loader has finished, audio driver is now active
+        ; STACK holds next state
+        ; Load next song
+        lda     TadPrivate_nextSong
+        beq     @UseBlankSong
 
-            stz     TadPrivate_previousCommand
+        jsl     LoadAudioData
+        bcs     :+
+            ; LoadAudioData returned false
+        @UseBlankSong:
+            ; The blank song is a single zero byte.
+            ; ::HACK use the 3rd byte of `ldy #1` (which is `0x00`) for the blank song data::
+            ldy     #1
+            @_BlankSongData = * - 1
+            lda     #.bankbyte(@_BlankSongData)
+            ldx     #.loword(@_BlankSongData)
+        :
+        ; A:X = data address
+        ; Y = data size
+        jsr     TadPrivate_Loader_SetDataToTransfer
 
-            ; Reset command and SFX queues
-            lda     #$ff
-            sta     TadPrivate_nextCommand_id
-            sta     Tad_sfxQueue_sfx
-            sta     Tad_sfxQueue_pan
-
-            ; Use `TadPrivate_state` to determine if the song is playing or paused.
-            ; Cannot use `Tad_flags` as it may have changed after the `TadLoaderDataType` was sent to
-            ; the loader (while the song was loaded).
-            .assert ((TadState::LOADING_SONG_DATA_PAUSED & 1) << 1) | $80 = TadState::PAUSED, error
-            .assert ((TadState::LOADING_SONG_DATA_PLAY & 1) << 1) | $80 = TadState::PLAYING, error
-            lda     TadPrivate_state
-            and     #1
-            asl
-            ora     #$80
-
-        ; A = new state
-    @EndIf:
+        ; Must set state AFTER the `LoadAudioData` call.
+        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
+        pla
         sta     TadPrivate_state
 
 @Return:
+    plb
+; DB restored
     rtl
+.endproc
+
+
+;; Process the LOADING_COMMON_AUDIO_DATA state
+;;
+;; return using RTL
+.a8
+.i16
+;; DB access lowram
+.proc TadPrivate_Process_LoadingCommonAudioData ; RTL
+    jsr     TadPrivate_Loader_TransferData
+    bcc     @Return
+        lda     #TadState::WAITING_FOR_LOADER_SONG
+        sta     TadPrivate_state
+@Return:
+    rtl
+.endproc
+
+
+;; Process the LOADING_SONG_DATA_PLAY state
+;;
+;; return using RTL
+.a8
+.i16
+;; DB access lowram
+.proc TadPrivate_Process_LoadingSongData_Play ; RTL
+    jsr     TadPrivate_Loader_TransferData
+    bcc     _Return
+        ; song data was loaded into Audio-RAM
+        ; Loader has finished, audio driver is now active
+        lda     #TadState::PLAYING
+    _SetStateAndResetQueues:
+        sta     TadPrivate_state
+
+        stz     TadPrivate_previousCommand
+
+        ; Reset command and SFX queues
+        lda     #$ff
+        sta     TadPrivate_nextCommand_id
+        sta     Tad_sfxQueue_sfx
+        sta     Tad_sfxQueue_pan
+_Return:
+    rtl
+.endproc
+
+TadPrivate_Process_Null = TadPrivate_Process_LoadingSongData_Play::_Return
+
+
+;; Process the LOADING_SONG_DATA_PAUSED state
+;;
+;; return using RTL
+.a8
+.i16
+;; DB access lowram
+.proc TadPrivate_Process_LoadingSongData_Paused ; RTL
+    jsr     TadPrivate_Loader_TransferData
+    bcc     TadPrivate_Process_LoadingSongData_Play::_Return
+        ; Data loaded successfully
+        lda     #TadState::PAUSED
+        bra     TadPrivate_Process_LoadingSongData_Play::_SetStateAndResetQueues
 .endproc
 
 
@@ -1227,7 +1257,7 @@ ReturnFalse:
     @Loop:
         TadPrivate_IsLoaderActive
         bcc     @EndLoop
-            jsl     TadPrivate_Process_Loading
+            jsl     Tad_Process
         bra     @Loop
     @EndLoop:
 

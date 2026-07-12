@@ -258,17 +258,18 @@ TAD_APUIO3 = $2143
 
 
 ; enum TadState
-    !TadState_NULL                                = $00
+    !TadState_NULL                                = 0
     ; Waiting for loader to send the ready signal before loading common-audio-data
-    !TadState_WAITING_FOR_LOADER_COMMON           = $7b
+    !TadState_WAITING_FOR_LOADER_COMMON           = 2
     ; Waiting for loader to send the ready signal before loading song data
-    !TadState_WAITING_FOR_LOADER_SONG             = $7c
+    !TadState_WAITING_FOR_LOADER_SONG             = 4
     ; Loading common audio data.
-    !TadState_LOADING_COMMON_AUDIO_DATA           = $7d
+    !TadState_LOADING_COMMON_AUDIO_DATA           = 6
     ; Loading a song and the !TadLoaderDataType_PLAY_SONG_FLAG was clear.
-    !TadState_LOADING_SONG_DATA_PAUSED            = $7e
+    !TadState_LOADING_SONG_DATA_PAUSED            = 8
     ; Loading a song and the !TadLoaderDataType_PLAY_SONG_FLAG was set.
-    !TadState_LOADING_SONG_DATA_PLAY              = $7f
+    !TadState_LOADING_SONG_DATA_PLAY              = 10
+
     ; Song is loaded into Audio-RAM and the audio driver is paused.
     ; No play-sound-effect commands will be sent when the driver is paused.
     !TadState_PAUSED                              = $80
