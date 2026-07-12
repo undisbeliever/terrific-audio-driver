@@ -516,7 +516,7 @@ pub(crate) fn debug_print_song_commands(
         writeln!(
             f,
             "  subroutine_analysis: {:?}",
-            &analysis.subroutine_analysis[usize::from(s.index)]
+            analysis.subroutine_analysis[usize::from(s.index)]
         )
         .unwrap();
 

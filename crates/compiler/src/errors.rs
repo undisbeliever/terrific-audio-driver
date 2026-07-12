@@ -1812,7 +1812,7 @@ impl Display for PitchError {
             ),
             Self::NoSampleRatesInSample => write!(f, "no sample rates in sample"),
             Self::TooManySampleRatesInSample => write!(f, "too many sample rates in sample"),
-            Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", &e),
+            Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", e),
         }
     }
 }
