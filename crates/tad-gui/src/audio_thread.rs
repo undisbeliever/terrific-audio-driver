@@ -32,9 +32,7 @@ use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::audio_thread::audio_stream::{
-    open_audio_stream, AudioStreamError, DeviceHost, OpenAudioStream,
-};
+use crate::audio_thread::audio_stream::{AudioStreamError, DeviceHost, OpenAudioStream};
 use crate::compiler_thread::{
     CommonAudioDataNoSfx, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer,
 };
@@ -831,7 +829,7 @@ impl GuiAudioDevice {
                 s.pause();
             }
             None => {
-                self.stream = match open_audio_stream(&self.host, self.sender.clone()) {
+                self.stream = match self.host.open_stream(self.sender.clone()) {
                     Ok(s) => Some(s),
                     Err(e) => {
                         eprintln!("Cannot open audio stream: {e}");

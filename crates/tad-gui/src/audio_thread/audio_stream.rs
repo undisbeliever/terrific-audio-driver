@@ -19,9 +19,6 @@ use cpal::{
 };
 
 const AUDIO_SAMPLE_RATE: u32 = 48000;
-const AUDIO_BUFFER_SAMPLES: u32 = 1024;
-
-const RING_BUFFER_SIZE: usize = 4096;
 
 pub enum OpenStreamError {
     BuildStreamError(cpal::BuildStreamError),
@@ -48,6 +45,18 @@ impl DeviceHost {
     pub fn new() -> Self {
         Self(cpal::default_host())
     }
+
+    pub fn open_stream(
+        &mut self,
+        sender: mpsc::Sender<AudioMessage>,
+    ) -> Result<OpenAudioStream, OpenStreamError> {
+        let device = self
+            .0
+            .default_output_device()
+            .ok_or(OpenStreamError::NoOutputDevices)?;
+
+        open_audio_stream(&device, AUDIO_SAMPLE_RATE, sender)
+    }
 }
 
 pub struct OpenAudioStream {
@@ -72,23 +81,22 @@ impl OpenAudioStream {
     }
 }
 
-pub fn open_audio_stream(
-    host: &DeviceHost,
+fn open_audio_stream(
+    device: &cpal::Device,
+    sample_rate: u32,
     sender: mpsc::Sender<AudioMessage>,
 ) -> Result<OpenAudioStream, OpenStreamError> {
-    let device = host
-        .0
-        .default_output_device()
-        .ok_or(OpenStreamError::NoOutputDevices)?;
+    let cpal_buffer_size = (sample_rate / 50).next_power_of_two();
+    let ring_buffer_size = (cpal_buffer_size as usize) * 4;
 
     let config = StreamConfig {
         channels: 2,
-        sample_rate: cpal::SampleRate(AUDIO_SAMPLE_RATE),
-        buffer_size: cpal::BufferSize::Fixed(AUDIO_BUFFER_SAMPLES),
+        sample_rate: cpal::SampleRate(sample_rate),
+        buffer_size: cpal::BufferSize::Fixed(cpal_buffer_size),
     };
 
     let (mut ringbuf, rb_consumer) =
-        resampling_ring_buffer(RING_BUFFER_SIZE, APU_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
+        resampling_ring_buffer(ring_buffer_size, APU_SAMPLE_RATE, sample_rate);
 
     ringbuf.fill_with_silence();
 
