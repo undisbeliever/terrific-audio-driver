@@ -1,6 +1,11 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.4.2
+=============
+ * Fixed no sound in tad-gui on windows if the audio device's sample rate is not 48kHz.
+
+
 Version 0.4.1
 =============
  * Fixed no sound effects when playing the blank song (song-id 0).
