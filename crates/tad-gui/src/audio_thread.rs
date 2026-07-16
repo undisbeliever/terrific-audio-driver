@@ -838,7 +838,7 @@ impl GuiAudioDevice {
                         if !self.sent_error_message {
                             self.gui_sender.send(GuiMessage::ErrorMessageDialog {
                                 title: "Audio Error".into(),
-                                message: format!("Cannot open audio stream.\n{e}"),
+                                message: e.multiline_message(),
                             });
                             self.sent_error_message = true;
                         }

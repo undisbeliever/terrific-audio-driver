@@ -22,17 +22,37 @@ use cpal::{
 const DEFAULT_AUDIO_SAMPLE_RATE: u32 = 48000;
 
 pub enum OpenStreamError {
-    BuildStreamError(cpal::BuildStreamError),
+    BuildStreamError {
+        sample_rate: u32,
+        err: cpal::BuildStreamError,
+    },
     BackendError(cpal::BackendSpecificError),
     NoOutputDevices,
+}
+
+impl OpenStreamError {
+    pub fn multiline_message(&self) -> String {
+        match self {
+            OpenStreamError::BuildStreamError { sample_rate, err } => {
+                format!("Cannot open a 16-bit stereo {sample_rate}Hz output stream.\n{err}")
+            }
+            OpenStreamError::BackendError(e) => format!("Cannot open an output audio stream.\n{e}"),
+            OpenStreamError::NoOutputDevices => "No output audio devices found.".to_owned(),
+        }
+    }
 }
 
 impl std::fmt::Display for OpenStreamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OpenStreamError::BuildStreamError(e) => e.fmt(f),
+            OpenStreamError::BuildStreamError { sample_rate, err } => {
+                write!(
+                    f,
+                    "cannot build a {sample_rate}Hz stereo i16 output stream: {err}"
+                )
+            }
             OpenStreamError::BackendError(e) => e.fmt(f),
-            OpenStreamError::NoOutputDevices => write!(f, "No output devices found"),
+            OpenStreamError::NoOutputDevices => write!(f, "no output devices found"),
         }
     }
 }
@@ -163,6 +183,6 @@ fn open_audio_stream(
         None, // No timeout
     ) {
         Ok(stream) => Ok(OpenAudioStream { ringbuf, stream }),
-        Err(e) => Err(OpenStreamError::BuildStreamError(e)),
+        Err(err) => Err(OpenStreamError::BuildStreamError { sample_rate, err }),
     }
 }
