@@ -93,11 +93,10 @@ impl ResamplingRingBufProducer {
 
     fn calc_min_vacant_samples(input_sample_rate: u32, output_sample_rate: u32) -> usize {
         assert!((8000..=256000).contains(&input_sample_rate));
-        assert!((8000..=256000).contains(&output_sample_rate));
+        assert!((8000..=1024000).contains(&output_sample_rate));
 
-        const _: () = assert!(
-            ResamplingRingBufProducer::INPUT_CHUNK_SIZE * 256000 / 8000 < i16::MAX as usize
-        );
+        const _: () =
+            assert!(ResamplingRingBufProducer::INPUT_CHUNK_SIZE * 1024000 / 8000 < 102400_usize);
 
         // +4 to ensure the whole input chunk is read
         usize::try_from(
