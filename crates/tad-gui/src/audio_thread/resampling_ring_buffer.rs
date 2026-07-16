@@ -92,7 +92,6 @@ impl ResamplingRingBufProducer {
     }
 
     fn calc_min_vacant_samples(input_sample_rate: u32, output_sample_rate: u32) -> usize {
-        assert!(input_sample_rate < output_sample_rate);
         assert!((8000..=256000).contains(&input_sample_rate));
         assert!((8000..=256000).contains(&output_sample_rate));
 
@@ -119,7 +118,6 @@ impl ResamplingRingBufProducer {
     pub fn process(&mut self, samples: &[i16; Self::INPUT_CHUNK_SIZE]) {
         assert!(self.ringbuf.vacant_len() >= self.min_vacant_samples);
 
-        debug_assert!(self.ratio > 0.0 && self.ratio < 1.0);
         let mut it = samples.iter();
         while let (Some(&left), Some(&right)) = (it.next(), it.next()) {
             self.left.push(left.into());
@@ -139,8 +137,6 @@ impl ResamplingRingBufProducer {
             self.mu -= 1.0;
         }
 
-        debug_assert!(self.mu >= 0.0 && self.mu < 1.0);
-
         self.ringbuf.commit();
     }
 
@@ -148,7 +144,6 @@ impl ResamplingRingBufProducer {
     pub fn process_mono(&mut self, samples: &[i16; Self::INPUT_CHUNK_SIZE / 2]) {
         assert!(self.ringbuf.vacant_len() >= self.min_vacant_samples);
 
-        debug_assert!(self.ratio > 0.0 && self.ratio < 1.0);
         for &s in samples {
             self.left.push(s.into());
             self.right.push(s.into());
@@ -166,8 +161,6 @@ impl ResamplingRingBufProducer {
 
             self.mu -= 1.0;
         }
-
-        debug_assert!(self.mu >= 0.0 && self.mu < 1.0);
 
         self.ringbuf.commit();
     }
