@@ -15,13 +15,15 @@ use std::sync::mpsc;
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    StreamConfig,
+    DefaultStreamConfigError, StreamConfig,
 };
 
-const AUDIO_SAMPLE_RATE: u32 = 48000;
+#[cfg(not(windows))]
+const DEFAULT_AUDIO_SAMPLE_RATE: u32 = 48000;
 
 pub enum OpenStreamError {
     BuildStreamError(cpal::BuildStreamError),
+    BackendError(cpal::BackendSpecificError),
     NoOutputDevices,
 }
 
@@ -29,6 +31,7 @@ impl std::fmt::Display for OpenStreamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OpenStreamError::BuildStreamError(e) => e.fmt(f),
+            OpenStreamError::BackendError(e) => e.fmt(f),
             OpenStreamError::NoOutputDevices => write!(f, "No output devices found"),
         }
     }
@@ -46,6 +49,10 @@ impl DeviceHost {
         Self(cpal::default_host())
     }
 
+    // On windows the cpal sample rate must match the shared audio device's sample rate.
+    //
+    // https://github.com/RustAudio/cpal/issues/593
+    #[cfg(windows)]
     pub fn open_stream(
         &mut self,
         sender: mpsc::Sender<AudioMessage>,
@@ -55,7 +62,27 @@ impl DeviceHost {
             .default_output_device()
             .ok_or(OpenStreamError::NoOutputDevices)?;
 
-        open_audio_stream(&device, AUDIO_SAMPLE_RATE, sender)
+        open_audio_stream_at_default_sample_rate(&device, sender)
+    }
+
+    // On undisbeliever's Debian Linux pipewrire setup cpal reports the default sample rate as
+    // 44100Hz despite pipewire reporting a default clock rate of 48000Hz.
+    //
+    // Trying 48000Hz first and if that fails try the default sample rate.
+    #[cfg(not(windows))]
+    pub fn open_stream(
+        &mut self,
+        sender: mpsc::Sender<AudioMessage>,
+    ) -> Result<OpenAudioStream, OpenStreamError> {
+        let device = self
+            .0
+            .default_output_device()
+            .ok_or(OpenStreamError::NoOutputDevices)?;
+
+        match open_audio_stream(&device, DEFAULT_AUDIO_SAMPLE_RATE, sender.clone()) {
+            Ok(s) => Ok(s),
+            Err(_) => open_audio_stream_at_default_sample_rate(&device, sender),
+        }
     }
 }
 
@@ -78,6 +105,22 @@ impl OpenAudioStream {
 
     pub fn ringbuf_mut(&mut self) -> &mut ResamplingRingBufProducer {
         &mut self.ringbuf
+    }
+}
+
+fn open_audio_stream_at_default_sample_rate(
+    device: &cpal::Device,
+    sender: mpsc::Sender<AudioMessage>,
+) -> Result<OpenAudioStream, OpenStreamError> {
+    match device.default_output_config() {
+        Ok(c) => open_audio_stream(device, c.sample_rate().0, sender),
+        Err(DefaultStreamConfigError::DeviceNotAvailable)
+        | Err(DefaultStreamConfigError::StreamTypeNotSupported) => {
+            Err(OpenStreamError::NoOutputDevices)
+        }
+        Err(DefaultStreamConfigError::BackendSpecific { err }) => {
+            Err(OpenStreamError::BackendError(err))
+        }
     }
 }
 
