@@ -125,7 +125,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
-  * [cc 1.2.65](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.2.67](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs), MIT License
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs), MIT License
@@ -138,14 +138,14 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [wasm-bindgen 0.2.126](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
   * [web-sys 0.3.103](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
-  * [bitflags 2.13.0](https://github.com/bitflags/bitflags), MIT License
+  * [bitflags 2.13.1](https://github.com/bitflags/bitflags), MIT License
   * [log 0.4.33](https://github.com/rust-lang/log), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive), MIT License
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits), MIT License
-  * [regex-automata 0.4.14](https://github.com/rust-lang/regex), MIT License
+  * [regex-automata 0.4.16](https://github.com/rust-lang/regex), MIT License
   * [regex-syntax 0.8.11](https://github.com/rust-lang/regex), MIT License
-  * [regex 1.12.4](https://github.com/rust-lang/regex), MIT License
+  * [regex 1.13.1](https://github.com/rust-lang/regex), MIT License
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path), MIT License
   * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp), MIT License
   * [coreaudio-rs 0.13.0](https://github.com/RustAudio/coreaudio-rs.git), MIT License
@@ -161,7 +161,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [utf8parse 0.2.2](https://github.com/alacritty/vte), MIT License
   * [indexmap 2.14.0](https://github.com/indexmap-rs/indexmap), MIT License
   * [equivalent 1.0.2](https://github.com/indexmap-rs/equivalent), MIT License
-  * [bytes 1.12.0](https://github.com/tokio-rs/bytes), MIT License
+  * [bytes 1.12.1](https://github.com/tokio-rs/bytes), MIT License
   * [autocfg 1.5.1](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser), MIT License
   * [ringbuf 0.4.8](https://github.com/agerasev/ringbuf.git), MIT License
@@ -173,15 +173,15 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git), MIT License
-  * [clap 4.6.1](https://github.com/clap-rs/clap), MIT License
-  * [clap_builder 4.6.0](https://github.com/clap-rs/clap), MIT License
+  * [clap 4.6.2](https://github.com/clap-rs/clap), MIT License
+  * [clap_builder 4.6.2](https://github.com/clap-rs/clap), MIT License
   * [clap_derive 4.6.1](https://github.com/clap-rs/clap), MIT License
   * [clap_lex 1.1.0](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git), MIT License
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill), MIT License
   * [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill), MIT License
   * [toml_datetime 1.1.1+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
-  * [toml_edit 0.25.12+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
+  * [toml_edit 0.25.13+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [toml_parser 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [libc 0.2.186](https://github.com/rust-lang/libc), MIT License
   * [alsa 0.9.1](https://github.com/diwic/alsa-rs), MIT License
@@ -189,7 +189,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [alsa-sys 0.3.1](https://github.com/diwic/alsa-sys), MIT License
   * [fltk-sys 1.5.23](https://github.com/fltk-rs/fltk-rs), MIT License
   * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs), MIT License
-  * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer), MIT License
+  * [spectrum-analyzer 1.8.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
   * [cesu8 1.1.0](https://github.com/emk/cesu8-rs), MIT License
   * [dasp_sample 0.11.0](https://github.com/rustaudio/sample.git), MIT License
@@ -212,10 +212,10 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [fltk 1.5.23](https://github.com/fltk-rs/fltk-rs), MIT License
   * [minipaste 0.1.0](https://github.com/MoAlyousef/minipaste), MIT License
-  * [cxx-build 1.0.194](https://github.com/dtolnay/cxx), MIT License
-  * [cxx 1.0.194](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.194](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.194](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.197](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.197](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.197](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.197](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.18](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.12](https://github.com/dtolnay/link-cplusplus), MIT License
   * [num_enum 0.7.6](https://github.com/illicitonion/num_enum), MIT License
@@ -226,20 +226,20 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [proc-macro-crate 3.5.0](https://github.com/bkchr/proc-macro-crate), MIT License
   * [proc-macro2 1.0.106](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.46](https://github.com/dtolnay/quote), MIT License
-  * [rustversion 1.0.22](https://github.com/dtolnay/rustversion), MIT License
+  * [rustversion 1.0.23](https://github.com/dtolnay/rustversion), MIT License
   * [scratch 1.0.9](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.228](https://github.com/serde-rs/serde), MIT License
   * [serde_core 1.0.228](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.150](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.118](https://github.com/dtolnay/syn), MIT License
+  * [syn 2.0.119](https://github.com/dtolnay/syn), MIT License
   * [thiserror-impl 1.0.69](https://github.com/dtolnay/thiserror), MIT License
   * [thiserror 1.0.69](https://github.com/dtolnay/thiserror), MIT License
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident), MIT License
-  * [zmij 1.0.21](https://github.com/dtolnay/zmij), MIT License
-  * [winnow 1.0.3](https://github.com/winnow-rs/winnow), MIT License
+  * [zmij 1.0.23](https://github.com/dtolnay/zmij), MIT License
+  * [winnow 1.0.4](https://github.com/winnow-rs/winnow), MIT License
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick), MIT License
-  * [memchr 2.8.2](https://github.com/BurntSushi/memchr), MIT License
+  * [memchr 2.8.3](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [walkdir 2.5.0](https://github.com/BurntSushi/walkdir), MIT License
   * [strsim 0.11.1](https://github.com/rapidfuzz/strsim-rs), MIT License
@@ -248,8 +248,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [jni 0.21.1](https://github.com/jni-rs/jni-rs), MIT License
   * [same-file 1.0.6](https://github.com/BurntSushi/same-file), MIT License
   * [winapi-util 0.1.11](https://github.com/BurntSushi/winapi-util), MIT License
-  * [crossbeam-channel 0.5.15](https://github.com/crossbeam-rs/crossbeam), MIT License
-  * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-channel 0.5.16](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-utils 0.8.22](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident), Unicode License v3
   * [foldhash 0.2.0](https://github.com/orlp/foldhash), zlib License
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)

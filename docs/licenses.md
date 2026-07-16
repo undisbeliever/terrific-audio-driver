@@ -410,7 +410,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.65](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.67](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs)
@@ -457,14 +457,14 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.13.0](https://github.com/bitflags/bitflags)
+  * [bitflags 2.13.1](https://github.com/bitflags/bitflags)
   * [log 0.4.33](https://github.com/rust-lang/log)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-derive 0.4.2](https://github.com/rust-num/num-derive)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
-  * [regex-automata 0.4.14](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.16](https://github.com/rust-lang/regex)
   * [regex-syntax 0.8.11](https://github.com/rust-lang/regex)
-  * [regex 1.12.4](https://github.com/rust-lang/regex)
+  * [regex 1.13.1](https://github.com/rust-lang/regex)
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path)
 
 ```
@@ -809,7 +809,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [bytes 1.12.0](https://github.com/tokio-rs/bytes)
+  * [bytes 1.12.1](https://github.com/tokio-rs/bytes)
 
 ```
 Copyright (c) 2018 Carl Lerche
@@ -1054,15 +1054,15 @@ Used by:
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git)
   * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git)
   * [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.6.1](https://github.com/clap-rs/clap)
-  * [clap_builder 4.6.0](https://github.com/clap-rs/clap)
+  * [clap 4.6.2](https://github.com/clap-rs/clap)
+  * [clap_builder 4.6.2](https://github.com/clap-rs/clap)
   * [clap_derive 4.6.1](https://github.com/clap-rs/clap)
   * [clap_lex 1.1.0](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
   * [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
   * [toml_datetime 1.1.1+spec-1.1.0](https://github.com/toml-rs/toml)
-  * [toml_edit 0.25.12+spec-1.1.0](https://github.com/toml-rs/toml)
+  * [toml_edit 0.25.13+spec-1.1.0](https://github.com/toml-rs/toml)
   * [toml_parser 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml)
 
 ```
@@ -1282,7 +1282,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer)
+  * [spectrum-analyzer 1.8.0](https://github.com/phip1611/spectrum-analyzer)
 
 ```
 MIT License
@@ -1450,10 +1450,10 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.194](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.194](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.194](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.194](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.197](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.197](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.197](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.197](https://github.com/dtolnay/cxx)
   * [itoa 1.0.18](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.12](https://github.com/dtolnay/link-cplusplus)
   * [num_enum 0.7.6](https://github.com/illicitonion/num_enum)
@@ -1464,17 +1464,17 @@ Used by:
   * [proc-macro-crate 3.5.0](https://github.com/bkchr/proc-macro-crate)
   * [proc-macro2 1.0.106](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.46](https://github.com/dtolnay/quote)
-  * [rustversion 1.0.22](https://github.com/dtolnay/rustversion)
+  * [rustversion 1.0.23](https://github.com/dtolnay/rustversion)
   * [scratch 1.0.9](https://github.com/dtolnay/scratch)
   * [serde 1.0.228](https://github.com/serde-rs/serde)
   * [serde_core 1.0.228](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde)
   * [serde_json 1.0.150](https://github.com/serde-rs/json)
-  * [syn 2.0.118](https://github.com/dtolnay/syn)
+  * [syn 2.0.119](https://github.com/dtolnay/syn)
   * [thiserror-impl 1.0.69](https://github.com/dtolnay/thiserror)
   * [thiserror 1.0.69](https://github.com/dtolnay/thiserror)
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident)
-  * [zmij 1.0.21](https://github.com/dtolnay/zmij)
+  * [zmij 1.0.23](https://github.com/dtolnay/zmij)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1507,7 +1507,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [winnow 1.0.3](https://github.com/winnow-rs/winnow)
+  * [winnow 1.0.4](https://github.com/winnow-rs/winnow)
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining
@@ -1536,7 +1536,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.8.2](https://github.com/BurntSushi/memchr)
+  * [memchr 2.8.3](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [walkdir 2.5.0](https://github.com/BurntSushi/walkdir)
 
@@ -1728,8 +1728,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [crossbeam-channel 0.5.15](https://github.com/crossbeam-rs/crossbeam)
-  * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-channel 0.5.16](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-utils 0.8.22](https://github.com/crossbeam-rs/crossbeam)
 
 ```
 The MIT License (MIT)
