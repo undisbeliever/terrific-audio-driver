@@ -791,17 +791,25 @@ impl PauseState {
 struct GuiAudioDevice {
     host: DeviceHost,
     sender: mpsc::Sender<AudioMessage>,
+    gui_sender: fltk::app::Sender<GuiMessage>,
     stream: Option<OpenAudioStream>,
     state: PlayState,
+
+    sent_error_message: bool,
 }
 
 impl GuiAudioDevice {
-    pub fn new(sender: mpsc::Sender<AudioMessage>) -> Self {
+    pub fn new(
+        sender: mpsc::Sender<AudioMessage>,
+        gui_sender: fltk::app::Sender<GuiMessage>,
+    ) -> Self {
         Self {
             host: DeviceHost::new(),
             sender,
+            gui_sender,
             stream: None,
             state: PlayState::Closed,
+            sent_error_message: false,
         }
     }
 
@@ -827,6 +835,15 @@ impl GuiAudioDevice {
                     Ok(s) => Some(s),
                     Err(e) => {
                         eprintln!("Cannot open audio stream: {e}");
+
+                        // Only show error message once
+                        if !self.sent_error_message {
+                            self.gui_sender.send(GuiMessage::ErrorMessageDialog {
+                                title: "Audio Error".into(),
+                                message: format!("Cannot open audio stream.\n{e}"),
+                            });
+                            self.sent_error_message = true;
+                        }
                         None
                     }
                 }
@@ -974,7 +991,7 @@ fn audio_thread(
     gui_sender: fltk::app::Sender<GuiMessage>,
     monitor: AudioMonitor,
 ) {
-    let mut device = GuiAudioDevice::new(sender.clone());
+    let mut device = GuiAudioDevice::new(sender.clone(), gui_sender);
     let mut monitor = monitor;
     let mut tad = TadState::new();
 

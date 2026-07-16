@@ -88,6 +88,7 @@ use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
 use sound_effects_tab::MAX_SFX_FILE_SOUND_EFFECTS;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -159,6 +160,10 @@ pub enum GuiMessage {
     ShowSampleSizes,
 
     OpenSampleFileDialog(ItemId),
+    ErrorMessageDialog {
+        title: Cow<'static, str>,
+        message: String,
+    },
 
     OpenSongTab(usize),
 
@@ -751,6 +756,10 @@ impl Project {
             }
             GuiMessage::OpenSampleFileDialog(id) => {
                 open_sample_file_dialog(&self.sender, &self.compiler_sender, &self.data, id);
+            }
+            GuiMessage::ErrorMessageDialog { title, message } => {
+                dialog::message_title(&title);
+                dialog::alert_default(&message);
             }
 
             GuiMessage::SetProjectSongName(index, name) => {

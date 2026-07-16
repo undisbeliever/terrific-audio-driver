@@ -15,13 +15,27 @@ use std::sync::mpsc;
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    BuildStreamError, StreamConfig,
+    StreamConfig,
 };
 
 const AUDIO_SAMPLE_RATE: u32 = 48000;
 const AUDIO_BUFFER_SAMPLES: u32 = 1024;
 
 const RING_BUFFER_SIZE: usize = 4096;
+
+pub enum OpenStreamError {
+    BuildStreamError(cpal::BuildStreamError),
+    NoOutputDevices,
+}
+
+impl std::fmt::Display for OpenStreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpenStreamError::BuildStreamError(e) => e.fmt(f),
+            OpenStreamError::NoOutputDevices => write!(f, "No output devices found"),
+        }
+    }
+}
 
 pub enum AudioStreamError {
     DeviceNotAvailable,
@@ -61,11 +75,11 @@ impl OpenAudioStream {
 pub fn open_audio_stream(
     host: &DeviceHost,
     sender: mpsc::Sender<AudioMessage>,
-) -> Result<OpenAudioStream, BuildStreamError> {
+) -> Result<OpenAudioStream, OpenStreamError> {
     let device = host
         .0
         .default_output_device()
-        .expect("no output device available");
+        .ok_or(OpenStreamError::NoOutputDevices)?;
 
     let config = StreamConfig {
         channels: 2,
@@ -98,6 +112,6 @@ pub fn open_audio_stream(
         None, // No timeout
     ) {
         Ok(stream) => Ok(OpenAudioStream { ringbuf, stream }),
-        Err(e) => Err(e),
+        Err(e) => Err(OpenStreamError::BuildStreamError(e)),
     }
 }
