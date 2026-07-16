@@ -6,8 +6,9 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+mod audio_stream;
 mod resampling_ring_buffer;
-use self::resampling_ring_buffer::{resampling_ring_buffer, ResamplingRingBufProducer};
+use self::resampling_ring_buffer::ResamplingRingBufProducer;
 
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::bytecode_interpreter::SongInterpreter;
@@ -22,10 +23,6 @@ use compiler::time::TickCounter;
 use compiler::Pan;
 use tad_emu::LagCounters;
 
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    Host, PlayStreamError, StreamConfig,
-};
 use std::ops::Deref;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::LockResult;
@@ -35,6 +32,9 @@ use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::audio_thread::audio_stream::{
+    open_audio_stream, AudioStreamError, DeviceHost, OpenAudioStream,
+};
 use crate::compiler_thread::{
     CommonAudioDataNoSfx, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer,
 };
@@ -49,11 +49,6 @@ const APU_SAMPLE_RATE: u32 = 32040;
 
 /// Sample rate to run BRR samples at
 const BRR_SAMPLE_RATE: u32 = 32000;
-
-const AUDIO_SAMPLE_RATE: u32 = 48000;
-const AUDIO_BUFFER_SAMPLES: u32 = 1024;
-
-const RING_BUFFER_SIZE: usize = 4096;
 
 /// Approximate number of samples to play a looping BRR sample for
 const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
@@ -793,67 +788,19 @@ impl PauseState {
     }
 }
 
-struct OpenAudioDevice {
-    ringbuf: ResamplingRingBufProducer,
-    stream: cpal::Stream,
-}
-
-fn open_audio_stream(host: &Host, sender: mpsc::Sender<AudioMessage>) -> Option<OpenAudioDevice> {
-    let device = host
-        .default_output_device()
-        .expect("no output device available");
-
-    let config = StreamConfig {
-        channels: 2,
-        sample_rate: cpal::SampleRate(AUDIO_SAMPLE_RATE),
-        buffer_size: cpal::BufferSize::Fixed(AUDIO_BUFFER_SAMPLES),
-    };
-
-    let (mut ringbuf, rb_consumer) =
-        resampling_ring_buffer(RING_BUFFER_SIZE, APU_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
-
-    ringbuf.fill_with_silence();
-
-    match device.build_output_stream(
-        &config,
-        {
-            let s = sender.clone();
-            let mut rb = rb_consumer;
-            move |buf: &mut [i16], _cb: &cpal::OutputCallbackInfo| {
-                rb.pop_slice(buf);
-                let _ = s.send(AudioMessage::RingBufferConsumed(PrivateToken::new()));
-            }
-        },
-        {
-            let s = sender;
-            move |e| {
-                eprintln!("Audio stream error: {e}");
-                let _ = s.send(AudioMessage::StopAndCloseDevice);
-            }
-        },
-        None, // No timeout
-    ) {
-        Ok(stream) => Some(OpenAudioDevice { ringbuf, stream }),
-        Err(e) => {
-            eprintln!("Cannot open audio stream: {e}");
-            None
-        }
-    }
-}
-
 struct GuiAudioDevice {
-    host: Host,
+    host: DeviceHost,
     sender: mpsc::Sender<AudioMessage>,
-    device: Option<OpenAudioDevice>,
+    stream: Option<OpenAudioStream>,
     state: PlayState,
 }
 
 impl GuiAudioDevice {
     pub fn new(sender: mpsc::Sender<AudioMessage>) -> Self {
         Self {
-            host: cpal::default_host(),
+            host: DeviceHost::new(),
             sender,
-            device: None,
+            stream: None,
             state: PlayState::Closed,
         }
     }
@@ -871,12 +818,18 @@ impl GuiAudioDevice {
     }
 
     fn open_or_restart(&mut self) {
-        match &mut self.device {
-            Some(d) => {
-                let _ = d.stream.pause();
+        match &mut self.stream {
+            Some(s) => {
+                s.pause();
             }
             None => {
-                self.device = open_audio_stream(&self.host, self.sender.clone());
+                self.stream = match open_audio_stream(&self.host, self.sender.clone()) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("Cannot open audio stream: {e}");
+                        None
+                    }
+                }
             }
         }
 
@@ -888,7 +841,7 @@ impl GuiAudioDevice {
     }
 
     fn resume(&mut self) {
-        if self.device.is_some() {
+        if self.stream.is_some() {
             self.state = PlayState::Starting;
             let _ = self
                 .sender
@@ -899,7 +852,7 @@ impl GuiAudioDevice {
     }
 
     fn close_device(&mut self) {
-        self.device = None;
+        self.stream = None;
         self.state = PlayState::Closed;
     }
 
@@ -908,59 +861,63 @@ impl GuiAudioDevice {
         _t: PrivateToken,
         mut f: impl FnMut(&mut ResamplingRingBufProducer) -> bool,
     ) {
-        match &mut self.device {
-            Some(d) => match &mut self.state {
-                PlayState::Closed => (),
-                PlayState::Starting => {
-                    f(&mut d.ringbuf);
+        match &mut self.stream {
+            Some(stream) => {
+                let ringbuf = stream.ringbuf_mut();
 
-                    // Stream could be paused in this state.
-                    // Start playback (if possible).
-                    self.state = match d.stream.play() {
-                        Ok(()) => PlayState::Running,
-                        Err(PlayStreamError::DeviceNotAvailable) => {
-                            self.device = None;
-                            PlayState::Closed
-                        }
-                        Err(PlayStreamError::BackendSpecific { err }) => {
-                            eprintln!("Stream error: {err}");
-                            self.device = None;
-                            PlayState::Closed
-                        }
-                    };
-                }
-                PlayState::Running => {
-                    let ended = f(&mut d.ringbuf);
-                    if ended {
-                        self.state = PlayState::Stopped(PauseState::new());
+                match &mut self.state {
+                    PlayState::Closed => (),
+                    PlayState::Starting => {
+                        f(ringbuf);
+
+                        // Stream could be paused in this state.
+                        // Start playback (if possible).
+                        self.state = match stream.play() {
+                            Ok(()) => PlayState::Running,
+                            Err(AudioStreamError::DeviceNotAvailable) => {
+                                self.stream = None;
+                                PlayState::Closed
+                            }
+                            Err(AudioStreamError::OtherError(e)) => {
+                                eprintln!("Stream error: {e}");
+                                self.stream = None;
+                                PlayState::Closed
+                            }
+                        };
                     }
-                }
-
-                PlayState::Stopped(s) | PlayState::Paused(s) => {
-                    let written = d.ringbuf.fill_with_silence();
-
-                    // Pause stream only after ring buffer and audio stream have been filled with
-                    // silence to prevent old samples from playing when the user starts a new song.
-                    //
-                    // `s.rb_written` is None after the device has been paused.
-                    if let Some(rb) = &mut s.rb_written {
-                        *rb += written;
-                        if *rb > d.ringbuf.capacity() * 2 {
-                            let _ = d.stream.pause();
-                            s.rb_written = None;
+                    PlayState::Running => {
+                        let ended = f(ringbuf);
+                        if ended {
+                            self.state = PlayState::Stopped(PauseState::new());
                         }
                     }
 
-                    // cpal documentation states audio devices might not support `Stream::pause()`.
-                    //
-                    // If that happens, continue filling the ring buffer with silence and
-                    // disconnect the device after it has been playing silence for a while.
-                    if s.time.elapsed() > DELAY_UNTIL_PAUSED_DEVICE_IS_CLOSED {
-                        self.device = None;
-                        self.state = PlayState::Closed;
+                    PlayState::Stopped(p) | PlayState::Paused(p) => {
+                        let written = ringbuf.fill_with_silence();
+
+                        // Pause stream only after ring buffer and audio stream have been filled with
+                        // silence to prevent old samples from playing when the user starts a new song.
+                        //
+                        // `p.rb_written` is None after the device has been paused.
+                        if let Some(rb) = &mut p.rb_written {
+                            *rb += written;
+                            if *rb > ringbuf.capacity() * 2 {
+                                stream.pause();
+                                p.rb_written = None;
+                            }
+                        }
+
+                        // cpal documentation states audio devices might not support `Stream::pause()`.
+                        //
+                        // If that happens, continue filling the ring buffer with silence and
+                        // disconnect the device after it has been playing silence for a while.
+                        if p.time.elapsed() > DELAY_UNTIL_PAUSED_DEVICE_IS_CLOSED {
+                            self.stream = None;
+                            self.state = PlayState::Closed;
+                        }
                     }
                 }
-            },
+            }
             None => {
                 self.state = PlayState::Closed;
             }
@@ -978,7 +935,7 @@ impl GuiAudioDevice {
 
     // NOTE: Does not close the device
     fn stop(&mut self) {
-        if self.device.is_some() {
+        if self.stream.is_some() {
             self.state = PlayState::Stopped(PauseState::new());
         }
     }
