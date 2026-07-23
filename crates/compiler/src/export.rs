@@ -65,9 +65,7 @@ pub struct ExportedBinFile {
 }
 
 impl ExportedBinFile {
-    pub const LOADER_OFFSET: usize = 0;
-    pub const LOADER_SIZE: usize = audio_driver::LOADER.len();
-    pub const AUDIO_DRIVER_OFFSET: usize = Self::LOADER_OFFSET + Self::LOADER_SIZE;
+    pub const AUDIO_DRIVER_OFFSET: usize = 0;
     pub const AUDIO_DRIVER_SIZE: usize = audio_driver::AUDIO_DRIVER.len();
     pub const DATA_TABLE_OFFSET: usize = Self::AUDIO_DRIVER_OFFSET + Self::AUDIO_DRIVER_SIZE;
     pub const DATA_TABLE_ELEMENT_SIZE: usize = 3;
@@ -118,7 +116,6 @@ fn export_bin_file(
 
     let mut bin_file = Vec::with_capacity(bin_file_size);
 
-    bin_file.extend(audio_driver::LOADER);
     bin_file.extend(audio_driver::AUDIO_DRIVER);
 
     // Add space for the data table

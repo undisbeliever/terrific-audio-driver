@@ -133,11 +133,9 @@ STACK_BOTTOM = $1f80
 .send
 
 
-Tad_Loader_Bin          =   $1234
-Tad_AudioDriver_Bin     =   $9abc
-LoadAudioData           = $80def0
+Tad_AudioDriver_Bin     =   $1234
+LoadAudioData           = $805678
 
-Tad_Loader_SIZE         =  116
-Tad_AudioDriver_SIZE    = 2048
+Tad_AudioDriver_SIZE    =   $0fff
 
 

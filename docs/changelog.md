@@ -1,6 +1,13 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.5.0
+=============
+
+SNES homebrew changes:
+ * `audio-driver.bin` and `loader.bin` have been combined into a single `audio-driver.bin` binary.
+
+
 Version 0.4.2
 =============
  * Fixed no sound in tad-gui on windows if the audio device's sample rate is not 48kHz.

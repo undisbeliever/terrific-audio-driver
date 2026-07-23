@@ -1700,11 +1700,7 @@ TestTable_SIZE = * - TestTable
 ;; Binary Data
 ;; ===========
 
-.export Tad_Loader_Bin, Tad_Loader_SIZE
 .export Tad_AudioDriver_Bin, Tad_AudioDriver_SIZE
-
-Tad_Loader_Bin: .incbin "../../../loader.bin"
-Tad_Loader_SIZE = .sizeof(Tad_Loader_Bin)
 
 Tad_AudioDriver_Bin: .incbin "../../../audio-driver.bin"
 Tad_AudioDriver_SIZE = .sizeof(Tad_AudioDriver_Bin)

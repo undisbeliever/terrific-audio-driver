@@ -137,7 +137,7 @@ TAD_APUIO3 = $2143
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-!TAD_IO_VERSION = 20
+!TAD_IO_VERSION = 21
 
 
 
@@ -213,8 +213,7 @@ TAD_APUIO3 = $2143
 
 ; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadLoaderDataType
-    !TadLoaderDataType_CODE        = 0
-    !TadLoaderDataType_COMMON_DATA = 1
+    !TadLoaderDataType_COMMON_DATA = 0
 
     !TadLoaderDataType_SONG_DATA_FLAG            = $80
     !TadLoaderDataType_PLAY_SONG_FLAG            = $40

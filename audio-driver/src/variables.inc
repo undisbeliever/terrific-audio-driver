@@ -58,6 +58,32 @@ VOL_PAN_EFFECT_TRIANGLE_UP   = $40
 VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
 
 
+; Variables used by loader or used across song loads.
+;
+; They must not be cleared by the audio-driver.
+.vars loader_zeropage
+    ; Global volumes.
+    ;
+    ; Stored here so they are unchanged when a new song or common-audio-data is loaded.
+    ;
+    ; If global-volume is 0, the channel volume is unchanged.
+    globalVolume_music : u8
+    globalVolume_sfx : u8
+
+    ; The address of the song data
+    songPtr :  ptr
+
+    ; The `LoaderDataType` value sent to the loader.
+    ;
+    ; Used as a Mono/Stereo flag.
+    ;
+    ; Set by the loader:
+    ;   Advantages: Simpler and uses less code space (no IoCommand for to set/clear stereoFlag).
+    ;   Disadvantages: Stereo flag is not set until a song is loaded.
+    loaderDataType : u8
+.endvars
+
+
 .vars zeropage
     ; Temporary variables
     zpTmpWord : u16

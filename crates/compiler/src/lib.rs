@@ -50,7 +50,6 @@ pub mod audio_driver {
     // SDPX—SnippetName: SPC700 Audio Driver
     // SPDX-SnippetCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
     // SPDX-License-Identifier: Zlib
-    pub const LOADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/loader.bin"));
     pub const AUDIO_DRIVER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/audio-driver.bin"));
     // SPDX-SnippetEnd
 }

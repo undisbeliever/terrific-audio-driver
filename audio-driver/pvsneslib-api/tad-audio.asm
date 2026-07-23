@@ -114,9 +114,9 @@
 ;; MUST match `audio-driver/src/io-commands.inc`
 
 
-;; Address to store the loader (in Audio-RAM).
-;; Address (in Audio-RAM) to execute after loading the Loader.
-;; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`
+;; Address to store the audio-driver binary (in Audio-RAM) using the IPL.
+;; Address (in Audio-RAM) to execute after loading the audio driver.
+;; MUST match LOADER_ADDR in `audio-driver/src/memmap.inc`
 TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -203,8 +203,7 @@ TAD_IO_ToScpu__MODE_AUDIO_DRIVER = $61 ; 'a'
 
 ;; The `audio-driver.bin` file.
 ;; MUST be loaded first.
-TAD_LoaderDataType__CODE        = 0
-TAD_LoaderDataType__COMMON_DATA = 1
+TAD_LoaderDataType__COMMON_DATA = 0
 
 ; song mode flags
 TAD_LoaderDataType__SONG_DATA_FLAG            = 1 << 7
@@ -643,7 +642,7 @@ TAD_N_AUDIO_MODES = 3
 .16bit
 
 
-;; Transfer and execute Loader using the IPL
+;; Transfer `Tad_AudioDriver_Bin` to Audio-RAM and execute loader using the IPL
 ;;
 ;; REQUIRES: S-SMP reset and no data has been written to it yet
 ;;
@@ -652,7 +651,7 @@ TAD_N_AUDIO_MODES = 3
 ;; A8
 ;; I16
 ;; DB = $80
-.macro tadPrivate_loader_transferLoaderViaIpl
+.macro tadPrivate_loader_transferAudioDriverViaIpl
 APUIO0 = $2140
 APUIO1 = $2141
 APUIO2 = $2142
@@ -674,39 +673,37 @@ APUIO3 = $2143
     sta     APUIO1              ; non-zero = write data to address
     sta     APUIO0              ; New data command (non-zero and APUIO0 + more than 2, or $cc on the first transfer)
 
-    ; Wait for a response from the IPL
+    ldx     #0
+    @IplLoop:
+        ; Wait for a response from the IPL
+        -
+            cmp     APUIO0
+            bne     -
+
+        ; Send the next byte to the IPL
+        lda.l   Tad_AudioDriver_Bin,x
+        sta     APUIO1
+
+        ; Tell the IPL the next byte is ready
+        txa
+        sta     APUIO0
+
+        inx
+        cpx     #Tad_AudioDriver_SIZE
+        bcc     @IplLoop
+
+
+    ; Wait for a response form the IPL
     -
         cmp     APUIO0
         bne     -
 
-    sep     #$30
-.index 8
-    ldx     #0
-    @IplLoop:
-        ; Send the next byte to the IPL
-        lda.l   Tad_Loader_Bin,x
-        sta     APUIO1
-
-        ; Tell the IPL the next byte is ready
-        stx     APUIO0
-
-        ; Wait for a response form the IPL
-        -
-            cpx     APUIO0
-            bne     -
-
-        inx
-        cpx     #Tad_Loader_SIZE
-        bcc     @IplLoop
-
-    rep     #$10
-.index 16
 
     ; Send an execute program command to the IPL
     ldx     #TAD_LOADER_ARAM_ADDR
     stx     APUIO2                  ; A-RAM address
     stz     APUIO1                  ; zero = execute program at A-RAM address
-    lda     #Tad_Loader_SIZE + 2
+    lda     #lobyte(Tad_AudioDriver_SIZE + 2)
     sta     APUIO0                  ; New data command (must be +2 the previous APUIO0 write)
 .endm
 
@@ -1293,7 +1290,7 @@ tad_init:
 .index 16
 // DB = $80
 
-    tadPrivate_loader_transferLoaderViaIpl
+    tadPrivate_loader_transferAudioDriverViaIpl
 
 
     ; Set default settings
@@ -1327,15 +1324,6 @@ tad_init:
     sta     tad_sfxQueue_sfx
 
     stz     tadPrivate_nextSong
-
-    @DataTypeLoop:
-        lda     #TAD_LoaderDataType__CODE
-        jsr     tadPrivate_loader_checkReadyAndSendLoaderDataType
-        bcc     @DataTypeLoop
-
-    @TransferLoop:
-        jsr     tadPrivate_loader_transferData
-        bcc     @TransferLoop
 
     lda     #TAD_State__WAITING_FOR_LOADER_COMMON
     sta     tadPrivate_state

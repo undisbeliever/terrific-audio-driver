@@ -24,27 +24,32 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
-.include "registers.inc"
-.include "io-commands.inc"
-.include "common-memmap.inc"
-
-
-.codebank LOADER_ADDR..(LOADER_ADDR + LOADER_SIZE)
-
-
 ; Loader can only write to even addresses
-.assert LOADER_ADDR % 2 == 0
-.assert CODE_ADDR % 2 == 0
+.assert COMMON_DATA_ADDR % 2 == 0
 
 ; Confirm LoaderIO and DriverIO use the same switch to loader signal
 .assert DriverIO__SWITCH_TO_LOADER_PORT == LoaderIO_TransferToLoader__SPINLOCK_PORT
 .assert DriverIO__SWITCH_TO_LOADER_BIT == LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT
 
 
-.proc start_loader
-    ; MUST be the first thing in the loader_code bank
+.proc init_loader
+    ; MUST be the first thing in the `.codebank`
     .assert PC == LOADER_ADDR
 
+    clrp
+.p0
+    ; Clear global music and sfx volume
+    .assert globalVolume_music + 1 == globalVolume_sfx
+    mov A, #0
+    mov Y, A
+    movw globalVolume_music, YA
+
+    ; fallthrough
+    .assert PC == start_loader
+.endproc
+
+
+.proc start_loader
     ; Setup stack
     mov X, #$ff
     mov SP, X
@@ -82,22 +87,8 @@
     mov loaderDataType, Y
 
     ; Get the address to store the data
-    .assert LoaderDataType__CODE == 0
     .assert LoaderDataType__SONG_DATA_BIT == 7
-    bne DtNotZero
-        ; Clear global music and sfx volume
-        .assert globalVolume_music + 1 == globalVolume_sfx
-        mov A, Y
-        movw globalVolume_music, YA
-
-        mov A, #lobyte(CODE_ADDR)
-        mov Y, #hibyte(CODE_ADDR)
-
-        bra DtEndIf
-
-    DtNotZero:
-        bmi DtIsSong
-
+    bmi DtIsSong
         mov A, #lobyte(COMMON_DATA_ADDR)
         mov Y, #hibyte(COMMON_DATA_ADDR)
 
@@ -189,6 +180,6 @@
 
 
     ; Fallthrough into `main` in `audio-driver.asm`
-    .assert PC == CODE_ADDR
+    .assert PC == main
 .endproc
 

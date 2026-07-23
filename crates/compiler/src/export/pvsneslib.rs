@@ -128,7 +128,6 @@ impl Exporter for PvExporter {
 
         out += ASM_HEADER;
 
-        writeln!(out, "Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
         writeln!(out, "Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
         writeln!(out)?;
         writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_DOCSTRING)?;
@@ -155,11 +154,6 @@ impl Exporter for PvExporter {
             let mut incbin_label = |label: &str, incbin_offset: usize, to_read: usize| {
                 writeln!(out, "  {label}: .incbin \"{incbin_path}\" SKIP ${incbin_offset:x} READ ${to_read:x}")
             };
-            incbin_label(
-                "Tad_Loader_Bin",
-                ExportedBinFile::LOADER_OFFSET,
-                ExportedBinFile::LOADER_SIZE,
-            )?;
             incbin_label(
                 "Tad_AudioDriver_Bin",
                 ExportedBinFile::AUDIO_DRIVER_OFFSET,
@@ -248,7 +242,7 @@ const ASM_HEADER: &str = r##";; Terrific Audio Driver loadSongData() and audio d
 ; For more information, please refer to <http://unlicense.org/>
 
 
-.export Tad_Loader_SIZE, Tad_AudioDriver_SIZE, Tad_BlankSong_SIZE
+.export Tad_AudioDriver_SIZE, Tad_BlankSong_SIZE
 
 "##;
 

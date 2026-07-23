@@ -58,11 +58,9 @@
 ;; To increase compatibility with existing resource subsystems, `tad-audio.s` does not embed
 ;; the audio driver or audio data into the ROM.
 ;;
-;; The audio driver is divided into 2 files
+;; The audio driver binary (`audio-driver.bin`) must be exported as `Tad_AudioDriver_Bin`
+;; with the binary file size exported as `Tad_AudioDriver_SIZE`.
 ;; (see the *Binary Data* section of `tad-audio.s` for more details):
-;;
-;;  * `loader.bin` - the custom spc700 loader.  Imported as `Tad_Loader_Bin`, `Tad_Loader_SIZE`.
-;;  * `audio-driver.bin` - the spc700 audio driver.  Imported as `Tad_AudioDriver_Bin`, `Tad_AudioDriver_SIZE`.
 ;;
 ;; Audio data is loaded using the external callback `LoadAudioData`.  `LoadAudioData` is
 ;; called when *Common Audio Data* or *Song Data* need to be loaded into Audio-RAM.
@@ -237,7 +235,6 @@ TAD_MIN_TICK_CLOCK = 64
 
 ;; Initialises the audio driver:
 ;;
-;;  * Loads the loader into Audio-RAM
 ;;  * Loads the audio driver into Audio-RAM
 ;;  * Sets the song to 0 (silence)
 ;;  * Resets variables

@@ -50,7 +50,7 @@ assert datasize(TadPrivate.dataToTransfer_size) >= 2
 ; ==================
 
 
-; Transfer and execute Loader using the IPL
+; Transfer `Tad_AudioDriver_Bin` to Audio-RAM and execute loader using the IPL
 ;
 ; REQUIRES: S-SMP reset and no data has been written to it yet
 ;
@@ -59,7 +59,7 @@ assert datasize(TadPrivate.dataToTransfer_size) >= 2
 ; A8
 ; I16
 ; DB access registers
-macro TadPrivate_Loader_TransferLoaderViaIpl()
+macro TadPrivate_Loader_TransferAudioDriverViaIpl()
     ; Clear start command port (just in case APUIO0 has $cc in it)
     ; SOURCE: `blarggapu.s` from lorom-template, originally written by blargg (Shay Green)
     stz.w   TAD_APUIO0
@@ -76,41 +76,37 @@ macro TadPrivate_Loader_TransferLoaderViaIpl()
     sta.w   TAD_APUIO1          ; non-zero = write data to address
     sta.w   TAD_APUIO0          ; New data command (non-zero and APUIO0 + more than 2, or $cc on the first transfer)
 
-    ; Wait for a response from the IPL
-    -
-        cmp.w   TAD_APUIO0
-        bne     -
 
-
-    ; Transfer the data
-    sep     #$30
-; I8
-    ldx.b   #0
+    ldx.w   #0
     .IplLoop:
+        ; Wait for a response from the IPL
+        -
+            cmp.w   TAD_APUIO0
+            bne     -
+
         ; Send the next byte to the IPL
-        lda.l   Tad_Loader_Bin,x
+        lda.l   Tad_AudioDriver_Bin,x
         sta.w   TAD_APUIO1
 
         ; Tell the IPL the next byte is ready
-        stx.w   TAD_APUIO0
-
-        ; Wait for a response form the IPL
-        -
-            cpx.w   TAD_APUIO0
-            bne     -
+        txa
+        sta.w   TAD_APUIO0
 
         inx
-        cpx.b   #Tad_Loader_SIZE
+        cpx.w   #Tad_AudioDriver_SIZE
         bcc     .IplLoop
 
-    rep     #$10
-; I16
+
+    ; Wait for a response form the IPL
+    -
+        cmp.w   TAD_APUIO0
+        bne     -
 
     ; Send an execute program command to the IPL
     ldx.w   #!TAD_LOADER_ARAM_ADDR
     stx.w   TAD_APUIO2              ; A-RAM address
     stz.w   TAD_APUIO1              ; zero = execute program at A-RAM address
-    lda.b   #Tad_Loader_SIZE+2
+    lda.b   #(Tad_AudioDriver_SIZE+2)&$ff
     sta.w   TAD_APUIO0              ; New data command (must be +2 the previous APUIO0 write)
 endmacro
 
@@ -405,7 +401,6 @@ endmacro
 
 ; Initialises the audio driver:
 ;
-;  * Loads the loader into Audio-RAM
 ;  * Loads the audio driver into Audio-RAM
 ;  * Sets the song to 0 (silence)
 ;  * Resets variables
@@ -438,7 +433,7 @@ Tad_Init: {
     plb
 ; DB = $80
 
-    %TadPrivate_Loader_TransferLoaderViaIpl()
+    %TadPrivate_Loader_TransferAudioDriverViaIpl()
 
 
     ; Set default settings
@@ -464,15 +459,6 @@ Tad_Init: {
     sta     TadSfxQueue.sfx
 
     stz.w   TadPrivate.nextSong
-
-    .DataTypeLoop:
-        lda.b   #!TadLoaderDataType_CODE
-        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
-        bcc     .DataTypeLoop
-
-    .TransferLoop:
-        jsr     TadPrivate_Loader_TransferData
-        bcc     .TransferLoop
 
     lda.b   #!TadState_WAITING_FOR_LOADER_COMMON
     sta.w   TadPrivate.state

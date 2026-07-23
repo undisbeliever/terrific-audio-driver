@@ -25,7 +25,7 @@
 
 
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 20
+TAD_IO_VERSION = 21
 
 
 ; Loader Commands
@@ -33,17 +33,13 @@ TAD_IO_VERSION = 20
 
 ; LoaderDataType
 ; --------------
-    ; The `audio-driver.bin` file.
-    ; MUST be loaded first.
-    LoaderDataType__CODE        = 0
-
     ; Common audio data.
     ; Contains samples, pitch table and sound effects.
-    ; MUST be loaded after `LoaderDataType__CODE` and before song data.
-    LoaderDataType__COMMON_DATA = 1
+    ; MUST be loaded before the song data.
+    LoaderDataType__COMMON_DATA = 0
 
 
-    ; If this bit is clear, the LoaderDataType is CODE (zero) or COMMON_DATA (non-zero).
+    ; If this bit is clear, the LoaderDataType is common-audio-data.
     ; If this bit is set, the LoaderDataType is song-data.
     ;
     ; CAUTION: This is is also used for the RELOAD_COMMON_DATA flag in the 65816 APIs.

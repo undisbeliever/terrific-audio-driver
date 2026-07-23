@@ -24,25 +24,19 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
+.include "memmap.inc"
 .include "registers.inc"
-.include "common-memmap.inc"
 .include "data-formats.inc"
 .include "io-commands.inc"
 .include "bytecode.inc"
 .include "variables.inc"
 
-.codebank CODE_ADDR..CODE_END_ADDR
+.include "loader.inc"
 
 .assert brrDirectory - commonDataHeader == COMMON_DATA_HEADER_SIZE
 
 
-; Code
-; ====
-
 .proc main
-    ; MUST be the first thing in the `code` bank (so the starting address is consistent across builds).
-    .assert PC == CODE_ADDR
-
     mov X, #$ff
     mov SP, X
     clrp

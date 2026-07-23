@@ -67,7 +67,7 @@ fn load_apu(
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
     const _: () = assert!(
-        audio_driver::AUDIO_DRIVER.len() + (addresses::DRIVER_CODE as usize)
+        audio_driver::AUDIO_DRIVER.len() + (addresses::AUDIO_DRIVER_BINARY as usize)
             <= (addresses::COMMON_DATA as usize)
     );
 
@@ -100,7 +100,7 @@ fn load_apu(
         spc_ram[addr..addr + data.len()].copy_from_slice(data);
     };
 
-    write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
+    write_spc_ram(addresses::AUDIO_DRIVER_BINARY, audio_driver::AUDIO_DRIVER);
     write_spc_ram(addresses::COMMON_DATA, common_audio_data.data());
 
     write_spc_ram(song_addr, song_data);
@@ -114,7 +114,7 @@ fn load_apu(
     spc_ram[LOADER_DATA_TYPE_ADDR] = flags.driver_value();
 
     // Replace loader with a `STOP` instructions
-    spc_ram[usize::from(addresses::LOADER)] = SPC700_STOP_INSTRUCTION;
+    spc_ram[usize::from(addresses::INIT_LOADER)] = SPC700_STOP_INSTRUCTION;
 
     // Reset global volume
     spc_ram[usize::from(addresses::GLOBAL_VOLUME_MUSIC)] = 0;
@@ -128,7 +128,7 @@ fn load_apu(
     );
 
     apu.reset(ResetRegisters {
-        pc: addresses::DRIVER_CODE,
+        pc: addresses::DRIVER_MAIN,
         a: 0,
         x: 0,
         y: 0,

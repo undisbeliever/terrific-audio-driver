@@ -37,15 +37,11 @@ TAD_DB_REGISTERS   = 0
 ; Binary Data
 ; ===========
 ;
-; These 3 files MUST be embedded (using `.incbin`) into the ROM if the developer uses a custom
-; `LoadAudioData` callback.
-;
+; The `audio-driver.bin` file MUST be embedded (using `.incbin`) into the ROM
+; if the developer uses a custom `LoadAudioData` callback.
 
-.cerror Tad_Loader_SIZE < 64 || Tad_Loader_SIZE > 128, "Invalid Tad_Loader_Bin size"
-.cerror (Tad_Loader_Bin >> 16) != ((Tad_Loader_Bin + Tad_Loader_SIZE) >> 16), "Tad_Loader_Bin does not fit inside a single bank"
-
-.cerror Tad_AudioDriver_SIZE < $600 || Tad_AudioDriver_SIZE > $d00, "Invalid Tad_AudioDriver_Bin size"
-; `Tad_AudioDriver_Bin` can cross bank boundaries
+.cerror Tad_AudioDriver_SIZE < $d00 || Tad_AudioDriver_SIZE > $1000, "Invalid Tad_AudioDriver_Bin size"
+.cerror (Tad_AudioDriver_Bin >> 16) != ((Tad_AudioDriver_Bin + Tad_AudioDriver_SIZE) >> 16), "Tad_AudioDriver_Bin does not fit inside a single bank"
 
 
 
@@ -88,7 +84,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 20
+TAD_IO_VERSION = 21
 
 
 ; MUST match `audio-driver/src/io-commands.inc`
@@ -164,8 +160,7 @@ TadIO_ToScpu .block
 
 ; MUST match `audio-driver/src/io-commands.inc`
 TadLoaderDataType .block
-    CODE        = 0
-    COMMON_DATA = 1
+    COMMON_DATA = 0
 
     SONG_DATA_FLAG            = 1 << 7
     PLAY_SONG_FLAG            = 1 << 6
@@ -216,7 +211,7 @@ TadIO_Loader .block
 ; ==================
 
 
-; Transfer and execute Loader using the IPL
+; Transfer `Tad_AudioDriver_Bin` to Audio-RAM and execute loader using the IPL
 ;
 ; REQUIRES: S-SMP reset and no data has been written to it yet
 ;
@@ -225,7 +220,7 @@ TadIO_Loader .block
 ; A8
 ; I16
 ; DB access registers
-TadPrivate_Loader_TransferLoaderViaIpl .macro
+TadPrivate_Loader_TransferAudioDriverViaIpl .macro
 
 APUIO0 = $2140
 APUIO1 = $2141
@@ -248,45 +243,39 @@ APUIO3 = $2143
     sta     APUIO1,b            ; non-zero = write data to address
     sta     APUIO0,b            ; New data command (non-zero and APUIO0 + more than 2, or $cc on the first transfer)
 
-    ; Wait for a response from the IPL
-    -
-        cmp     APUIO0,b
-        bne     -
 
-
-    ; Transfer the data
-    .cerror !(Tad_Loader_SIZE < $ff), "Cannot fit Tad_Loader_SIZE in an 8 bit index"
-
-    sep     #$30
-.xs
     ldx     #0
     _IplLoop:
-        ; Send the next byte to the IPL
+        ; Wait for a response from the IPL
+        -
+            cmp     APUIO0,b
+            bne     -
+            ; Send the next byte to the IPL
+
     .databank ?
-        lda     Tad_Loader_Bin,x
+        lda     Tad_AudioDriver_Bin,x
     .databank TAD_DB_REGISTERS
         sta     APUIO1,b
 
         ; Tell the IPL the next byte is ready
-        stx     APUIO0,b
-
-        ; Wait for a response form the IPL
-        -
-            cpx     APUIO0,b
-            bne     -
+        txa
+        sta     APUIO0,b
 
         inx
-        cpx     #Tad_Loader_SIZE
+        cpx     #Tad_AudioDriver_SIZE
         bcc     _IplLoop
 
-    rep     #$10
-.xl
+
+    ; Wait for a response form the IPL
+    -
+        cmp     APUIO0,b
+        bne     -
 
     ; Send an execute program command to the IPL
     ldx     #TAD_LOADER_ARAM_ADDR
     stx     APUIO2,b                ; A-RAM address
     stz     APUIO1,b                ; zero = execute program at A-RAM address
-    lda     #Tad_Loader_SIZE + 2
+    lda     #(Tad_AudioDriver_SIZE + 2) & $ff
     sta     APUIO0,b                ; New data command (must be +2 the previous APUIO0 write)
 .endmacro
 
@@ -597,7 +586,7 @@ Tad_Init .proc
     plb
 .databank TAD_DB_REGISTERS
 
-    #TadPrivate_Loader_TransferLoaderViaIpl
+    #TadPrivate_Loader_TransferAudioDriverViaIpl
 
 .databank TAD_DB_LOWRAM
 
@@ -626,15 +615,6 @@ Tad_Init .proc
     sta     Tad_sfxQueue_sfx
 
     stz     TadPrivate_nextSong
-
-    _DataTypeLoop:
-        lda     #TadLoaderDataType.CODE
-        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
-        bcc     _DataTypeLoop
-
-    _TransferLoop:
-        jsr     TadPrivate_Loader_TransferData
-        bcc     _TransferLoop
 
     lda     #TadState.WAITING_FOR_LOADER_COMMON
     sta     TadPrivate_state

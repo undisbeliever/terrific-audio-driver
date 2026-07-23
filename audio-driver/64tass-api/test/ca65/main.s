@@ -79,11 +79,8 @@ TadConstants:
     .byte TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
 
 
-.export Tad_Loader_Bin          =   $1234
-.export Tad_AudioDriver_Bin     =   $9abc
-.export LoadAudioData           = $80def0
+.export Tad_AudioDriver_Bin     =   $1234
+.export LoadAudioData           = $805678
 
-.export Tad_Loader_SIZE         =  116
-.export Tad_AudioDriver_SIZE    = 2048
-
+.export Tad_AudioDriver_SIZE    =   $0fff
 

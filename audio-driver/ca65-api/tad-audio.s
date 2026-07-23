@@ -105,23 +105,15 @@
 ;; Binary Data
 ;; ===========
 ;;
-;; These 3 files MUST be embedded (using `.incbin`) into the ROM if the developer uses a custom
-;; `LoadAudioData` callback.
+;; The `audio-driver.bin` file MUST be embedded (using `.incbin`) into the ROM
+;; if the developer uses a custom `LoadAudioData` callback.
 ;;
-
-;; Terrific Audio Driver spc700 Loader (loader.bin)
-.import Tad_Loader_Bin
-.importzp Tad_Loader_SIZE
 
 ;; Terrific Audio Driver spc700 driver (audio-driver.bin)
 .import Tad_AudioDriver_Bin, Tad_AudioDriver_SIZE
 
-
-.assert Tad_Loader_SIZE > 64 && Tad_Loader_SIZE < 128, lderror, "Invalid Tad_Loader_Bin size"
-.assert .bankbyte(Tad_Loader_Bin) = .bankbyte(Tad_Loader_Bin + Tad_Loader_SIZE), lderror, "Tad_Loader_Bin does not fit inside a single bank"
-
-.assert Tad_AudioDriver_SIZE > $600 && Tad_AudioDriver_SIZE < $d00, lderror, "Invalid Tad_AudioDriver_Bin size"
-; `Tad_AudioDriver_Bin` can cross bank boundaries
+.assert Tad_AudioDriver_SIZE > $d00 && Tad_AudioDriver_SIZE < $1000, lderror, "Invalid Tad_AudioDriver_Bin size"
+.assert .bankbyte(Tad_AudioDriver_Bin) = .bankbyte(Tad_AudioDriver_Bin + Tad_AudioDriver_SIZE), lderror, "Tad_AudioDriver_Bin does not fit inside a single bank"
 
 
 
@@ -150,9 +142,9 @@
 ;; =========
 
 
-;; Address to store the loader (in Audio-RAM).
-;; Address (in Audio-RAM) to execute after loading the Loader.
-;; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`
+;; Address to store the audio-driver binary (in Audio-RAM) using the IPL.
+;; Address (in Audio-RAM) to execute after loading the audio driver.
+;; MUST match LOADER_ADDR in `audio-driver/src/memmap.inc`
 TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -177,7 +169,7 @@ TAD_MAX_TRANSFER_PER_FRAME = 800
 ;; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;;
 ;; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-.export TAD_IO_VERSION : abs = 20
+.export TAD_IO_VERSION : abs = 21
 
 
 ; MUST match `audio-driver/src/io-commands.inc`
@@ -272,8 +264,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 ;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadLoaderDataType
-    CODE        = 0
-    COMMON_DATA = 1
+    COMMON_DATA = 0
 
     SONG_DATA_FLAG            = 1 << 7
     PLAY_SONG_FLAG            = 1 << 6
@@ -481,7 +472,7 @@ TAD_N_AUDIO_MODES = 3
 .segment TAD_PROCESS_SEGMENT
 
 
-;; Transfer and execute Loader using the IPL
+;; Transfer `Tad_AudioDriver_Bin` to Audio-RAM and execute loader using the IPL
 ;;
 ;; REQUIRES: S-SMP reset and no data has been written to it yet
 ;;
@@ -490,7 +481,7 @@ TAD_N_AUDIO_MODES = 3
 ;; A8
 ;; I16
 ;; DB access registers
-.macro TadPrivate_Loader_TransferLoaderViaIpl
+.macro TadPrivate_Loader_TransferDriverViaIpl
     .assert .asize = 8, error
     .assert .isize = 16, error
 
@@ -515,43 +506,37 @@ APUIO3 = $2143
     sta     APUIO1              ; non-zero = write data to address
     sta     APUIO0              ; New data command (non-zero and APUIO0 + more than 2, or $cc on the first transfer)
 
-    ; Wait for a response from the IPL
+    ldx     #0
+    @IplLoop:
+        ; Wait for a response form the IPL
+        :
+            cmp     APUIO0
+            bne     :-
+
+        ; Send the next byte to the IPL
+        lda     f:Tad_AudioDriver_Bin,x
+        sta     APUIO1
+
+        ; Tell the IPL the next byte is ready
+        txa
+        sta     APUIO0
+
+        ; Increment increment index while IPL is loading the byte
+        inx
+        cpx     #Tad_AudioDriver_SIZE
+        bcc     @IplLoop
+
+    ; Wait for a response form the IPL
     :
         cmp     APUIO0
         bne     :-
 
 
-    ; Transfer the data
-    .assert Tad_Loader_SIZE < $ff, error, "Cannot fit Tad_Loader_SIZE in an 8 bit index"
-
-    sep     #$30
-.i8
-    ldx     #0
-    @IplLoop:
-        ; Send the next byte to the IPL
-        lda     f:Tad_Loader_Bin,x
-        sta     APUIO1
-
-        ; Tell the IPL the next byte is ready
-        stx     APUIO0
-
-        ; Wait for a response form the IPL
-        :
-            cpx     APUIO0
-            bne     :-
-
-        inx
-        cpx     #Tad_Loader_SIZE
-        bcc     @IplLoop
-
-    rep     #$10
-.i16
-
     ; Send an execute program command to the IPL
     ldx     #TAD_LOADER_ARAM_ADDR
     stx     APUIO2                  ; A-RAM address
     stz     APUIO1                  ; zero = execute program at A-RAM address
-    lda     #Tad_Loader_SIZE + 2
+    lda     #.lobyte(Tad_AudioDriver_SIZE + 2)
     sta     APUIO0                  ; New data command (must be +2 the previous APUIO0 write)
 .endmacro
 
@@ -861,7 +846,7 @@ ReturnFalse:
     plb
 ; DB = $80
 
-    TadPrivate_Loader_TransferLoaderViaIpl
+    TadPrivate_Loader_TransferDriverViaIpl
 
 
     ; Set default settings
@@ -887,15 +872,6 @@ ReturnFalse:
     sta     Tad_sfxQueue_sfx
 
     stz     TadPrivate_nextSong
-
-    @DataTypeLoop:
-        lda     #TadLoaderDataType::CODE
-        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
-        bcc     @DataTypeLoop
-
-    @TransferLoop:
-        jsr     TadPrivate_Loader_TransferData
-        bcc     @TransferLoop
 
     lda     #TadState::WAITING_FOR_LOADER_COMMON
     sta     TadPrivate_state

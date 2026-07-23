@@ -26,7 +26,6 @@
 
 ; LOADER_ADDR must match LOADER_ADDR in the 65816 APIs
 LOADER_ADDR = $200
-LOADER_SIZE =  116 ; MUST be even
 
 SHARED_ZEROPAGE_ADDR = $00eb
 
@@ -47,38 +46,16 @@ LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 11) * 10
 ;   * The Tad_AudioDriver_SIZE assert in `64tass-api/tad-process.inc`
 COMMON_DATA_ADDR = $1100 - 24
 
-; `CODE_ADDR` MUST be an even address (The loader only works with even addresses)
-CODE_ADDR = $200 + LOADER_SIZE
-CODE_END_ADDR = COMMON_DATA_ADDR - LAST_VAR_PAGE_SIZE
+LAST_VAR_PAGE_ADDR = COMMON_DATA_ADDR - LAST_VAR_PAGE_SIZE
 
 
 .varbank zeropage           $0000..SHARED_ZEROPAGE_ADDR
 .varbank loader_zeropage    SHARED_ZEROPAGE_ADDR..$00f0
 .varbank firstpage          $0100..STACK_BOTTOM_ADDR
 .varbank stack              STACK_BOTTOM_ADDR..$0200
-.varbank lastvarpage        CODE_END_ADDR..COMMON_DATA_ADDR
+.varbank lastvarpage        LAST_VAR_PAGE_ADDR..COMMON_DATA_ADDR
 
 
-; Variables used by loader or used across song loads
-.vars loader_zeropage
-    ; Global volumes.
-    ;
-    ; Stored here so they are unchanged when a new song or common-audio-data is loaded.
-    ;
-    ; If global-volume is 0, the channel volume is unchanged.
-    globalVolume_music : u8
-    globalVolume_sfx : u8
+.codebank LOADER_ADDR..LAST_VAR_PAGE_ADDR
 
-    ; The address of the song data
-    songPtr :  ptr
-
-    ; The `LoaderDataType` value sent to the loader.
-    ;
-    ; Used as a Mono/Stereo flag.
-    ;
-    ; Set by the loader:
-    ;   Advantages: Simpler and uses less code space (no IoCommand for to set/clear stereoFlag).
-    ;   Disadvantages: Stereo flag is not set until a song is loaded.
-    loaderDataType : u8
-.endvars
 

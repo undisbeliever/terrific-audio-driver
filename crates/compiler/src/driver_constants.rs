@@ -28,10 +28,10 @@ pub mod addresses {
     }
 
     declare_symbols!(
-        DRIVER_CODE,
+        INIT_LOADER,
+        DRIVER_MAIN,
         MAINLOOP_CODE,
         PROCESS_MUSIC_CHANNELS_CODE,
-        LOADER,
         SONG_PTR,
         LOADER_DATA_TYPE,
         KEYON_SHADOW_MUSIC,
@@ -99,28 +99,21 @@ pub mod addresses {
         GLOBAL_VOLUME_SFX,
     );
 
+    pub const AUDIO_DRIVER_BINARY: u16 = 0x200;
+
     // MUST match `audio-driver/src/common-memmap.inc`
     pub const COMMON_DATA: u16 = _symbols::COMMON_DATA_ADDR;
 
     const _: () = assert!(
-        _symbols::_LOADER_END_ADDR == DRIVER_CODE,
-        "Loader is not direct before driver code"
+        INIT_LOADER == AUDIO_DRIVER_BINARY,
+        "Invalid START_LOADER address"
     );
 
     const _: () = assert!(
-        LOADER + (crate::audio_driver::LOADER.len() as u16) == DRIVER_CODE,
-        "Audio-driver is not directly after Loader"
-    );
-
-    const _: () = assert!(
-        COMMON_DATA > _symbols::_DRIVER_END_ADDR && COMMON_DATA > _symbols::_LOADER_END_ADDR,
+        COMMON_DATA > _symbols::_DRIVER_END_ADDR,
         "Invalid COMMON_DATA address"
     );
 
-    const _: () = assert!(
-        DRIVER_CODE % 2 == 0,
-        "Loader requires an even DRIVER_CODE address"
-    );
     const _: () = assert!(
         COMMON_DATA % 2 == 0,
         "Loader requires an even COMMON_DATA address"
@@ -130,7 +123,7 @@ pub mod addresses {
         "BRR directory is not page aligned"
     );
 
-    const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_START > DRIVER_CODE);
+    const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_START > DRIVER_MAIN);
     const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_END < MAINLOOP_CODE);
     const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_END > MAIN_CLEAR_ECHO_BUFFER_START);
 
@@ -209,7 +202,7 @@ pub struct LoaderDataType {
 
 impl LoaderDataType {
     pub fn driver_value(&self) -> u8 {
-        const _: () = assert!(TAD_IO_VERSION == 20);
+        const _: () = assert!(TAD_IO_VERSION == 21);
 
         // LoaderDataType.SONG_DATA_BIT
         let mut o = 1 << 7;
@@ -264,7 +257,7 @@ pub const STARTING_VOLUME: u8 = 96;
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
 
-const _: () = assert!(TAD_IO_VERSION == 20);
+const _: () = assert!(TAD_IO_VERSION == 21);
 
 // IO Commands
 pub mod io_commands {

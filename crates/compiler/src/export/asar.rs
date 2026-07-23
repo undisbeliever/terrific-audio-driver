@@ -133,10 +133,6 @@ check bankcross off
 
 Tad_AudioData:
 
-Tad_Loader_Bin:
-    incbin "{incbin_path}":0..{}
-Tad_Loader_SIZE = {}
-
 Tad_AudioDriver_Bin:
     incbin "{incbin_path}":{}..{}
 Tad_AudioDriver_SIZE = {}
@@ -150,10 +146,8 @@ Tad_AudioData_End:
 
 check bankcross full
 "##,
-    ExportedBinFile::LOADER_SIZE,
-    ExportedBinFile::LOADER_SIZE,
     ExportedBinFile::AUDIO_DRIVER_OFFSET,
-    ExportedBinFile::AUDIO_DRIVER_OFFSET + ExportedBinFile::AUDIO_DRIVER_SIZE,
+    ExportedBinFile::AUDIO_DRIVER_SIZE,
     ExportedBinFile::AUDIO_DRIVER_SIZE,
     ExportedBinFile::DATA_TABLE_OFFSET
 )?;

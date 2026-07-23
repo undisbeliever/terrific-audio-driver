@@ -134,8 +134,6 @@ impl Exporter for Ca65Exporter {
 
         out += ASM_HEADER;
 
-        writeln!(out, ".export Tad_Loader_Bin := {} + {}", FIRST_BLOCK, ExportedBinFile::LOADER_OFFSET)?;
-        writeln!(out, ".export Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
         writeln!(out, ".export Tad_AudioDriver_Bin := {} + {}", FIRST_BLOCK, ExportedBinFile::AUDIO_DRIVER_OFFSET)?;
         writeln!(out, ".export Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
         writeln!(out)?;
