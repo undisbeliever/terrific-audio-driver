@@ -62,8 +62,8 @@ TAD_DB_REGISTERS   = 0
 
     ; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
     ;
-    ; MUST be between the TAD_MIN_TRANSFER_PER_FRAME and TAD_MAX_TRANSFER_PER_FRAME
-    TAD_DEFAULT_TRANSFER_PER_FRAME = 256
+    ; MUST be between the `TAD_MIN_TRANSFERS_PER_PROCESS` and `TAD_MAX_TRANSFERS_PER_PROCESS`
+    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 256 / 2
 .endweak
 
 .cerror TAD_MEMORY_MAP != "LOROM" && TAD_MEMORY_MAP != "HIROM", "Unknown memory map, set TAD_MEMORY_MAP to the string LOROM or HIROM"
@@ -328,7 +328,15 @@ TadPrivate_Loader_SetDataToTransfer .proc
     .databank TAD_DB_LOWRAM
     stx     TadPrivate_dataToTransfer_addr
     sta     TadPrivate_dataToTransfer_bank
-    sty     TadPrivate_dataToTransfer_size
+
+    rep     #$30
+.al
+    tya
+    lsr     a
+    sta     TadPrivate_dataToTransfer_transfersRemaining
+
+    sep     #$20
+.as
 
     rts
 .endproc
@@ -363,31 +371,30 @@ TadPrivate_Loader_TransferData .proc
     rep     #$30
 .al
 
-    ; Calculate number of words to read
-    lda     TadPrivate_dataToTransfer_size
-    cmp     TadPrivate_bytesToTransferPerFrame
-    bcc     +
-        lda     TadPrivate_bytesToTransferPerFrame
-    +
-    inc     a       ; required
-    lsr     a
+    ; Determine number of transfers
 
-    ; Prevent corrupting all of Audio-RAM if number of words == 0
+    lda     TadPrivate_dataToTransfer_transfersRemaining
+    cmp     TadPrivate_transfersPerProcess
+    bcc     +
+        lda     TadPrivate_transfersPerProcess
+    +
+
+    ; Store transfer count in X
+    tax
+    ; Prevent corrupting all of Audio-RAM if number of transfers == 0
     bne     +
+        inx
         inc     a
     +
-    ; Store word to read in X
-    tax
 
-    ; Reverse subtract TadPrivate_dataToTransfer_size (with clamping)
-    asl     a                       ; convert number of words to number of bytes
+    ; Reverse subtract TadPrivate_dataToTransfer_transfersRemaining (with clamping)
     eor     #$ffff
     sec
-    adc     TadPrivate_dataToTransfer_size
+    adc     TadPrivate_dataToTransfer_transfersRemaining
     bcs     +
         lda     #0
     +
-    sta     TadPrivate_dataToTransfer_size
+    sta     TadPrivate_dataToTransfer_transfersRemaining
 
 
     lda     #$2100
@@ -408,7 +415,7 @@ TadPrivate_Loader_TransferData .proc
 ; I do not see a way to restore `.dpage` after `PLD`
 
     _Loop:
-        ; x = number of words remaining
+        ; x = number of transfers remaining
         ; y = data address (using y to force addr,y addressing mode)
 
         ; DB = TadPrivate_dataToTransfer_bank (unknown)
@@ -461,7 +468,7 @@ _EndLoop:
     sta     TadPrivate_dataToTransfer_prevSpinLock
 
 
-    ldy     TadPrivate_dataToTransfer_size
+    ldy     TadPrivate_dataToTransfer_transfersRemaining
     bne     _ReturnFalse
         ; End of data transfer
 
@@ -601,9 +608,9 @@ Tad_Init .proc
     stx     Tad_flags
 
 
-    .cerror !((TAD_DEFAULT_TRANSFER_PER_FRAME) >= TAD_MIN_TRANSFER_PER_FRAME && (TAD_DEFAULT_TRANSFER_PER_FRAME) <= TAD_MAX_TRANSFER_PER_FRAME), "Invalid TAD_DEFAULT_TRANSFER_PER_FRAME"
-    ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
-    stx     TadPrivate_bytesToTransferPerFrame
+    .cerror !((TAD_DEFAULT_TRANSFERS_PER_PROCESS) >= TAD_MIN_TRANSFERS_PER_PROCESS && (TAD_DEFAULT_TRANSFERS_PER_PROCESS) <= TAD_MAX_TRANSFERS_PER_PROCESS), "Invalid TAD_DEFAULT_TRANSFERS_PER_PROCESS"
+    ldx     #TAD_DEFAULT_TRANSFERS_PER_PROCESS
+    stx     TadPrivate_transfersPerProcess
 
     lda     #`Tad_AudioDriver_Bin
     ldx     #<>Tad_AudioDriver_Bin

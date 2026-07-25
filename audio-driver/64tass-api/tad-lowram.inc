@@ -33,15 +33,15 @@
 .cerror (* >= $2000) && ((* < $7e0000) || (* >= $7e2000)), "tad-lowram.inc is not in lowram"
 
 
-; Minimum transfer size accepted by `Tad_SetTransferSize`
+; Minimum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; MUST BE > 0
-TAD_MIN_TRANSFER_PER_FRAME = 32
+TAD_MIN_TRANSFERS_PER_PROCESS = 32 / 2
 
-; Maximum transfer size accepted by `Tad_SetTransferSize`
+; Maximum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-TAD_MAX_TRANSFER_PER_FRAME = 800
+TAD_MAX_TRANSFERS_PER_PROCESS = 800 / 2
 
 
 TadState .block
@@ -140,10 +140,10 @@ Tad_audioMode .byte ?
 ; (see `TadState`)
 TadPrivate_state .byte ?
 
-; Number of bytes to transfer per `Tad_Process` call
+; Number of loader transfers per `Tad_Process` call.
 ;
 ; MUST be > 0
-TadPrivate_bytesToTransferPerFrame .word ?
+TadPrivate_transfersPerProcess .word ?
 
 ; The previous `IO_ToScpu.COMMAND_PORT` sent to the S-SMP audio driver.
 TadPrivate_previousCommand .byte ?
@@ -156,8 +156,8 @@ TadPrivate_previousCommand .byte ?
     TadPrivate_dataToTransfer_addr .word ?
     TadPrivate_dataToTransfer_bank .byte ?
 
-    ; The remaining number of bytes to transfer
-    TadPrivate_dataToTransfer_size .word ?
+    ; The remaining number of loader transfers left to process
+    TadPrivate_dataToTransfer_transfersRemaining .word ?
 
     ; The previous value written to the loader spinLock
     TadPrivate_dataToTransfer_prevSpinLock .byte ?

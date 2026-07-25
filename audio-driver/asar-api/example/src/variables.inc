@@ -48,12 +48,12 @@ org $7e0100
 
 
     TadPrivate.state: skip 1
-    TadPrivate.bytesToTransferPerFrame: skip 2
+    TadPrivate.transfersPerProcess: skip 2
     TadPrivate.previousCommand: skip 1
 
     TadPrivate.dataToTransfer_addr: skip 2
     TadPrivate.dataToTransfer_bank: skip 1
-    TadPrivate.dataToTransfer_size: skip 2
+    TadPrivate.dataToTransfer_transfersRemaining: skip 2
     TadPrivate.dataToTransfer_prevSpinLock: skip 1
 
     TadPrivate.nextSong: skip 1

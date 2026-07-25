@@ -457,16 +457,16 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_GlobalVolumesPersist
 
 
-;; Sets the number of bytes to transfer to Audio-RAM per `Tad_Process` call.
+;; Sets the number of loader transfers to Audio-RAM per `Tad_Process` call.
 ;;
-;; The value will be clamped from `TAD_MIN_TRANSFER_PER_FRAME` to `TAD_MAX_TRANSFER_PER_FRAME`.
+;; The value will be clamped from `TAD_MIN_TRANSFERS_PER_PROCESS` to `TAD_MAX_TRANSFERS_PER_PROCESS`.
 ;;
-;; IN: X = number of bytes to transfer on every `Tad_Process` call.
+;; IN: X = Maximum number of transfers per `Tad_Process` call.
 ;;
 ;; A unknown
 ;; I16
 ;; DB access lowram
-.import Tad_SetTransferSize
+.import Tad_SetTransfersPerProcess
 
 
 ;; OUT: Carry set if the loader is still using data returned by `LoadAudioData` (state == `LOADING_*`)

@@ -332,20 +332,20 @@ Tad_GlobalVolumesPersist .proc
 .endproc
 
 
-; IN: X = new `TadPrivate_bytesToTransferPerFrame` value
+; IN: X = new `TadPrivate_transfersPerProcess` value
 ; A unknown
 .xl
 .databank TAD_DB_LOWRAM
-Tad_SetTransferSize .proc
-    cpx     #TAD_MAX_TRANSFER_PER_FRAME
+Tad_SetTransfersPerProcess .proc
+    cpx     #TAD_MAX_TRANSFERS_PER_PROCESS
     bcc     +
-        ldx     #TAD_MAX_TRANSFER_PER_FRAME
+        ldx     #TAD_MAX_TRANSFERS_PER_PROCESS
     +
-    cpx     #TAD_MIN_TRANSFER_PER_FRAME
+    cpx     #TAD_MIN_TRANSFERS_PER_PROCESS
     bcs     +
-        ldx     #TAD_MIN_TRANSFER_PER_FRAME
+        ldx     #TAD_MIN_TRANSFERS_PER_PROCESS
     +
-    stx     TadPrivate_bytesToTransferPerFrame
+    stx     TadPrivate_transfersPerProcess
 
     rts
 .endproc

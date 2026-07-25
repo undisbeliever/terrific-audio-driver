@@ -99,11 +99,11 @@
     TAD_DEFAULT_AUDIO_MODE = TAD_MONO
 .endif
 
-.ifndef TAD_DEFAULT_TRANSFER_PER_FRAME
+.ifndef TAD_DEFAULT_TRANSFERS_PER_PROCESS
     ;; Default number of bytes to transfer to Audio-RAM per `tad_Process` call.
     ;;
-    ;; MUST be between the TAD_MIN_TRANSFER_PER_FRAME and TAD_MAX_TRANSFER_PER_FRAME
-    TAD_DEFAULT_TRANSFER_PER_FRAME = 256
+    ;; MUST be between `TAD_MIN_TRANSFERS_PER_PROCESS` and `TAD_MAX_TRANSFERS_PER_PROCESS`
+    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 256 / 2
 .endif
 
 
@@ -248,15 +248,15 @@ TAD_IO_Loader__SPINLOCK_SWITCH_TO_LOADER = TAD_IO_ToDriver__SWITCH_TO_LOADER
 ;; CONSTANTS
 ;; =========
 
-;; Minimum transfer size accepted by `tad_setTransferSize`
+;; Minimum value accepted by `tad_setTransfersPerProcess`
 ;;
 ;; MUST BE > 0
-TAD_MIN_TRANSFER_PER_FRAME = 32
+TAD_MIN_TRANSFERS_PER_PROCESS = 32 / 2
 
-;; Maximum transfer size accepted by `tad_setTransferSize`
+;; Maximum value accepted by `tad_setTransfersPerProcess`
 ;;
 ;; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-TAD_MAX_TRANSFER_PER_FRAME = 800
+TAD_MAX_TRANSFERS_PER_PROCESS = 800 / 2
 
 
 ;; ------
@@ -756,8 +756,15 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
 tadPrivate_loader_setDataToTransfer:
     stx     tadPrivate_dataToTransfer_addr
     sta     tadPrivate_dataToTransfer_bank
-    sty     tadPrivate_dataToTransfer_size
 
+    rep     #$30
+.accu 16
+    tya
+    lsr
+    sta     tadPrivate_dataToTransfer_transfersRemaining
+
+    sep     #$20
+.a8
     rts
 
 
@@ -795,31 +802,29 @@ tadPrivate_loader_transferData:
     rep     #$30
 .accu 16
 
-    ; Calculate number of words to read
-    lda     tadPrivate_dataToTransfer_size
-    cmp     tadPrivate_bytesToTransferPerFrame
+    ; Determine number of transfers
+    lda     tadPrivate_dataToTransfer_transfersRemaining
+    cmp     tadPrivate_transfersPerProcess
     bcc     +
-        lda     tadPrivate_bytesToTransferPerFrame
+        lda     tadPrivate_transfersPerProcess
     +
-    ina     ; required
-    lsr
 
-    ; Prevent corrupting all of Audio-RAM if number of words == 0
+    ; Store transfer count in X
+    tax
+    ; Prevent corrupting all of Audio-RAM if number of transfers == 0
     bne     +
+        inx
         ina
     +
-    ; Store word to read in X
-    tax
 
-    ; Reverse subtract tad_dataToTransfer_size (with clamping)
-    asl                             ; convert number of words to number of bytes
+    ; Reverse subtract TadPrivate_dataToTransfer_transfersRemaining (with clamping)
     eor     #$ffff
     sec
-    adc     tadPrivate_dataToTransfer_size
+    adc     tadPrivate_dataToTransfer_transfersRemaining
     bcs     +
         lda     #0
     +
-    sta     tadPrivate_dataToTransfer_size
+    sta     tadPrivate_dataToTransfer_transfersRemaining
 
 
     lda     #$2100
@@ -837,7 +842,7 @@ tadPrivate_loader_transferData:
 ; DB = tadPrivate_dataToTransfer_bank
 
     @Loop:
-        ; x = number of words remaining
+        ; x = remaining transfers counter
         ; y = data address (using y to force addr,y addressing mode)
 
         lda.w   0,y
@@ -887,7 +892,7 @@ tadPrivate_loader_transferData:
     sta     tadPrivate_dataToTransfer_prevSpinLock
 
 
-    ldy     tadPrivate_dataToTransfer_size
+    ldy     tadPrivate_dataToTransfer_transfersRemaining
     bne     @ReturnFalse
         ; End of data transfer
 
@@ -1303,15 +1308,15 @@ tad_init:
     .if (TAD_DEFAULT_AUDIO_MODE) < 0 || (TAD_DEFAULT_AUDIO_MODE) >= TAD_N_AUDIO_MODES
         .fail "Invalid TAD_DEFAULT_AUDIO_MODE"
     .endif
-    .if (TAD_DEFAULT_TRANSFER_PER_FRAME) < TAD_MIN_TRANSFER_PER_FRAME || (TAD_DEFAULT_TRANSFER_PER_FRAME) > TAD_MAX_TRANSFER_PER_FRAME
-        .fail "Invalid TAD_DEFAULT_TRANSFER_PER_FRAME"
+    .if (TAD_DEFAULT_TRANSFERS_PER_PROCESS) < TAD_MIN_TRANSFERS_PER_PROCESS || (TAD_DEFAULT_TRANSFERS_PER_PROCESS) > TAD_MAX_TRANSFERS_PER_PROCESS
+        .fail "Invalid TAD_DEFAULT_TRANSFERS_PER_PROCESS"
     .endif
 
     ldx     #(TAD_DEFAULT_FLAGS) | ((TAD_DEFAULT_AUDIO_MODE) << 8)
     stx     tad_flags
 
-    ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
-    stx     tadPrivate_bytesToTransferPerFrame
+    ldx     #TAD_DEFAULT_TRANSFERS_PER_PROCESS
+    stx     tadPrivate_transfersPerProcess
 
 
     lda     #:Tad_AudioDriver_Bin
@@ -1510,23 +1515,23 @@ tad_getSong:
 
 
 
-.section "tad_setTransferSize" SUPERFREE
+.section "tad_setTransfersPerProcess" SUPERFREE
 
-; void tad_setTransferSize(u16 transferSize)
-tad_setTransferSize:
+; void tad_setTransfersPerProcess(u16 nTransfers)
+tad_setTransfersPerProcess:
     __Push__A16_noX_noY
 .accu 16
 
     lda     _stack_arg_offset,s
-    cmp     #TAD_MAX_TRANSFER_PER_FRAME
+    cmp     #TAD_MAX_TRANSFERS_PER_PROCESS
     bcc     +
-        lda     #TAD_MAX_TRANSFER_PER_FRAME
+        lda     #TAD_MAX_TRANSFERS_PER_PROCESS
     +
-    cmp     #TAD_MIN_TRANSFER_PER_FRAME
+    cmp     #TAD_MIN_TRANSFERS_PER_PROCESS
     bcs     +
-        lda     #TAD_MIN_TRANSFER_PER_FRAME
+        lda     #TAD_MIN_TRANSFERS_PER_PROCESS
     +
-    sta.l   tadPrivate_bytesToTransferPerFrame
+    sta.l   tadPrivate_transfersPerProcess
 
     __PopReturn_noX_noY
 .ends
@@ -1916,10 +1921,10 @@ tadPrivate_Command_A__Override_TwoParameters:
     ;; (`State` enum)
     tadPrivate_state: db
 
-    ;; Number of bytes to transfer per `tad_process` call
+    ;; Number of loader transfers per `tad_process()` call
     ;;
     ;; MUST be > 0
-    tadPrivate_bytesToTransferPerFrame: dw
+    tadPrivate_transfersPerProcess: dw
 
     ;; The previous `IO_ToScpu::COMMAND_PORT` sent to the S-SMP audio driver.
     tadPrivate_previousCommand: db
@@ -1932,8 +1937,8 @@ tadPrivate_Command_A__Override_TwoParameters:
     tadPrivate_dataToTransfer_addr: dw
     tadPrivate_dataToTransfer_bank: db
 
-    ;; The remaining number of bytes to transfer
-    tadPrivate_dataToTransfer_size: dw
+    ;; The remaining number of loader transfers left to process
+    tadPrivate_dataToTransfer_transfersRemaining: dw
 
     ;; The previous value written to the loader spinLock
     tadPrivate_dataToTransfer_prevSpinLock: db

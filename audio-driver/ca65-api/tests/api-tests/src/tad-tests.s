@@ -82,8 +82,8 @@
 
 
         ; Reset TAD State
-        ldx     #256
-        jsr     Tad_SetTransferSize
+        ldx     #256 / 2
+        jsr     Tad_SetTransfersPerProcess
         jsr     Tad_SongsStartImmediately
         ; Switch to a blank song
         lda     #0
@@ -148,7 +148,7 @@ TestTable:
     .addr   TestQueueSoundEffectKeepsXY8
     .addr   TestSongStartsImmediately
     .addr   TestSongStartPaused
-    .addr   TestSetTransferSize
+    .addr   TestSetTransfersPerProcess
     .addr   TestFlagFunctions
 TestTable_SIZE = * - TestTable
 
@@ -1441,7 +1441,7 @@ TestTable_SIZE = * - TestTable
 .a8
 .i16
 ;; DB access lowram
-.proc TestSetTransferSize
+.proc TestSetTransfersPerProcess
     SONG_ID = 1
     DATA_SIZE = DummySongData_SIZE
     .assert DATA_SIZE = 2000, error
@@ -1452,32 +1452,31 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_IsSongLoaded, true
 
 
-    ; Also tests `loader` rounds up transfer size to 100
-    ldx     #99
-    jsr     Tad_SetTransferSize
+    ldx     #50
+    jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
     assert_a_eq     20
 
 
-    ldx     #250
-    jsr     Tad_SetTransferSize
+    ldx     #125
+    jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
     assert_a_eq     8
 
 
-    ; Test `Tad_SetTransferSize` enforces minimum value
+    ; Test `Tad_SetTransfersPerProcess` enforces minimum value
     ldx     #10
-    jsr     Tad_SetTransferSize
+    jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
     assert_a_eq     (DATA_SIZE + MIN_TRANSFER - 1) / MIN_TRANSFER
 
 
-    ; Test `Tad_SetTransferSize` enforces maximum value
+    ; Test `Tad_SetTransfersPerProcess` enforces maximum value
     ldx     #$6000
-    jsr     Tad_SetTransferSize
+    jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
     assert_a_eq     (DATA_SIZE + MAX_TRANSFER - 1) / MAX_TRANSFER
@@ -1719,7 +1718,7 @@ Tad_AudioDriver_SIZE = .sizeof(Tad_AudioDriver_Bin)
 ;;          `DummyCommonAudioData_Part2`, `DummySongData_Part1` and `DummySongData_Part2`.
 ;;        * Set a breakpoint on `__Tad_Loader_GotoNextBank`
 ;;   2. Tests the API without invoking `tad-compiler`
-;;   3. Enforces a fixed song-data size for the `Tad_SetTransferSize` and `Tad_LoadSong` tests.
+;;   3. Enforces a fixed song-data size for the `Tad_SetTransfersPerProcess` and `Tad_LoadSong` tests.
 
 
 .export LoadAudioData : far

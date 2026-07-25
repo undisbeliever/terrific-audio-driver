@@ -34,9 +34,9 @@ optimize address mirrors
 !LOROM = 1
 
 ; Testing custom default values
-!TAD_DEFAULT_FLAGS               = !TadFlags_PLAY_SONG_IMMEDIATELY|!TadFlags_RESET_GLOBAL_VOLUMES_ON_SONG_START
-!TAD_DEFAULT_AUDIO_MODE          = !TadAudioMode_SURROUND
-!TAD_DEFAULT_TRANSFER_PER_FRAME  = 700
+!TAD_DEFAULT_FLAGS                 = !TadFlags_PLAY_SONG_IMMEDIATELY|!TadFlags_RESET_GLOBAL_VOLUMES_ON_SONG_START
+!TAD_DEFAULT_AUDIO_MODE            = !TadAudioMode_SURROUND
+!TAD_DEFAULT_TRANSFERS_PER_PROCESS = (700/2)
 
 
 incsrc "registers.inc"

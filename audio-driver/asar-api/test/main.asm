@@ -56,7 +56,7 @@ TadSubroutines:
     dl  Tad_SongsStartPaused
     dl  Tad_GlobalVolumesResetOnSongStart
     dl  Tad_GlobalVolumesPersist
-    dl  Tad_SetTransferSize
+    dl  Tad_SetTransfersPerProcess
     dl  Tad_IsLoaderActive
     dl  Tad_IsSongLoaded
     dl  Tad_IsSfxPlaying

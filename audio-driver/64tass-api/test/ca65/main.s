@@ -48,7 +48,7 @@ TadSubroutines:
     .faraddr Tad_SongsStartPaused
     .faraddr Tad_GlobalVolumesResetOnSongStart
     .faraddr Tad_GlobalVolumesPersist
-    .faraddr Tad_SetTransferSize
+    .faraddr Tad_SetTransfersPerProcess
     .faraddr Tad_IsLoaderActive
     .faraddr Tad_IsSongLoaded
     .faraddr Tad_IsSfxPlaying

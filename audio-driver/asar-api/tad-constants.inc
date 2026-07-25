@@ -91,11 +91,11 @@ if not(defined("TAD_DEFAULT_AUDIO_MODE"))
     !TAD_DEFAULT_AUDIO_MODE = !TadAudioMode_MONO
 endif
 
-if not(defined("TAD_DEFAULT_TRANSFER_PER_FRAME"))
+if not(defined("TAD_DEFAULT_TRANSFERS_PER_PROCESS"))
     ; Default number of bytes to transfer to Audio-RAM per `Process` call.
     ;
-    ; MUST be between !TAD_MIN_TRANSFER_PER_FRAME and !TAD_MAX_TRANSFER_PER_FRAME
-    !TAD_DEFAULT_TRANSFER_PER_FRAME = 256
+    ; MUST be between `!TAD_MIN_TRANSFERS_PER_PROCESS` and `!TAD_MAX_TRANSFERS_PER_PROCESS`
+    !TAD_DEFAULT_TRANSFERS_PER_PROCESS = (256/2)
 endif
 
 
@@ -110,15 +110,15 @@ endif
 !TAD_LOADER_ARAM_ADDR = $0200
 
 
-; Minimum transfer size accepted by `SetTransferSize`
+; Minimum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; MUST BE > 0
-!TAD_MIN_TRANSFER_PER_FRAME = 32
+!TAD_MIN_TRANSFERS_PER_PROCESS = 16
 
-; Maximum transfer size accepted by `SetTransferSize`
+; Maximum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-!TAD_MAX_TRANSFER_PER_FRAME = 800
+!TAD_MAX_TRANSFERS_PER_PROCESS = 400
 
 
 ; ========

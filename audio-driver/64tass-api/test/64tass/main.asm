@@ -101,7 +101,7 @@ STACK_BOTTOM = $1f80
         .long Tad_SongsStartPaused
         .long Tad_GlobalVolumesResetOnSongStart
         .long Tad_GlobalVolumesPersist
-        .long Tad_SetTransferSize
+        .long Tad_SetTransfersPerProcess
         .long Tad_IsLoaderActive
         .long Tad_IsSongLoaded
         .long Tad_IsSfxPlaying

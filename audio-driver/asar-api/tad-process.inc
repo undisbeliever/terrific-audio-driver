@@ -40,9 +40,9 @@ assert (TadPrivate.nextCommand_parameter1&$ffff) < $2000, "Tad variables are not
 ; The `TadSfxQueue` is handled via `optimize dp` and `optimise address`
 
 
-assert datasize(TadPrivate.bytesToTransferPerFrame) >= 2
+assert datasize(TadPrivate.transfersPerProcess) >= 2
 assert datasize(TadPrivate.dataToTransfer_addr) >= 2
-assert datasize(TadPrivate.dataToTransfer_size) >= 2
+assert datasize(TadPrivate.dataToTransfer_transfersRemaining) >= 2
 
 
 ; ==================
@@ -160,7 +160,15 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
 TadPrivate_Loader_SetDataToTransfer: {
     stx.w   TadPrivate.dataToTransfer_addr
     sta.w   TadPrivate.dataToTransfer_bank
-    sty.w   TadPrivate.dataToTransfer_size
+
+    rep     #$30
+; A16
+    tya
+    lsr
+    sta.w   TadPrivate.dataToTransfer_transfersRemaining
+
+    sep     #$20
+; A8
 
     rts
 }
@@ -195,31 +203,29 @@ TadPrivate_Loader_TransferData: {
     rep     #$30
 ; A16
 
-    ; Calculate number of words to read
-    lda.w   TadPrivate.dataToTransfer_size
-    cmp.w   TadPrivate.bytesToTransferPerFrame
+    ; Determine number of transfers
+    lda.w   TadPrivate.dataToTransfer_transfersRemaining
+    cmp.w   TadPrivate.transfersPerProcess
     bcc     +
-        lda.w   TadPrivate.bytesToTransferPerFrame
+        lda.w   TadPrivate.transfersPerProcess
     +
-    inc     ; required
-    lsr
 
-    ; Prevent corrupting all of Audio-RAM if number of words == 0
+    ; Store transfer count in X
+    tax
+    ; Prevent corrupting all of Audio-RAM if number of transfers == 0
     bne     +
+        inx
         inc
     +
-    ; Store word to read in X
-    tax
 
-    ; Reverse subtract TadPrivate.dataToTransfer_size (with clamping)
-    asl                             ; convert number of words to number of bytes
+    ; Reverse subtract TadPrivate.dataToTransfer_transfersRemaining (with clamping)
     eor.w   #$ffff
     sec
-    adc.w   TadPrivate.dataToTransfer_size
+    adc.w   TadPrivate.dataToTransfer_transfersRemaining
     bcs     +
         lda.w   #0
     +
-    sta.w   TadPrivate.dataToTransfer_size
+    sta.w   TadPrivate.dataToTransfer_transfersRemaining
 
 
     lda.w   #$2100
@@ -237,7 +243,7 @@ TadPrivate_Loader_TransferData: {
 ; DB = TadPrivate.dataToTransfer_bank
 
     .Loop:
-        ; x = number of words remaining
+        ; x = number of transfers remaining
         ; y = data address (using y to force addr,y addressing mode)
 
         lda.w   0,y
@@ -287,7 +293,7 @@ TadPrivate_Loader_TransferData: {
     sta.w   TadPrivate.dataToTransfer_prevSpinLock
 
 
-    ldy.w   TadPrivate.dataToTransfer_size
+    ldy.w   TadPrivate.dataToTransfer_transfersRemaining
     bne     .ReturnFalse
         ; End of data transfer
 
@@ -445,8 +451,10 @@ Tad_Init: {
     ldx.w   #(!TAD_DEFAULT_FLAGS)|((!TAD_DEFAULT_AUDIO_MODE)<<8)
     stx.w   Tad.flags
 
-    ldx.w   #!TAD_DEFAULT_TRANSFER_PER_FRAME
-    stx.w   TadPrivate.bytesToTransferPerFrame
+    assert (!TAD_DEFAULT_TRANSFERS_PER_PROCESS) >= !TAD_MIN_TRANSFERS_PER_PROCESS
+    assert (!TAD_DEFAULT_TRANSFERS_PER_PROCESS) <= !TAD_MAX_TRANSFERS_PER_PROCESS
+    ldx.w   #!TAD_DEFAULT_TRANSFERS_PER_PROCESS
+    stx.w   TadPrivate.transfersPerProcess
 
 
     lda.b   #Tad_AudioDriver_Bin>>16

@@ -78,9 +78,9 @@ If `TAD_CUSTOM_DEFAULTS` is defined, **all** configuration variables must be def
 ``` asm
 TAD_CUSTOM_DEFAULTS = 1
     ; using define allows me to access TadFlags before it is defined
-    .define TAD_DEFAULT_FLAGS               TadFlags::PLAY_SONG_IMMEDIATELY | TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
-    .define TAD_DEFAULT_AUDIO_MODE          TadAudioMode::SURROUND
-    .define TAD_DEFAULT_TRANSFER_PER_FRAME  300
+    .define TAD_DEFAULT_FLAGS                 TadFlags::PLAY_SONG_IMMEDIATELY | TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+    .define TAD_DEFAULT_AUDIO_MODE            TadAudioMode::SURROUND
+    .define TAD_DEFAULT_TRANSFERS_PER_PROCESS 150
 
 .include "../terrific-audio-driver/audio-driver/ca65-api/tad-audio.s"
 ```

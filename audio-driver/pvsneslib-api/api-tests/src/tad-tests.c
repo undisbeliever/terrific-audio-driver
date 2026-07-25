@@ -770,28 +770,27 @@ void test_songStartPaused(void) {
 }
 
 
-// The minimum and maximum values for tad_setTransferSize(u16)
+// The minimum and maximum values for tad_setTransfersPerProcess(u16)
 #define MIN_TRANSFER 32
 #define MAX_TRANSFER 800
 
-void test_setTransferSize(void) {
+void test_setTransfersPerProcess(void) {
     ASSERT_EQ(DUMMY_SONG_DATA_SIZE, 2000);
 
     ASSERT_EQ(tad_isSongLoaded(), true);
 
-    // Also tests `loader` rounds up transfer size to 100
-    tad_setTransferSize(99);
+    tad_setTransfersPerProcess(50);
     ASSERT_EQ(countTransfers_song1(), 20);
 
-    tad_setTransferSize(250);
+    tad_setTransfersPerProcess(125);
     ASSERT_EQ(countTransfers_song1(), 8);
 
-    // Test `Tad_SetTransferSize` enforces minimum value
-    tad_setTransferSize(10);
+    // Test `Tad_SetTransfersPerProcess` enforces minimum value
+    tad_setTransfersPerProcess(10);
     ASSERT_EQ(countTransfers_song1(), (DUMMY_SONG_DATA_SIZE + MIN_TRANSFER + 1) / MIN_TRANSFER);
 
-    // Test `Tad_SetTransferSize` enforces maximum value
-    tad_setTransferSize(0x6000);
+    // Test `Tad_SetTransfersPerProcess` enforces maximum value
+    tad_setTransfersPerProcess(0x6000);
     ASSERT_EQ(countTransfers_song1(), (DUMMY_SONG_DATA_SIZE + MAX_TRANSFER + 1) / MAX_TRANSFER);
 }
 
@@ -856,7 +855,7 @@ static const VoidFn TAD_TESTS[] = {
     // Skipped TestQueueSoundEffectKeepsXY8
     test_songStartsImmediately,
     test_songStartPaused,
-    test_setTransferSize,
+    test_setTransfersPerProcess,
     test_flagFunctions,
 };
 
@@ -867,7 +866,7 @@ void runTests(void) {
 
     for (testIndex=0; testIndex < N_ELEMENTS(TAD_TESTS); testIndex++) {
         // Reset TAD state
-        tad_setTransferSize(256);
+        tad_setTransfersPerProcess(256 / 2);
         tad_songsStartImmediately();
         // Switch to a blank song
         tad_loadSong(0);

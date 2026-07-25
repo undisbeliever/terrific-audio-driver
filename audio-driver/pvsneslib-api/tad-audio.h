@@ -109,7 +109,7 @@
  *
  *  * `TAD_DEFAULT_FLAGS` - the initial TAD flags.
  *  * `TAD_DEFAULT_AUDIO_MODE` - the default audio mode.
- *  * `TAD_DEFAULT_TRANSFER_PER_FRAME` - The default bytes to transfer every `Tad_Process` call.
+ *  * `TAD_DEFAULT_TRANSFERS_PER_PROCESS` - The default bytes to transfer every `Tad_Process` call.
  *
  *
  * External Resources
@@ -579,11 +579,11 @@ void tad_globalVolumesResetOnSongStart(void);
 void tad_globalVolumesPersist(void);
 
 /*!
- * Sets the number of bytes to transfer to Audio-RAM per `tad_process` call.
+ * Sets the number of loader transfers to Audio-RAM per `tad_process()` call.
  *
- * The value will be clamped from `MIN_TRANSFER_PER_FRAME` to `MAX_TRANSFER_PER_FRAME`.
+ * The value will be clamped from `TAD_MIN_TRANSFERS_PER_PROCESS` to `TAD_MAX_TRANSFERS_PER_PROCESS`.
  */
-void tad_setTransferSize(u16 transferSize);
+void tad_setTransfersPerProcess(u16 nTransfers);
 
 /*!
  * @}

@@ -301,25 +301,25 @@ Tad_GlobalVolumesPersist: {
 }
 
 
-; Sets the number of bytes to transfer to Audio-RAM per `Process` call.
+; Sets the number of loader transfers to Audio-RAM per `Process` call.
 ;
-; The value will be clamped from `!TAD_MIN_TRANSFER_PER_FRAME` to `!TAD_MAX_TRANSFER_PER_FRAME`.
+; The value will be clamped from `!TAD_MIN_TRANSFERS_PER_PROCESS` to `!TAD_MAX_TRANSFERS_PER_PROCESS`.
 ;
-; IN: X = number of bytes to transfer on every `Process` call.
+; IN: X = number of transfers per `Process` call.
 ;
 ; A unknown
 ; I16
 ; DB access lowram
-Tad_SetTransferSize: {
-    cpx.w   #!TAD_MAX_TRANSFER_PER_FRAME
+Tad_SetTransfersPerProcess: {
+    cpx.w   #!TAD_MAX_TRANSFERS_PER_PROCESS
     bcc     +
-        ldx.w   #!TAD_MAX_TRANSFER_PER_FRAME
+        ldx.w   #!TAD_MAX_TRANSFERS_PER_PROCESS
     +
-    cpx.w   #!TAD_MIN_TRANSFER_PER_FRAME
+    cpx.w   #!TAD_MIN_TRANSFERS_PER_PROCESS
     bcs     +
-        ldx.w   #!TAD_MIN_TRANSFER_PER_FRAME
+        ldx.w   #!TAD_MIN_TRANSFERS_PER_PROCESS
     +
-    stx.w   TadPrivate.bytesToTransferPerFrame
+    stx.w   TadPrivate.transfersPerProcess
 
     rts
 }

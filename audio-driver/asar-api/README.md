@@ -61,7 +61,7 @@ The following defines are compile-time configurable (see [\_example-lorom.asm](e
 
  * `TAD_DEFAULT_FLAGS` - the initial TAD flags.
  * `TAD_DEFAULT_AUDIO_MODE` - the default audio mode.
- * `TAD_DEFAULT_TRANSFER_PER_FRAME` - The default bytes to transfer every `Tad_Process` call.
+ * `TAD_DEFAULT_TRANSFERS_PER_PROCESS` - The default number of loader transfers every `Tad_Process` call.
 
 
 

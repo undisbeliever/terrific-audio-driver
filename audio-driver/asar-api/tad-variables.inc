@@ -68,10 +68,10 @@ struct TadPrivate $7e0202
     ; (`TadState` enum)
     .state: skip 1
 
-    ; Number of bytes to transfer per `Process` call
+    ; Number of loader transfers per `Tad_Process` call.
     ;
     ; MUST be > 0
-    .bytesToTransferPerFrame: skip 2
+    .transfersPerProcess: skip 2
 
     ; The previous `TadIO_ToScpu.COMMAND_PORT` sent to the S-SMP audio driver.
     .previousCommand: skip 1
@@ -84,8 +84,8 @@ struct TadPrivate $7e0202
     .dataToTransfer_addr: skip 2
     .dataToTransfer_bank: skip 1
 
-    ; The remaining number of bytes to transfer
-    .dataToTransfer_size: skip 2
+    ; The remaining number of loader transfers left to process
+    .dataToTransfer_transfersRemaining: skip 2
 
     ; The previous value written to the loader spinLock
     .dataToTransfer_prevSpinLock: skip 1
