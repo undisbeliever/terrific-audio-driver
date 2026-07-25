@@ -813,7 +813,6 @@ TadPrivate_Process_WaitingForLoader_Common .proc ; RTL
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         lda     #TadState.LOADING_COMMON_AUDIO_DATA
         sta     TadPrivate_state
 
@@ -898,7 +897,6 @@ TadPrivate_Process_WaitingForLoader_Song .proc ; RTL
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         pla
         sta     TadPrivate_state
 
@@ -966,23 +964,5 @@ TadPrivate_Process_LoadingSongData_Paused .proc ; RTL
         ; Data loaded successfully
         lda     #TadState.PAUSED
         bra     TadPrivate_Process_LoadingSongData_Play._SetStateAndResetQueues
-.endproc
-
-
-
-; JSL/RTL subroutine
-.as
-.xl
-.databank TAD_DB_LOWRAM
-; Called with JSL (far addressing)
-Tad_FinishLoadingData .proc
-    _Loop:
-        TadPrivate_IsLoaderActive
-        bcc     _EndLoop
-            jsl     Tad_Process
-        bra     _Loop
-    _EndLoop:
-
-    rtl
 .endproc
 

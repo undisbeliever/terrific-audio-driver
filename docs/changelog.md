@@ -9,6 +9,7 @@ SNES API changes:
  * Removed `Tad_SetTransferSize` and `TAD_DEFAULT_TRANSFER_PER_FRAME`
  * Added `Tad_SetTransfersPerProcess` and `TAD_DEFAULT_TRANSFERS_PER_PROCESS`
     * The value is number of number of transfers per `Tad_Process` call (bytes per frame / 2)
+ * Removed `Tad_FinishLoadingData`
 
 
 Version 0.4.2

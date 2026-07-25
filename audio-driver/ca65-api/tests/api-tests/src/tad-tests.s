@@ -88,7 +88,7 @@
         ; Switch to a blank song
         lda     #0
         jsr     Tad_LoadSong
-        jsr     _FinishLoading
+        jsr     _FinishLoadingSong
         jsr     _Wait
 
 
@@ -111,12 +111,11 @@
 
 
 TestTable:
-    .addr   TestFinishLoadingData
-    .addr   TestFinishLoadingData2
     .addr   TestLoadSong
     .addr   TestLoadSongWhileLoaderActive
     .addr   TestLoadSongWhileLoaderActive2
     .addr   TestLoadSongWhileLoadingCommonAudioData
+    .addr   TestReloadCommonAudioData
     .addr   TestReloadCommonAudioDataImmediatelyAfterLoadSong
     .addr   TestLoadSongRestartsLoaderIfReloadCommonAudioDataIsSet
     .addr   TestLoadSongIfChanged
@@ -214,55 +213,6 @@ TestTable_SIZE = * - TestTable
 .endmacro
 
 
-; Also tests `Tad_ReloadCommonAudioData`
-.a8
-.i16
-;; DB access lowram
-.proc TestFinishLoadingData
-    lda     #1
-    jsr     Tad_LoadSong
-
-    jsr     _WaitForLoader
-
-    jsl     Tad_FinishLoadingData
-
-    assert_carry  Tad_IsLoaderActive, false
-    assert_carry  Tad_IsSongLoaded,  true
-
-    rts
-.endproc
-
-
-; Also tests `Tad_ReloadCommonAudioData`
-.a8
-.i16
-;; DB access lowram
-.proc TestFinishLoadingData2
-    jsr     Tad_ReloadCommonAudioData
-
-    lda     #1
-    jsr     Tad_LoadSong
-
-    jsr     _WaitForLoader
-
-    jsl     Tad_FinishLoadingData
-
-    ; Common audio data loaded
-    ; State = WAITING_FOR_LOADER
-    assert_carry  Tad_IsLoaderActive, false
-    assert_carry  Tad_IsSongLoaded,  false
-
-    jsr     _WaitForLoader
-
-    jsl     Tad_FinishLoadingData
-
-    assert_carry  Tad_IsLoaderActive, false
-    assert_carry  Tad_IsSongLoaded,  true
-
-    rts
-.endproc
-
-
 .a8
 .i16
 ;; DB access lowram
@@ -312,7 +262,7 @@ TestTable_SIZE = * - TestTable
 
     assert_carry  Tad_IsLoaderActive, true
 
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     rts
 .endproc
@@ -341,7 +291,7 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsSongLoaded,  false
 
     jsr     _WaitForLoader
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     rts
 .endproc
@@ -378,6 +328,48 @@ TestTable_SIZE = * - TestTable
 .endproc
 
 
+.a8
+.i16
+;; DB access lowram
+.proc TestReloadCommonAudioData
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded,  true
+
+
+    jsr     Tad_ReloadCommonAudioData
+
+    lda     #1
+    jsr     Tad_LoadSong
+
+    jsr     _WaitForLoader
+    jsr     _FinishLoadingData
+
+    ; Common audio data loaded
+    ; State = WAITING_FOR_LOADER
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded,  false
+
+    jsr     _WaitForLoader
+    jsr     _FinishLoadingData
+
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded,  true
+
+
+    ; Check RELOAD_COMMON_AUDIO_DATA flag is clear
+    lda     #1
+    jsr     Tad_LoadSong
+
+    jsr     _WaitForLoader
+    jsr     _FinishLoadingData
+
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded,  true
+
+    rts
+.endproc
+
+
 ;; Tests that `Tad_Process` does not clear the RELOAD_COMMON_AUDIO_DATA flag.
 .a8
 .i16
@@ -393,7 +385,7 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_ReloadCommonAudioData
 
 
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     assert_carry  Tad_IsLoaderActive, false
     assert_carry  Tad_IsSongLoaded, true
@@ -406,14 +398,14 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsSongLoaded, false
     assert_carry  Tad_IsLoaderActive, false
     jsr     _WaitForLoader
-    jsl     Tad_FinishLoadingData
+    jsr     _FinishLoadingData
 
     ; Test the loader is waiting for song data
     assert_carry  Tad_IsLoaderActive, false
     assert_carry  Tad_IsSongLoaded, false
 
     jsr     _WaitForLoader
-    jsl     Tad_FinishLoadingData
+    jsr     _FinishLoadingData
     assert_carry  Tad_IsSongLoaded, true
 
     rts
@@ -481,14 +473,14 @@ TestTable_SIZE = * - TestTable
 
     ; Finish loading the CAD
     jsr     _WaitForLoader
-    jsl     Tad_FinishLoadingData
+    jsr     _FinishLoadingData
 
     ; Test the loader is waiting for song data
     assert_carry  Tad_IsLoaderActive, false
     assert_carry  Tad_IsSongLoaded, false
 
     jsr     _WaitForLoader
-    jsl     Tad_FinishLoadingData
+    jsr     _FinishLoadingData
     assert_carry  Tad_IsSongLoaded, true
 
     rts
@@ -531,7 +523,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_LoadSongIfChanged, true
 
 
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
     assert_carry    Tad_IsSongPlaying, true
 
 
@@ -560,7 +552,7 @@ TestTable_SIZE = * - TestTable
     lda     #$44
     jsr     Tad_LoadSongIfChanged
 
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     jsr     Tad_GetSong
     assert_a_eq($44)
@@ -1109,7 +1101,7 @@ TestTable_SIZE = * - TestTable
 
     lda     #0
     jsr     Tad_LoadSong
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     ; Assert queue has been reset
     assert_u8_var_eq   Tad_sfxQueue_sfx, #$ff
@@ -1246,7 +1238,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueCommand, false
 
 
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
 
     ; Test the two queue are now empty by trying to populate them
@@ -1409,7 +1401,7 @@ TestTable_SIZE = * - TestTable
 
     lda     #0
     jsr     Tad_LoadSong
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     assert_carry    Tad_IsSongPlaying, true
     assert_carry    Tad_IsSfxPlaying, true
@@ -1428,7 +1420,7 @@ TestTable_SIZE = * - TestTable
 
     lda     #0
     jsr     Tad_LoadSong
-    jsr     _FinishLoading
+    jsr     _FinishLoadingSong
 
     assert_carry    Tad_IsSongPlaying, false
     assert_carry    Tad_IsSfxPlaying, false
@@ -1557,7 +1549,7 @@ TestTable_SIZE = * - TestTable
 .a8
 .i16
 ;; DB access lowram
-.proc _FinishLoading
+.proc _FinishLoadingSong
     @Loop:
         jsr     Tad_IsSongLoaded
         bcs     @Return
@@ -1574,7 +1566,7 @@ TestTable_SIZE = * - TestTable
 
 
 ;; Asserts state is WAITING_FOR_LOADER.
-;; Repeatedly calls `Tad_Process` if the loader is active
+;; Repeatedly calls `Tad_Process` if the loader is not active
 .a8
 .i16
 ;; DB access lowram
@@ -1592,6 +1584,30 @@ TestTable_SIZE = * - TestTable
     ; assert state is LOADING_COMMON_AUDIO_DATA
     assert_carry  Tad_IsLoaderActive, true
     assert_carry  Tad_IsSongLoaded,  false
+
+    rts
+.endproc
+
+
+;; Asserts state is LOADING_*
+;; Repeatedly calls `Tad_Process` while the loader is active
+.a8
+.i16
+;; DB access lowram
+.proc _FinishLoadingData
+    ; assert state is LOADING_*
+    assert_carry  Tad_IsLoaderActive, true
+
+    @Loop:
+        jsr     Tad_IsLoaderActive
+        bcc     @EndLoop
+
+        jsl     Tad_Process
+
+        bra     @Loop
+    @EndLoop:
+
+    assert_carry  Tad_IsLoaderActive, false
 
     rts
 .endproc

@@ -88,7 +88,6 @@ STACK_BOTTOM = $1f80
     TadSubroutines:
         .long Tad_Init
         .long Tad_Process
-        .long Tad_FinishLoadingData
         .long Tad_QueueCommand
         .long Tad_QueueCommandOverride
         .long Tad_QueuePannedSoundEffect

@@ -35,7 +35,6 @@
 TadSubroutines:
     .faraddr Tad_Init
     .faraddr Tad_Process
-    .faraddr Tad_FinishLoadingData
     .faraddr Tad_QueueCommand
     .faraddr Tad_QueueCommandOverride
     .faraddr Tad_QueuePannedSoundEffect

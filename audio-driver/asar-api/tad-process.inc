@@ -681,7 +681,6 @@ TadPrivate_Process_WaitingForLoader_Common: { ; RTL
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         lda.b   #!TadState_LOADING_COMMON_AUDIO_DATA
         sta.w   TadPrivate.state
 
@@ -766,7 +765,6 @@ TadPrivate_Process_WaitingForLoader_Song: { ; RTL
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         pla
         sta.w   TadPrivate.state
 
@@ -834,29 +832,3 @@ TadPrivate_Process_LoadingSongData_Paused: { ; RTL
         bra     TadPrivate_Process_LoadingSongData_Play__SetStateAndResetQueues
 }
 
-
-
-; Finish loading the data into audio-RAM.
-;
-; `Tad_FinishLoadingData` will not transfer data if the state is `WAITING_FOR_LOADER`.
-; It will only transfer data if the loader is in the middle of transferring data
-; (when `Tad_IsLoaderActive` returns true).
-;
-; This function can be safely called by `LoadAudioData`.
-;
-; This function may require multiple frames of execution time.
-;
-; Called with JSL long addressing (returns with RTL).
-; A8
-; I16
-; DB access lowram
-Tad_FinishLoadingData: {
-    .Loop:
-        %TadPrivate_IsLoaderActive()
-        bcc     .EndLoop
-            jsl     Tad_Process
-        bra     .Loop
-    .EndLoop:
-
-    rtl
-}

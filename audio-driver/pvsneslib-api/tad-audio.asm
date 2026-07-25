@@ -1153,7 +1153,6 @@ tadPrivate_process_WaitingForLoader_Common:
         jsr     tadPrivate_loader_setDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         lda     #TAD_State__LOADING_COMMON_AUDIO_DATA
         sta     tadPrivate_state
 
@@ -1224,7 +1223,6 @@ tadPrivate_process_WaitingForLoader_Song:
         jsr     tadPrivate_loader_setDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         pla
         sta     tadPrivate_state
 
@@ -1345,29 +1343,6 @@ tad_process:
 // DB = $80
 
     tadPrivate_Process
-
-    __PopReturn_X16_Y16_DB_80
-
-
-
-; void tad_finishLoadingData(void)
-tad_finishLoadingData:
-    __Push__A8_X16_Y16_DB_80
-.accu 8
-.index 16
-// DB = $80
-
-    @Loop:
-        tadPrivate_IsLoaderActive__a8_db80_carry
-        bcc     @EndLoop
-            sep     #$10
-        .index 8
-            ldx     tadPrivate_state
-            rep     #$10
-        .index 16
-            jsr     (tadPrivate_process_FunctionTable, x)
-        bra     @Loop
-    @EndLoop:
 
     __PopReturn_X16_Y16_DB_80
 .ends

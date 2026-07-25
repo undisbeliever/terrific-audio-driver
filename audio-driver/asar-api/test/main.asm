@@ -43,7 +43,6 @@ org $808000
 TadSubroutines:
     dl  Tad_Init
     dl  Tad_Process
-    dl  Tad_FinishLoadingData
     dl  Tad_QueueCommand
     dl  Tad_QueueCommandOverride
     dl  Tad_QueuePannedSoundEffect

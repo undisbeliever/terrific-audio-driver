@@ -33,7 +33,7 @@
 .autoimport -
 
 
-.export Tad_Init : far, Tad_Process : far, Tad_FinishLoadingData : far
+.export Tad_Init : far, Tad_Process : far
 .export Tad_QueueCommand, Tad_QueueCommandOverride
 .export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
 .export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_GetSong, Tad_ReloadCommonAudioData
@@ -69,7 +69,7 @@
 ;; The following optional defines are used to determine the segment to place the code in.
 ;;
 ;;  * `TAD_PROCESS_SEGMENT` defines the segment to store the subroutines that processes the queues
-;;     and loads data into Audio-RAM (`Tad_Init`, `Tad_Process`, `Tad_FinishLoadingData`).
+;;     and loads data into Audio-RAM (`Tad_Init`, `Tad_Process`).
 ;;      * The exported subroutines in this segment are called using `JSL` long addressing.
 ;;      * If `TAD_PROCESS_SEGMENT` is undefined, `TAD_CODE_SEGMENT` is used.
 ;;
@@ -1074,7 +1074,6 @@ _FunctionTable:
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         lda     #TadState::LOADING_COMMON_AUDIO_DATA
         sta     TadPrivate_state
 
@@ -1159,7 +1158,6 @@ _FunctionTable:
         jsr     TadPrivate_Loader_SetDataToTransfer
 
         ; Must set state AFTER the `LoadAudioData` call.
-        ; `LoadAudioData` might call `Tad_FinishLoadingData`.
         pla
         sta     TadPrivate_state
 
@@ -1227,23 +1225,6 @@ TadPrivate_Process_Null = TadPrivate_Process_LoadingSongData_Play::_Return
         ; Data loaded successfully
         lda     #TadState::PAUSED
         bra     TadPrivate_Process_LoadingSongData_Play::_SetStateAndResetQueues
-.endproc
-
-
-
-; JSL/RTL subroutine
-.a8
-.i16
-; DB access lowram
-.proc Tad_FinishLoadingData : far
-    @Loop:
-        TadPrivate_IsLoaderActive
-        bcc     @EndLoop
-            jsl     Tad_Process
-        bra     @Loop
-    @EndLoop:
-
-    rtl
 .endproc
 
 

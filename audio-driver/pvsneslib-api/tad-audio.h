@@ -258,20 +258,6 @@ void tad_init(void);
 void tad_process(void);
 
 /*!
- * Finish loading the data into audio-RAM.
- *
- * tad_finishLoadingData() will not transfer data if the state is `WAITING_FOR_LOADER`.
- * It will only transfer data if the loader is in the middle of transferring data
- * (when tad_isLoaderActive() returns true).
- *
- * This function can be safely called by `loadAudioData`.
- *
- * This function may require multiple frames of execution time.
- */
-void tad_finishLoadingData(void);
-
-
-/*!
  * @name Queue IO Commands
  *
  * The following functions will add a command to the command queue if the queue is empty.
@@ -509,8 +495,6 @@ void tad_queueSoundEffect(u8 sfx_id);
  *
  * CAUTION: tad_loadSong() will switch the state to `WAITING_FOR_LOADER`.  loadAudioData() will
  * not be called until tad_process() is called **and** the audio-driver has switched to the loader.
- * While the state remains `WAITING_FOR_LOADER_*`, no audio data will be transferred and calling
- * tad_finishLoadingData() will not transfer any audio data.
  *
  * CAUTION: The audio driver starts in the paused state if the \ref TAD_FLAGS_PLAY_SONG_IMMEDIATELY
  * flag is clear when `Tad_Process` receives the ready signal from the loader.
@@ -747,12 +731,8 @@ extern struct Tad_AudioData loadAudioData_out;
  *  * The data can be freed on the next loadAudioData() call.
  *  * The data can be freed when the state changes to PAUSED, PLAYING_SFX or PLAYING.
  *  * The data can be freed if the tad_isLoaderActive() function returns false.
- *  * tad_finishLoadingData() can be used to flush decompressed memory into Audio-RAM.
- *    The data can be freed immediately after a tad_finishLoadingData() call.
  *
  * loadAudioData() **MUST NOT** call tad_process() or tad_loadSong().
- *
- * loadAudioData() **is allowed** to call tad_finishLoadingData().
  */
 extern void loadAudioData(u8 id);
 

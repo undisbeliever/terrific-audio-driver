@@ -283,23 +283,6 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_Process : far
 
 
-;; Finish loading the data into audio-RAM.
-;;
-;; `Tad_FinishLoadingData` will not transfer data if the state is `WAITING_FOR_LOADER`.
-;; It will only transfer data if the loader is in the middle of transferring data
-;; (when `Tad_IsLoaderActive` returns true).
-;;
-;; This function can be safely called by `LoadAudioData`.
-;;
-;; This function may require multiple frames of execution time.
-;;
-;; Called with JSL long addressing (returns with RTL).
-;; A8
-;; I16
-;; DB access lowram
-.import Tad_FinishLoadingData : far
-
-
 ;; Adds a command to the queue if the queue is empty.
 ;;
 ;; The command queue can only hold 1 command.
@@ -369,8 +352,6 @@ TAD_MIN_TICK_CLOCK = 64
 ;;
 ;; CAUTION: `Tad_LoadSong` will switch the state to `WAITING_FOR_LOADER_*`.  `LoadAudioData` will
 ;; not be called until `Tad_Process` is called **and** the audio-driver has switched to the loader.
-;; While the state remains `WAITING_FOR_LOADER_*`, no audio data will be transferred and calling
-;; `Tad_FinishLoadingData` will not transfer any audio data.
 ;;
 ;; CAUTION: The audio driver starts in the paused state if the `TadFlags::PLAY_SONG_IMMEDIATELY`
 ;; flag is clear when `Tad_Process` receives the ready signal from the loader.
@@ -612,12 +593,8 @@ TAD_MIN_TICK_CLOCK = 64
 ;;  * The data can be freed on the next `LoadAudioData` call.
 ;;  * The data can be freed when the state changes to PAUSED, PLAYING_SFX or PLAYING.
 ;;  * The data can be freed if the `Tad_IsLoaderActive` function returns false.
-;;  * The `Tad_FinishLoadingData` subroutine can be used to flush decompressed
-;;    memory into Audio-RAM.  The data can be freed immediately after a
-;;    `Tad_FinishLoadingData` call.
 ;;
 ;; This function MUST NOT call `Tad_Process` or `Tad_LoadSong`.
-;; It is allowed to call `Tad_FinishLoadingData`.
 ;;
 ;;
 ;; Called with JSL long addressing (returns with RTL).

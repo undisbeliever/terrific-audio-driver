@@ -56,7 +56,8 @@ extern u8 tadPrivate_nextCommand_parameter1;
 void assert_failure(void);
 
 
-static void finishLoading(void);
+static void finishLoadingData(void);
+static void finishLoadingSong(void);
 static void wait(void);
 static void waitForLoader(void);
 
@@ -65,38 +66,6 @@ static void queueSoundEffect_assertFail(u8 sfx_id);
 static void queuePannedSoundEffect_assertSuccess(u8 sfx_id, u8 pan);
 static void queuePannedSoundEffect_assertFail(u8 sfx_id, u8 pan);
 static u16 countTransfers_song1(void);
-
-
-void test_finishLoadingData(void) {
-    tad_loadSong(1);
-    waitForLoader();
-
-    tad_finishLoadingData();
-
-    ASSERT_EQ(tad_isLoaderActive(), false)
-    ASSERT_EQ(tad_isSongLoaded(), true)
-}
-
-// also tests `tad_reloadCommonAudioData`
-void test_finishLoadingData2(void) {
-    tad_reloadCommonAudioData();
-
-    tad_loadSong(1);
-    waitForLoader();
-
-    tad_finishLoadingData();
-
-    // common audio data loaded
-    // State = WAITING_FOR_LOADER
-    ASSERT_EQ(tad_isLoaderActive(), false)
-    ASSERT_EQ(tad_isSongLoaded(), false)
-
-    waitForLoader();
-    tad_finishLoadingData();
-
-    ASSERT_EQ(tad_isLoaderActive(), false)
-    ASSERT_EQ(tad_isSongLoaded(), true)
-}
 
 void test_loadSong(void) {
     ASSERT_EQ(tad_isSongLoaded(), true)
@@ -132,7 +101,7 @@ void test_loadSongWhileLoaderActive(void) {
     waitForLoader();
 
     ASSERT_EQ(tad_isLoaderActive(), true)
-    finishLoading();
+    finishLoadingSong();
 }
 
 void test_loadSongWhileLoaderActive2(void) {
@@ -152,7 +121,7 @@ void test_loadSongWhileLoaderActive2(void) {
     ASSERT_EQ(tad_isSongLoaded(), false)
 
     waitForLoader();
-    finishLoading();
+    finishLoadingSong();
 }
 
 void test_loadSongWhileLoadingCommonAudioData(void) {
@@ -174,6 +143,39 @@ void test_loadSongWhileLoadingCommonAudioData(void) {
     ASSERT_EQ(tad_isLoaderActive(), true)
 }
 
+void test_reloadCommonAudioData(void) {
+    ASSERT_EQ(tad_isLoaderActive(), false)
+    ASSERT_EQ(tad_isSongLoaded(), true)
+
+    tad_reloadCommonAudioData();
+
+    tad_loadSong(1);
+    waitForLoader();
+
+    finishLoadingData();
+
+    // common audio data loaded
+    // State = WAITING_FOR_LOADER
+    ASSERT_EQ(tad_isLoaderActive(), false)
+    ASSERT_EQ(tad_isSongLoaded(), false)
+
+    waitForLoader();
+    finishLoadingData();
+
+    ASSERT_EQ(tad_isLoaderActive(), false)
+    ASSERT_EQ(tad_isSongLoaded(), true)
+
+
+    // Check RELOAD_COMMON_AUDIO_DATA flag is clear
+    tad_loadSong(1);
+    waitForLoader();
+
+    finishLoadingData();
+
+    ASSERT_EQ(tad_isLoaderActive(), false)
+    ASSERT_EQ(tad_isSongLoaded(), true)
+}
+
 // Tests that `tad_process()` does not clear the RELOAD_COMMON_AUDIO_DATA flag.
 void test_reloadCommonAudioDataImmediatelyAfterLoadSong(void) {
 
@@ -184,7 +186,7 @@ void test_reloadCommonAudioDataImmediatelyAfterLoadSong(void) {
 
     tad_reloadCommonAudioData();
 
-    finishLoading();
+    finishLoadingSong();
     ASSERT_EQ(tad_isLoaderActive(), false);
     ASSERT_EQ(tad_isSongLoaded(), true);
 
@@ -196,14 +198,14 @@ void test_reloadCommonAudioDataImmediatelyAfterLoadSong(void) {
     ASSERT_EQ(tad_isSongLoaded(), false);
 
     waitForLoader();
-    tad_finishLoadingData();
+    finishLoadingData();
 
     // Test the loader is waiting for song data
     ASSERT_EQ(tad_isLoaderActive(), false);
     ASSERT_EQ(tad_isSongLoaded(), false);
 
     waitForLoader();
-    tad_finishLoadingData();
+    finishLoadingData();
     ASSERT_EQ(tad_isSongLoaded(), true);
 }
 
@@ -254,14 +256,14 @@ void test_loadSongRestartsLoaderIfReloadCommonAudioDataIsSet(void) {
 
     // Finish loading the CAD
     waitForLoader();
-    tad_finishLoadingData();
+    finishLoadingData();
 
     // Test the loader is waiting for song data
     ASSERT_EQ(tad_isLoaderActive(), false);
     ASSERT_EQ(tad_isSongLoaded(), false);
 
     waitForLoader();
-    tad_finishLoadingData();
+    finishLoadingData();
     ASSERT_EQ(tad_isSongLoaded(), true);
 }
 
@@ -300,7 +302,7 @@ void test_loadSongIfChanged(void) {
     ASSERT_EQ(r, true);
 
 
-    finishLoading();
+    finishLoadingSong();
     ASSERT_EQ(tad_isSongPlaying(), true);
 
 
@@ -320,7 +322,7 @@ void test_getSong(void) {
     tad_loadSongIfChanged(0x44);
     ASSERT_EQ(tad_getSong(), 0x44);
 
-    finishLoading();
+    finishLoadingSong();
     ASSERT_EQ(tad_getSong(), 0x44);
 }
 
@@ -628,7 +630,7 @@ void test_sfxQueueAfterLoadSong(void) {
     tad_sfxQueue_pan = 42;
 
     tad_loadSong(0);
-    finishLoading();
+    finishLoadingSong();
 
     ASSERT_EQ(tad_sfxQueue_sfx, 0xff);
     ASSERT_EQ(tad_sfxQueue_pan, 0xff);
@@ -725,7 +727,7 @@ void test_commandAndSfxQueueEmptyAfterSongLoad(void) {
     r = tad_queueCommand_stopSoundEffects();
     ASSERT_EQ(r, false);
 
-    finishLoading();
+    finishLoadingSong();
 
     // Test the two queues are now empty by trying to populate them
     queueSoundEffect_assertSuccess(0xfe);
@@ -751,7 +753,7 @@ void test_songStartsImmediately(void) {
     tad_songsStartImmediately();
 
     tad_loadSong(0);
-    finishLoading();
+    finishLoadingSong();
 
     ASSERT_EQ(tad_isSongPlaying(), true);
     ASSERT_EQ(tad_isSfxPlaying(), true);
@@ -762,7 +764,7 @@ void test_songStartPaused(void) {
     tad_songsStartPaused();
 
     tad_loadSong(0);
-    finishLoading();
+    finishLoadingSong();
 
     ASSERT_EQ(tad_isSongLoaded(), true);
     ASSERT_EQ(tad_isSongPlaying(), false);
@@ -819,12 +821,11 @@ void test_flagFunctions(void) {
 }
 
 static const VoidFn TAD_TESTS[] = {
-    test_finishLoadingData,
-    test_finishLoadingData2,
     test_loadSong,
     test_loadSongWhileLoaderActive,
     test_loadSongWhileLoaderActive2,
     test_loadSongWhileLoadingCommonAudioData,
+    test_reloadCommonAudioData,
     test_reloadCommonAudioDataImmediatelyAfterLoadSong,
     test_loadSongRestartsLoaderIfReloadCommonAudioDataIsSet,
     test_loadSongIfChanged,
@@ -871,15 +872,25 @@ void runTests(void) {
         // Switch to a blank song
         tad_loadSong(0);
 
-        finishLoading();
+        finishLoadingSong();
         wait();
 
         TAD_TESTS[testIndex]();
     }
 }
 
+static void finishLoadingData(void) {
+    ASSERT_EQ(tad_isLoaderActive(), true)
 
-static void finishLoading(void) {
+    while (tad_isLoaderActive()) {
+        tad_process();
+    }
+
+    ASSERT_EQ(tad_isLoaderActive(), false)
+}
+
+
+static void finishLoadingSong(void) {
     while (tad_isSongLoaded() == false) {
         tad_process();
     }
