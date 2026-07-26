@@ -27,10 +27,6 @@
 ; Loader can only write to even addresses
 .assert COMMON_DATA_ADDR % 2 == 0
 
-; Confirm LoaderIO and DriverIO use the same switch to loader signal
-.assert DriverIO__SWITCH_TO_LOADER_PORT == LoaderIO_TransferToLoader__SPINLOCK_PORT
-.assert DriverIO__SWITCH_TO_LOADER_BIT == LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT
-
 
 .proc init_loader
     ; MUST be the first thing in the `.codebank`
@@ -65,25 +61,26 @@
     ; Clear IO ports
     mov CONTROL, #CONTROL__RESET_PORTS_01 | CONTROL__RESET_PORTS_23
 
-    ; Tell the S-CPU the S-SMP is running the loader
-    mov A, #DriverIO__MODE_LOADER
-    mov DriverIO__MODE_PORT, A
-
-    ; Send 'ready' signal
-    .assert LoaderIO__LOADER_READY_L == DriverIO__MODE_LOADER
-    .assert LoaderIO_InitToScpu__READY_PORT_L + 1 == LoaderIO_InitToScpu__READY_PORT_H
-    ; A = LoaderIO__LOADER_READY_L
+    ; Send 'ready' signal and tell the S-CPU the S-SMP is running the loader
+    .assert LoaderIO__READY_PORT_L == TadIO__LOADER_PORT
+    .assert LoaderIO__READY_PORT_H == TadIO__MODE_PORT
+    .assert LoaderIO__LOADER_READY_H == TadIO__MODE_PORT__LOADER
+    .assert LoaderIO__READY_PORT_L + 1 == LoaderIO__READY_PORT_H
+    mov A, #LoaderIO__LOADER_READY_L
     mov Y, #LoaderIO__LOADER_READY_H
-    movw LoaderIO_InitToScpu__READY_PORT_L, YA
+    movw LoaderIO__READY_PORT_L, YA
 
     ; Wait for S-CPU to respond to the ready signal
     InitSpinloop:
-        cmpw YA, LoaderIO_InitToLoader__READY_PORT_L
+        cmpw YA, LoaderIO__READY_PORT_L
         bne InitSpinloop
 
+    ; Clear ready signal, keep mode signal set
+    ; X = 0
+    mov LoaderIO__READY_PORT_H, X
 
     ; retrieve LoaderDataType from S-CPU
-    mov Y, LoaderIO_InitToLoader__DATA_TYPE_PORT
+    mov Y, LoaderIO__DATA_TYPE_PORT
     mov loaderDataType, Y
 
     ; Get the address to store the data
@@ -105,11 +102,11 @@
 
     mov Y, A
 
-    ; Acknowledge LoaderDataType
-    ; And override the `RD` ready signal.
-    mov LoaderIO_InitAckToScpu__ACK_PORT, #LoaderIO_InitAckToScpu__ACK_VALUE
+    ; Acknowledge LoaderDataType and clear ready signal
+    .assert LoaderIO__READY_PORT_L == TadIO__LOADER_PORT
+    mov TadIO__LOADER_PORT, #TadIO__LOADER_PORT__SPINLOCK_INIT_VALUE
 
-    mov X, #LoaderIO__LOADER_READY_H
+    mov X, #LoaderIO__LOADER_READY_L
 
     ; Have to use a manual loop so the above code has access to the `STA_1` and `STA_2` labels.
     Loop:
@@ -118,24 +115,25 @@
 
         ; Wait until S-CPU has written the data to the IO ports
         SpinLoop:
-            cmp X, LoaderIO_TransferToLoader__SPINLOCK_PORT
+            cmp X, TadIO__LOADER_PORT
             beq SpinLoop
 
         ; Check if this data is correct, and get the byte to send back to the S-CPU
-        mov X, LoaderIO_TransferToLoader__SPINLOCK_PORT
-        ; Transfer is complete when spinlock is negative.
+        mov X, TadIO__LOADER_PORT
+        ; Transfer is complete when spinlock MSB is set
+        .assert TadIO__LOADER_PORT__END_OF_TRANSFER_BIT == 7
         bmi EndLoop
 
 
         ; Read data from the IO ports and store to memory
-        mov A, LoaderIO_TransferToLoader__DATA_PORT_L
+        mov A, LoaderIO__DATA_PORT_L
     STA_1:
         mov $ff00 + Y, A
 
-        mov A, LoaderIO_TransferToLoader__DATA_PORT_H
+        mov A, LoaderIO__DATA_PORT_H
 
         ; Acknowledge data (S-CPU will start loading new data)
-        mov LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT, X
+        mov TadIO__LOADER_PORT, X
 
         ; This code is executed while the S-CPU loads the next data into ports 0 & 1
         inc Y
@@ -154,11 +152,11 @@
 
     ; Acknowledge end of data
     ; (x is negative)
-    mov LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT, X
+    mov TadIO__LOADER_PORT, X
 
     ; Restart loader if the SWITCH_TO_LOADER_BIT is set
     mov A, X
-    and A, #(1 << LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT)
+    and A, #1 << TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT
     bne start_loader
 
 

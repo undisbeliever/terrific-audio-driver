@@ -25,7 +25,79 @@
 
 
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 21
+TAD_IO_VERSION = 22
+
+
+; Global ports
+; ============
+;
+; These IO ports are used by both the loader and audio-driver.
+
+
+; Loader spinlock and switch to loader command.
+;
+; 65816 to spc700:  This port serves multiple purposes:
+;  1. (audio-driver and loader): Switch to the loader signal.
+;     * If the audio driver is running: When bit 5 is set, the audio driver will
+;       stop and execute the loader.
+;     * If the loader is running: When bits 5 & 7 are set, the loader will restart.
+;  2. Synchronise the start of the loader
+;     * The port is set to "R" when the loader starts.
+;     * The 65816 writes "R" to this port when initialising the loader
+;     * The 65816 will wait until this port is 0 before sending data to the loader.
+;  3. (loader only): Spinlock to synchronise loader transfers
+;     * The loader will wait until the `TadIO__LOADER_PORT`'s value changes with
+;      bit 7 clear before processing the next transfer.
+;     * After the data has been read the value will be echoed to the 65816 over
+;       `APUIO0` tell the 65816 S-CPU that IO ports 1-3 can be safely written to.
+;  4. (loader only): Signal the end of transfer (bit 7 set and bit 5 clear).
+;     * No data is written to audio-RAM.
+;
+; spc700 to 65816: This port serves 1 purpose:
+;  1. The value that was written to this port is echoed by the spc700 to signal
+;     to the 65816 that IO ports 1-3 can be safely written to.
+;
+; See: The *Loader Commands* section for more details of the spinlock signalling.
+;
+; Data format:
+;      eslscccc
+;          e    = end of transfer.
+;          s    = Must only be set during the LoaderDataType loader initialisation
+;          l    = switch to loader bit.
+;          cccc = changing 4 bit spinlock value
+TadIO__LOADER_PORT = CPUIO0
+    TadIO__LOADER_PORT__END_OF_TRANSFER_BIT = 7
+    TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT = 5
+
+    TadIO__LOADER_PORT__END_OF_TRANSFER = $80
+    TadIO__LOADER_PORT__SWITCH_TO_LOADER = $a0
+
+    TadIO__LOADER_PORT__SPINLOCK_INIT_VALUE = 0
+
+    .assert LoaderIO__LOADER_READY_L & (1 << 6) != 0
+    .assert LoaderIO__LOADER_READY_L & (1 << 4) != 0
+    .assert LoaderIO__LOADER_READY_L & TadIO__LOADER_PORT__END_OF_TRANSFER == 0
+    .assert LoaderIO__LOADER_READY_L & TadIO__LOADER_PORT__SWITCH_TO_LOADER == 0
+
+
+; The mode the spc700 is currently executing (from spc700 to 65816)
+;
+; Used by both the loader and the audio-driver.
+;
+; NOTE: The IPL sets this value after at has cleared the zero-page.
+;       Do not read this value immediately after reset.
+;       Make sure enough time has passed for the IPL to set IO Port 1
+;       to $bb before reading this port.
+TadIO__MODE_PORT = CPUIO1
+    ; The spc700 is running the IPL
+    TadIO__MODE_PORT__IPL = $bb
+
+    ; The S-SMP is running the loader.
+    TadIO__MODE_PORT__LOADER = $4c ; 'L'
+
+    ; The S-SMP is running the audio-driver.
+    TadIO__MODE_PORT__AUDIO_DRIVER = $61 ; 'a'
+
 
 
 ; Loader Commands
@@ -72,82 +144,56 @@ TAD_IO_VERSION = 21
 
 
 
-; Loader IO Commands
-; ==================
-
-    ; Port 0 is MUST be unused.
-    ; MUST only be used for `DriverIO__COMMAND_PORT` and `DriverIO__COMMAND_ACK_PORT`.
-
+; Loader IO
+; =========
     ; The loader ready signal.
+    LoaderIO__LOADER_READY_L = %01010010 ; 'R'
+    LoaderIO__LOADER_READY_H = %01001100 ; 'L'
+        .assert LoaderIO__LOADER_READY_L & TadIO__LOADER_PORT__SWITCH_TO_LOADER == 0
+
+    LoaderIO__READY_PORT_L = TadIO__LOADER_PORT
+    LoaderIO__READY_PORT_H = TadIO__MODE_PORT
+
+    LoaderIO__DATA_TYPE_PORT = CPUIO2
+
+    LoaderIO__DATA_PORT_L = CPUIO1
+    LoaderIO__DATA_PORT_H = CPUIO2
+
+    ; Loader protocol
     ;
-    ; To prevent conflicts with `LoaderIO_TransferToLoader__SPINLOCK_PORT` or `DriverIO__SWITCH_TO_LOADER_PORT`:
-    ;   * bit 7 must be clear (end of transfer bit)
-    ;   * bit 6 should be set (so `LoaderIO_TransferToLoader__SPINLOCK_PORT is never LOADE_READY if the counter MASK is used)
-    ;   * bit 5 must be clear (`DriverIO__SWITCH_TO_LOADER_BIT`)
-    LoaderIO__LOADER_READY_L = %01001100 ; 'L'
-    LoaderIO__LOADER_READY_H = %01000100 ; 'D'
+    ; Step 1: Ready signal is sent
+    ;   * spc700 writes `LOADER_READY` to `READY_PORT_L` and `READY_PORT_H`
+    ;   * 65816 waits until `READY_PORT_L` & `READY_PORT_H` == `LOADER_READY`
+    ;
+    ; Step 2: 65816 sends a `LoaderDataType` message.
+    ;   * The 65816 MUST wait until the ready ports match `LOADER_READY`
+    ;   * The 65816 writes the following in this order, 1 byte at a time:
+    ;      1. Writes the `LoaderDataType` to `LoaderIO__DATA_TYPE_PORT`
+    ;      2. Writes `LOADER_READY_L` to `READY_PORT_L`
+    ;      3. Writes `LOADER_READY_H` to `READY_PORT_H`
+    ;  * The spc700 waits until the `READY_PORT`s == `LOADER_READY`
+    ;  * The spc700 initialises the loader transfer
+    ;  * The spc700 writes `SPINLOCK_INIT_VALUE` to `TadIO__LOADER_PORT`.
+    ;    The spinlock value is set to `TadIO__LOADER_PORT`.
+    ;
+    ; Step 3: Data is transferred, 2 bytes at a time
+    ;  * The 65816 waits until `TadIO__LOADER_PORT` == spinlock value.
+    ;  * The 65816 writes the data to `DATA_PORT_L` and `DATA_PORT_H`.
+    ;  * The 65816 writes a different spinlock value to `TadIO__LOADER_PORT`.
+    ;    The lower 4 bits of the spinlock MUST be clear.
+    ;  * The spc700 waits until `TadIO__LOADER_PORT` has changed
+    ;  * The spc700 reads the data bytes and copies it into Audio-RAM
+    ;  * The spc700 will echo the spinlock value to `TadIO__LOADER_PORT`
+    ;
+    ; Step 3 is repeated until all data is written
+    ;
+    ; Step 4: An end-of-transfer signal is sent to the loader
+    ;  * The 65816 waits until `TadIO__LOADER_PORT` == spinlock value.
+    ;  * The 65816 writes `TadIO__LOADER_PORT__END_OF_TRANSFER` to `TadIO__LOADER_PORT`
+    ;  * The spc700 notices the `TadIO__LOADER_PORT` MSB is set and ends the transfer.
+    ;  * If `LoaderDataType` is song, the loader will switch to audio-driver mode,
+    ;    otherwise the loader restarts.
 
-
-    ; Step 1: S-CPU waits until ready signal is set by the loader
-        ; Signal to the S-CPU that the loader is ready to receive data.
-        ; MUST wait until `ready` ports match `LOADER_READY` before writing `LoaderIO_InitToDriver_*` ports.
-        LoaderIO_InitToScpu__READY_PORT_L = CPUIO2
-        LoaderIO_InitToScpu__READY_PORT_H = CPUIO3
-
-    ; Step 2: S-CPU writes the following to the IO ports
-        ; The LoaderDataType to transfer to audio-RAM.
-        ; MUST be written first
-        LoaderIO_InitToLoader__DATA_TYPE_PORT = CPUIO1
-
-        ; Signal to the loader that the S-CPU is ready to receive data.
-        LoaderIO_InitToLoader__READY_PORT_L = CPUIO2
-        LoaderIO_InitToLoader__READY_PORT_H = CPUIO3
-
-
-    ; Step 3: S-CPU waits until `LoaderIO_InitToLoader_*` data is acknowledged
-    ;         by waiting until `LoaderIO_InitAckToScpu__ACK_PORT` is zero.
-        LoaderIO_InitAckToScpu__ACK_VALUE = 0
-        LoaderIO_InitAckToScpu__ACK_PORT = CPUIO3
-
-    ; Step 4: S-CPU writes the next word to transfer to Audio-RAM to the following IO ports:
-        ; Should be written one byte at a time
-        LoaderIO_TransferToLoader__DATA_PORT_L = CPUIO1
-        LoaderIO_TransferToLoader__DATA_PORT_H = CPUIO2
-
-        ; Write a different value to this port to signal the data is ready.
-        ;
-        ; MUST be written last.
-        ;
-        ; Data format:
-        ;      e0l0cccc
-        ;          e    = end of transfer.
-        ;          l    = switch to loader bit
-        ;          cccc = incrementing 4 bit counter.
-        ;
-        ; If the MSB is set, no data is written to the Audio-RAM and the transfer is complete.
-        ;
-        ; If the *switch-to-loader* and *end-of-transfer* bits are set, the loader will restart.
-        LoaderIO_TransferToLoader__SPINLOCK_PORT = CPUIO3
-
-        LoaderIO_TransferToLoader__SPINLOCK_MASK = $0f
-        LoaderIO_TransferToLoader__SPINLOCK_COMPLETE = $80
-        LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT = 5
-
-
-    ; Step 5: S-CPU waits until the transfer is acknowledged
-    ;         by waiting until `LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT == spinlock`.
-        LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT = CPUIO3
-
-    ; Step 6: If there is more data to transfer, goto step 4
-
-    ; Step 7: The S-CPU writes
-    ;         `LoaderIO_TransferToLoader__SPINLOCK_COMPLETE` to `LoaderIO_TransferToLoader__SPINLOCK_PORT`
-
-    ; Step 8: The S-CPU waits until
-    ;         `LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT == LoaderIO_TransferToLoader__SPINLOCK_COMPLETE`
-
-    ; Step 9: If `LoaderDataType` is not song goto Step 1.
-    ;         If `LoaderDataType` is a song, the audio driver is executed..
 
 
 ; To Driver IO Commands
@@ -165,7 +211,7 @@ TAD_IO_VERSION = 21
     ;  * This value MUST be written last.
     ;  * The command and parameter bytes MUST NOT change unless the previous command
     ;    has been acknowledged.
-    DriverIO__COMMAND_PORT = CPUIO0
+    DriverIO__COMMAND_PORT = CPUIO3
 
     DriverIO__N_COMMANDS = 11
     DriverIO__COMMAND_MASK   = %00011110
@@ -176,43 +222,23 @@ TAD_IO_VERSION = 21
     DriverIO__PARAMETER_1_PORT = CPUIO2
 
 
-    ; Writing `SWITCH_TO_LOADER` to this port should stop execution and start the loader.
+    ; Audio driver command acknowledgment.
+    ;
+    ; Acknowledgment of the `DriverIO__COMMAND_PORT` byte.  Not used in the loader.
+    ;
+    ; After the command has been processed, the `DriverIO__COMMAND_PORT` value
+    ; will be written to this port.
+    DriverIO__COMMAND_ACK_PORT = CPUIO3
+
+
+    ; Writing `TadIO__LOADER_PORT__SWITCH_TO_LOADER` to `TadIO__LOADER_PORT`
+    ; will stop the audio driver and execute the loader.
     ;
     ; If the audio-driver is running; if the `DriverIO__SWITCH_TO_LOADER_BIT` is set
     ; the audio driver will stop and execute the loader.
     ;
     ; If the loader is in the middle of a transfer and both the `DriverIO__SWITCH_TO_LOADER_BIT`
     ; and MSB (bit 7) bits are set, the loader will restart.
-    DriverIO__SWITCH_TO_LOADER_PORT = CPUIO3
-    DriverIO__SWITCH_TO_LOADER_BIT = 5
-
-
-    ; Audio driver command acknowledgment.
-    ;
-    ; Acknowledgment of the `DriverIO__COMMAND_PORT` byte.  Not used in the loader.
-    ;
-    ; After the command has been processed, the `DriverIO__COMMAND_PORT` value will be written to this port.
-    DriverIO__COMMAND_ACK_PORT = CPUIO0
-
-
-    ; The mode the S-SMP is currently executing.
-    ;
-    ; Used by both the loader and the audio-driver.
-    ;
-    ; NOTE: The IPL sets this value after at has cleared the zero-page.
-    ;       Do not read this value immediately after reset.
-    ;       Make sure enough time has passed for the IPL to set IO Port 1
-    ;       to $bb before reading this port.
-    DriverIO__MODE_PORT = CPUIO1
-
-    ; The S-SMP is at the start of the IPL, waiting for the ready signal.
-    DriverIO__MODE_IPL = $bb
-
-    ; The S-SMP is running the loader.
-    DriverIO__MODE_LOADER = $4c;         ; 'L', LoaderIO__LOADER_READY_L
-
-    ; The S-SMP is running the audio-driver.
-    DriverIO__MODE_AUDIO_DRIVER = $61 ;  ; 'a'
 
 
 ; IO Commands

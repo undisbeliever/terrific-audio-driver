@@ -148,7 +148,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 ;;  * This value MUST be written last.
 ;;  * The command and parameter bytes MUST NOT change unless the previous command
 ;;    has been acknowledged.
-TAD_IO_ToDriver__COMMAND_PORT = $2140 ; APUIO0
+TAD_IO_ToDriver__COMMAND_PORT = $2143 ; APUIO3
 
 TAD_IO_ToDriver__COMMAND_MASK   = %00011110
 TAD_IO_ToDriver__COMMAND_I_MASK = %11100001
@@ -167,7 +167,7 @@ TAD_IO_ToDriver__PARAMETER1_PORT = $2142 ; APUIO2
 ;;
 ;; If the loader is in the middle of a transfer and both the `SWITCH_TO_LOADER_BIT`
 ;; and MSB (bit 7) bits are set, the loader will restart.
-TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT = $2143 ; APUIO3
+TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT = $2140 ; APUIO0
 
 TAD_IO_ToDriver__SWITCH_TO_LOADER_BIT = 5
 TAD_IO_ToDriver__SWITCH_TO_LOADER = $80 | (1 << TAD_IO_ToDriver__SWITCH_TO_LOADER_BIT)
@@ -178,7 +178,7 @@ TAD_IO_ToDriver__SWITCH_TO_LOADER = $80 | (1 << TAD_IO_ToDriver__SWITCH_TO_LOADE
 ;; Acknowledgment of the `ToDriver.command` byte.  Not used in the loader.
 ;;
 ;; After the command has been processed, the `IO.ToDriver.command` value will be written to this port.
-TAD_IO_ToScpu__COMMAND_ACK_PORT = $2140 ; APUIO0
+TAD_IO_ToScpu__COMMAND_ACK_PORT = $2143 ; APUIO3
 
 
 ;; The mode the S-SMP is currently executing.
@@ -214,23 +214,23 @@ TAD_LoaderDataType__SURROUND_FLAG             = 1 << 0
 
 
 ;; MUST match `audio-driver/src/io-commands.inc`
-TAD_IO_Loader_Init__LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
-TAD_IO_Loader_Init__READY_PORT_L          = $2142 ; APUIO2
-TAD_IO_Loader_Init__READY_PORT_H          = $2143 ; APUIO3
+TAD_IO_Loader_Init__LOADER_DATA_TYPE_PORT = $2142 ; APUIO2
+TAD_IO_Loader_Init__READY_PORT_L          = $2140 ; APUIO0
+TAD_IO_Loader_Init__READY_PORT_H          = $2141 ; APUIO1
 
-TAD_IO_Loader_Init__READY_PORT_HL         = $2142 ; APUIO2 & APUIO3
+TAD_IO_Loader_Init__READY_PORT_HL         = $2140 ; APUIO0 & APUIO1
 
-TAD_IO_Loader_Init__LOADER_READY_L = %01001100  ; 'L'
-TAD_IO_Loader_Init__LOADER_READY_H = %01000100  ; 'D'
-TAD_IO_Loader_Init__LOADER_READY_HL = %0100010001001100 ; "LD"
+TAD_IO_Loader_Init__LOADER_READY_L = %01010010  ; 'R'
+TAD_IO_Loader_Init__LOADER_READY_H = %01001100  ; 'L'
+TAD_IO_Loader_Init__LOADER_READY_HL = %0100110001010010 ; "LD"
 
 
 ;; MUST match `audio-driver/src/io-commands.inc`
 TAD_IO_Loader__DATA_PORT_L   = $2141 ; APUIO1
 TAD_IO_Loader__DATA_PORT_H   = $2142 ; APUIO2
-TAD_IO_Loader__SPINLOCK_PORT = $2143 ; APUIO3
+TAD_IO_Loader__SPINLOCK_PORT = $2140 ; APUIO0
 
-;; The spinlock value when the audio driver starts playing a song
+;; The spinlock value when the loader starts the transfer
 TAD_IO_Loader__SPINLOCK_INIT_VALUE = 0
 
 ;; Only the lower 4 bits of the spinlock should be set while sending data to the loader
@@ -727,6 +727,7 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
         ; Send the ready signal and the LoaderDataType
         sta     TAD_IO_Loader_Init__LOADER_DATA_TYPE_PORT
 
+        ; Ready signal must be sent last and one byte at a time
         lda     #TAD_IO_Loader_Init__LOADER_READY_L
         sta     TAD_IO_Loader_Init__READY_PORT_L
 
@@ -734,6 +735,7 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
         sta     TAD_IO_Loader_Init__READY_PORT_H
 
         ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
+        .assert TAD_IO_Loader__SPINLOCK_INIT_VALUE == 0
         stz     tadPrivate_dataToTransfer_prevSpinLock
 
         ; return true
@@ -791,7 +793,6 @@ tadPrivate_loader_transferData:
     ; This test doubles as a lock for the previous transfer.
     ;
     ; This also prevents a freeze in `process()` if the loader has crashed/glitched.
-    ; (`finish_loading_data()` will freeze if the loader has crashed/glitched.
     lda     tadPrivate_dataToTransfer_prevSpinLock
     cmp     TAD_IO_Loader__SPINLOCK_PORT
     bne     @ReturnFalse
@@ -1436,8 +1437,8 @@ tad_loadSong:
         sta     tadPrivate_state
 
         ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
-        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER != TAD_IO_Loader_Init__LOADER_READY_H
-        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT == TAD_IO_Loader_Init__READY_PORT_H
+        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER != TAD_IO_Loader_Init__LOADER_READY_L
+        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT == TAD_IO_Loader_Init__READY_PORT_L
 
         ; Send a *switch-to-loader* command to the audio-driver or loader
         lda     #TAD_IO_ToDriver__SWITCH_TO_LOADER

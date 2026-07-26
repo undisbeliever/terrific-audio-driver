@@ -137,7 +137,7 @@ TAD_APUIO3 = $2143
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-!TAD_IO_VERSION = 21
+!TAD_IO_VERSION = 22
 
 
 
@@ -155,7 +155,7 @@ TAD_APUIO3 = $2143
     ;  * This value MUST be written last.
     ;  * The command and parameter bytes MUST NOT change unless the previous command
     ;    has been acknowledged.
-    !TadIO_ToDriver_COMMAND_PORT = $2140 ; APUIO0
+    !TadIO_ToDriver_COMMAND_PORT = $2143 ; APUIO3
 
     !TadIO_ToDriver_COMMAND_MASK   = %00011110
     !TadIO_ToDriver_COMMAND_I_MASK = %11100001
@@ -174,7 +174,7 @@ TAD_APUIO3 = $2143
     ;
     ; If the loader is in the middle of a transfer and both the `SWITCH_TO_LOADER_BIT`
     ; and MSB (bit 7) bits are set, the loader will restart.
-    !TadIO_ToDriver_SWITCH_TO_LOADER_PORT = $2143 ; APUIO3
+    !TadIO_ToDriver_SWITCH_TO_LOADER_PORT = $2140 ; APUIO0
 
     !TadIO_ToDriver_SWITCH_TO_LOADER_BIT = 5
     !TadIO_ToDriver_SWITCH_TO_LOADER = $a0
@@ -187,7 +187,7 @@ TAD_APUIO3 = $2143
     ; Acknowledgment of the `ToDriver.command` byte.  Not used in the loader.
     ;
     ; After the command has been processed, the `IO.ToDriver.command` value will be written to this port.
-    !TadIO_ToScpu_COMMAND_ACK_PORT = $2140 ; APUIO0
+    !TadIO_ToScpu_COMMAND_ACK_PORT = $2143 ; APUIO3
 
 
     ; The mode the S-SMP is currently executing.
@@ -226,24 +226,24 @@ TAD_APUIO3 = $2143
 
 ; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_Loader_Init
-    !TadIO_Loader_Init_LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
-    !TadIO_Loader_Init_READY_PORT_L          = $2142 ; APUIO2
-    !TadIO_Loader_Init_READY_PORT_H          = $2143 ; APUIO3
+    !TadIO_Loader_Init_LOADER_DATA_TYPE_PORT = $2142 ; APUIO2
+    !TadIO_Loader_Init_READY_PORT_L          = $2140 ; APUIO0
+    !TadIO_Loader_Init_READY_PORT_H          = $2141 ; APUIO1
 
-    !TadIO_Loader_Init_READY_PORT_HL         = $2142 ; APUIO2 & APUIO3
+    !TadIO_Loader_Init_READY_PORT_HL         = $2140 ; APUIO0 & APUIO1
 
-    !TadIO_Loader_Init_LOADER_READY_L = %01001100  ; 'L'
-    !TadIO_Loader_Init_LOADER_READY_H = %01000100  ; 'D'
-    !TadIO_Loader_Init_LOADER_READY_HL = $444c     ; 'LD'
+    !TadIO_Loader_Init_LOADER_READY_L = %01010010  ; 'R'
+    !TadIO_Loader_Init_LOADER_READY_H = %01001100  ; 'L'
+    !TadIO_Loader_Init_LOADER_READY_HL = $4c52     ; 'RL'
 
 
 ; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_Loader
     !TadIO_Loader_DATA_PORT_L   = $2141 ; APUIO1
     !TadIO_Loader_DATA_PORT_H   = $2142 ; APUIO2
-    !TadIO_Loader_SPINLOCK_PORT = $2143 ; APUIO3
+    !TadIO_Loader_SPINLOCK_PORT = $2140 ; APUIO0
 
-    ; The spinlock value when the audio driver starts playing a song
+    ; The spinlock value when the loader starts the transfer
     !TadIO_Loader_SPINLOCK_INIT_VALUE = 0
 
     ; Only the lower 4 bits of the spinlock should be set while sending data to the loader

@@ -202,7 +202,7 @@ pub struct LoaderDataType {
 
 impl LoaderDataType {
     pub fn driver_value(&self) -> u8 {
-        const _: () = assert!(TAD_IO_VERSION == 21);
+        const _: () = assert!(TAD_IO_VERSION == 22);
 
         // LoaderDataType.SONG_DATA_BIT
         let mut o = 1 << 7;
@@ -257,7 +257,7 @@ pub const STARTING_VOLUME: u8 = 96;
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
 
-const _: () = assert!(TAD_IO_VERSION == 21);
+const _: () = assert!(TAD_IO_VERSION == 22);
 
 // IO Commands
 pub mod io_commands {
@@ -266,6 +266,8 @@ pub mod io_commands {
     pub const PLAY_SOUND_EFFECT: u8 = 6;
     pub const STOP_SOUND_EFFECTS: u8 = 8;
 }
+
+pub const IO_COMMAND_PORT: usize = 3;
 
 pub const IO_COMMAND_MASK: u8 = 0b00011110;
 pub const IO_COMMAND_I_MASK: u8 = 0b11100001;

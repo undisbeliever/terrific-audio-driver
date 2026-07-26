@@ -10,8 +10,8 @@ use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
 use compiler::driver_constants::{
     addresses, io_commands, AudioMode, LoaderDataType, AUDIO_RAM_SIZE, FIRST_SFX_CHANNEL,
-    IO_COMMAND_I_MASK, IO_COMMAND_MASK, LAG_DETECTOR_MUSIC_LAG_MASK, LAG_DETECTOR_SFX_LAG_MASK,
-    N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
+    IO_COMMAND_I_MASK, IO_COMMAND_MASK, IO_COMMAND_PORT, LAG_DETECTOR_MUSIC_LAG_MASK,
+    LAG_DETECTOR_SFX_LAG_MASK, N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
 };
 use compiler::errors::LoadSongError;
 use compiler::songs::SongData;
@@ -204,7 +204,8 @@ impl TadEmulator {
 
         // Unpause the audio driver
         const _: () = assert!(io_commands::UNPAUSE != 0);
-        self.emu.0.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
+        const _: () = assert!(IO_COMMAND_PORT == 3);
+        self.emu.0.write_io_ports([0, 0, 0, io_commands::UNPAUSE]);
 
         self.previous_command = io_commands::UNPAUSE;
         self.song_addr = Some(song_addr);
@@ -263,15 +264,18 @@ impl TadEmulator {
     }
 
     pub fn is_io_command_acknowledged(&self) -> bool {
-        self.is_song_loaded() && self.emu.0.read_io_ports()[0] == self.previous_command
+        self.is_song_loaded()
+            && self.emu.0.read_io_ports()[IO_COMMAND_PORT] == self.previous_command
     }
 
     pub fn try_send_io_command(&mut self, command: u8, param1: u8, param2: u8) -> bool {
+        const _: () = assert!(IO_COMMAND_PORT == 3);
+
         if self.is_io_command_acknowledged() {
             let command = ((self.previous_command ^ u8::MAX) & IO_COMMAND_I_MASK)
                 | (command & IO_COMMAND_MASK);
 
-            self.emu.0.write_io_ports([command, param1, param2, 0]);
+            self.emu.0.write_io_ports([0, param1, param2, command]);
             self.previous_command = command;
 
             true

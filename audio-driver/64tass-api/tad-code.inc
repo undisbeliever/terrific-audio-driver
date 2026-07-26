@@ -239,8 +239,8 @@ _SongRequested:
         sta     TadPrivate_state
 
         ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
-        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER != TadIO_Loader_Init.LOADER_READY_H)
-        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER_PORT == TadIO_Loader_Init.READY_PORT_H)
+        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER != TadIO_Loader_Init.LOADER_READY_L)
+        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER_PORT == TadIO_Loader_Init.READY_PORT_L)
 
         ; Send a *switch-to-loader* command to the audio-driver or loader
         lda     #TadIO_ToDriver.SWITCH_TO_LOADER

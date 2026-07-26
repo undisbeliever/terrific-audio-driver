@@ -43,7 +43,7 @@
 .p0
 
     ; Tell the S-CPU the S-SMP is running the audio driver
-    mov DriverIO__MODE_PORT, #DriverIO__MODE_AUDIO_DRIVER
+    mov TadIO__MODE_PORT, #TadIO__MODE_PORT__AUDIO_DRIVER
 
     ; Reset the DSP
     mov A, #DSP_FLG
@@ -505,9 +505,9 @@ ClearEchoBufferEnd:
 
 
     ; Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
-    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
+    bbc TadIO__LOADER_PORT, TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT, NoStl
         ; Read the IO port a second time just in case it was a glitch
-        bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
+        bbc TadIO__LOADER_PORT, TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT, NoStl
             jmp LOADER_ADDR
     NoStl:
 .endinline
@@ -2085,7 +2085,7 @@ _target_h = zpTmp
 ; See `process_bytecode_with_loader_test`
 .proc _process_bytecode_with_loader_test__SecondBitTest
     ; Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
-    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode
+    bbc TadIO__LOADER_PORT, TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT, process_bytecode
     jmp LOADER_ADDR
 .endproc
 
@@ -2101,7 +2101,7 @@ _target_h = zpTmp
 ; IN: X = channelIndex
 ; KEEP: X
 .proc process_bytecode_with_loader_test
-    bbs DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, _process_bytecode_with_loader_test__SecondBitTest
+    bbs TadIO__LOADER_PORT, TadIO__LOADER_PORT__SWITCH_TO_LOADER_BIT, _process_bytecode_with_loader_test__SecondBitTest
 
     ; fallthrough
     .assert PC == process_bytecode

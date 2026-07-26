@@ -130,6 +130,7 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
         ; Send the ready signal and the TadLoaderDataType
         sta.w   !TadIO_Loader_Init_LOADER_DATA_TYPE_PORT
 
+        ; Ready signal must be sent last and one byte at a time
         lda.b   #!TadIO_Loader_Init_LOADER_READY_L
         sta.w   !TadIO_Loader_Init_READY_PORT_L
 
@@ -137,6 +138,7 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
         sta.w   !TadIO_Loader_Init_READY_PORT_H
 
         ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
+        assert !TadIO_Loader_SPINLOCK_INIT_VALUE == 0
         stz.w   TadPrivate.dataToTransfer_prevSpinLock
 
         ; return true
@@ -192,7 +194,6 @@ TadPrivate_Loader_TransferData: {
     ; This test doubles as a lock for the previous transfer.
     ;
     ; This also prevents a freeze in `process()` if the loader has crashed/glitched.
-    ; (`finish_loading_data()` will freeze if the loader has crashed/glitched.
     lda.w   TadPrivate.dataToTransfer_prevSpinLock
     cmp.l   !TadIO_Loader_SPINLOCK_PORT
     bne     .ReturnFalse
