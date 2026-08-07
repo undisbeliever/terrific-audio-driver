@@ -166,8 +166,12 @@
     ; Using timer1 as timer0 is setup before echo buffer clear.
     mov T1TARGET, #EDL_SLEEP_TIMER_1
 
-    ; Reset and enable timer 0 (timers are reset on a transition from 0 to 1)
-    mov CONTROL, #0
+    ; Clear the IO command in port and reset and enable timer 0
+    ; (timers are reset on a transition from 0 to 1)
+    .assert DriverIO__COMMAND_PORT == CPUIO3
+    ; clear timer bits
+    mov CONTROL, #CONTROL__RESET_PORTS_23
+    ; set timer bits
     mov CONTROL, #CONTROL__ENABLE_TIMER_1
 
 

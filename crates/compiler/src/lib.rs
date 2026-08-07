@@ -34,6 +34,7 @@ pub mod sound_effects;
 pub mod spc_file_export;
 pub mod subroutines;
 pub mod tad_apu;
+pub mod tad_loader;
 pub mod textfile;
 pub mod time;
 

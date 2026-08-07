@@ -226,6 +226,12 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
+    ; Add a small delay for the loader to initialise the transfer
+    lda     #120
+    :
+        dec
+        bne     :-
+
     ; Loading blank song, it should only require 1 Tad_Process call to load it
     jsl     Tad_Process
     assert_carry  Tad_IsSongLoaded,   true
@@ -1438,8 +1444,8 @@ TestTable_SIZE = * - TestTable
     DATA_SIZE = DummySongData_SIZE
     .assert DATA_SIZE = 2000, error
 
-    MIN_TRANSFER = 32
-    MAX_TRANSFER = 800
+    MIN_TRANSFER = 45
+    MAX_TRANSFER = 930
 
     assert_carry    Tad_IsSongLoaded, true
 
@@ -1448,14 +1454,14 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
-    assert_a_eq     20
+    assert_a_eq     14
 
 
     ldx     #125
     jsr     Tad_SetTransfersPerProcess
 
     jsr     __CountTransfers
-    assert_a_eq     8
+    assert_a_eq     6
 
 
     ; Test `Tad_SetTransfersPerProcess` enforces minimum value
@@ -1485,6 +1491,12 @@ TestTable_SIZE = * - TestTable
         stz     counter
 
         @Loop:
+            ; Add a small delay for the loader to process the pending transfer
+            lda     #120
+            :
+                dec
+                bne     :-
+
             jsl     Tad_Process
             inc     counter
 

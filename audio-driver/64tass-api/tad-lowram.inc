@@ -36,12 +36,16 @@
 ; Minimum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; MUST BE > 0
-TAD_MIN_TRANSFERS_PER_PROCESS = 32 / 2
+TAD_MIN_TRANSFERS_PER_PROCESS = 15
 
 ; Maximum value accepted by `Tad_SetTransfersPerProcess`
 ;
-; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-TAD_MAX_TRANSFERS_PER_PROCESS = 800 / 2
+; The loader can transfer ~947 bytes per NTSC frame SlowROM or ~1048 bytes
+; per NTSC frame FastROM (measured with the Mesen Profiler).
+;
+; Multiply this number by 3 to get bytes/Tad_Process.
+TAD_MAX_TRANSFERS_PER_PROCESS = 310
+
 
 
 TadState .block

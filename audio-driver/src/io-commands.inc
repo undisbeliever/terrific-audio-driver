@@ -25,7 +25,7 @@
 
 
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 22
+TAD_IO_VERSION = 23
 
 
 ; Global ports
@@ -72,7 +72,7 @@ TadIO__LOADER_PORT = CPUIO0
     TadIO__LOADER_PORT__END_OF_TRANSFER = $80
     TadIO__LOADER_PORT__SWITCH_TO_LOADER = $a0
 
-    TadIO__LOADER_PORT__SPINLOCK_INIT_VALUE = 0
+    TadIO__LOADER_PORT__SPINLOCK_INIT_VALUE  = 0
 
     .assert LoaderIO__LOADER_READY_L & (1 << 6) != 0
     .assert LoaderIO__LOADER_READY_L & (1 << 4) != 0
@@ -156,8 +156,10 @@ TadIO__MODE_PORT = CPUIO1
 
     LoaderIO__DATA_TYPE_PORT = CPUIO2
 
-    LoaderIO__DATA_PORT_L = CPUIO1
-    LoaderIO__DATA_PORT_H = CPUIO2
+    LoaderIO__DATA_PORT_0 = CPUIO1
+    LoaderIO__DATA_PORT_1 = CPUIO2
+    LoaderIO__DATA_PORT_2 = CPUIO3
+
 
     ; Loader protocol
     ;
@@ -176,18 +178,32 @@ TadIO__MODE_PORT = CPUIO1
     ;  * The spc700 writes `SPINLOCK_INIT_VALUE` to `TadIO__LOADER_PORT`.
     ;    The spinlock value is set to `TadIO__LOADER_PORT`.
     ;
-    ; Step 3: Data is transferred, 2 bytes at a time
+    ; Step 3: The 65816 tells the loader how many transfers are required.
     ;  * The 65816 waits until `TadIO__LOADER_PORT` == spinlock value.
-    ;  * The 65816 writes the data to `DATA_PORT_L` and `DATA_PORT_H`.
+    ;  * The 65816 writes number of transfers (`data size / 3`) to `DATA_PORT_0`, `DATA_PORT_1`.
+    ;  * The 65816 writes a new spinlock value to `TadIO__LOADER_PORT`.
+    ;    The lower 4 bits of the spinlock MUST be clear.
+    ;  * The spc700 waits until `TadIO__LOADER_PORT` has changed
+    ;  * The spc700 updates loader addresses
+    ;  * The spc700 echos the spinlock to `TadIO__LOADER_PORT`.
+    ;
+    ; Step 4: Data is transferred, 3 bytes at a time
+    ;  * The data is interleaved.
+    ;     * `DATA_PORT_0` is written to `addr + i`
+    ;     * `DATA_PORT_1` is written to `addr + i + nTransfers`
+    ;     * `DATA_PORT_2` is written to `addr + i + nTransfers * 2`
+    ;  * The 65816 waits until `TadIO__LOADER_PORT` == spinlock value.
+    ;  * The 65816 writes the data to `DATA_PORT_0`, `DATA_PORT_1` and `DATA_PORT_2`.
     ;  * The 65816 writes a different spinlock value to `TadIO__LOADER_PORT`.
     ;    The lower 4 bits of the spinlock MUST be clear.
     ;  * The spc700 waits until `TadIO__LOADER_PORT` has changed
     ;  * The spc700 reads the data bytes and copies it into Audio-RAM
     ;  * The spc700 will echo the spinlock value to `TadIO__LOADER_PORT`
     ;
-    ; Step 3 is repeated until all data is written
+    ; Step 4 is repeated until all data is written
+    ;  * The number of step 4 transfers MUST EQUAL the value sent in Step 3.
     ;
-    ; Step 4: An end-of-transfer signal is sent to the loader
+    ; Step 5: An end-of-transfer signal is sent to the loader
     ;  * The 65816 waits until `TadIO__LOADER_PORT` == spinlock value.
     ;  * The 65816 writes `TadIO__LOADER_PORT__END_OF_TRANSFER` to `TadIO__LOADER_PORT`
     ;  * The spc700 notices the `TadIO__LOADER_PORT` MSB is set and ends the transfer.

@@ -95,7 +95,7 @@ if not(defined("TAD_DEFAULT_TRANSFERS_PER_PROCESS"))
     ; Default number of bytes to transfer to Audio-RAM per `Process` call.
     ;
     ; MUST be between `!TAD_MIN_TRANSFERS_PER_PROCESS` and `!TAD_MAX_TRANSFERS_PER_PROCESS`
-    !TAD_DEFAULT_TRANSFERS_PER_PROCESS = (256/2)
+    !TAD_DEFAULT_TRANSFERS_PER_PROCESS = 100
 endif
 
 
@@ -113,12 +113,15 @@ endif
 ; Minimum value accepted by `Tad_SetTransfersPerProcess`
 ;
 ; MUST BE > 0
-!TAD_MIN_TRANSFERS_PER_PROCESS = 16
+!TAD_MIN_TRANSFERS_PER_PROCESS = 15
 
 ; Maximum value accepted by `Tad_SetTransfersPerProcess`
 ;
-; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-!TAD_MAX_TRANSFERS_PER_PROCESS = 400
+; The loader can transfer ~947 bytes per NTSC frame SlowROM or ~1048 bytes
+; per NTSC frame FastROM (measured with the Mesen Profiler).
+;
+; Multiply this number by 3 to get bytes/Tad_Process.
+!TAD_MAX_TRANSFERS_PER_PROCESS = 310
 
 
 ; ========
@@ -137,7 +140,7 @@ TAD_APUIO3 = $2143
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-!TAD_IO_VERSION = 22
+!TAD_IO_VERSION = 23
 
 
 
@@ -239,12 +242,16 @@ TAD_APUIO3 = $2143
 
 ; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_Loader
-    !TadIO_Loader_DATA_PORT_L   = $2141 ; APUIO1
-    !TadIO_Loader_DATA_PORT_H   = $2142 ; APUIO2
+    !TadIO_Loader_DATA_PORT_0   = $2141 ; APUIO1
+    !TadIO_Loader_DATA_PORT_1   = $2142 ; APUIO2
+    !TadIO_Loader_DATA_PORT_2   = $2143 ; APUIO3
     !TadIO_Loader_SPINLOCK_PORT = $2140 ; APUIO0
 
     ; The spinlock value when the loader starts the transfer
     !TadIO_Loader_SPINLOCK_INIT_VALUE = 0
+
+    ; The spinlock value when sending number-of-transfers to loader
+    !TadIO_Loader_N_TRANSFERS_SPINLOCK_VALUE = $f
 
     ; Only the lower 4 bits of the spinlock should be set while sending data to the loader
     !TadIO_Loader_SPINLOCK_MASK = $0f

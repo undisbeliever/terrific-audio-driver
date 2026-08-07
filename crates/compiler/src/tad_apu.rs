@@ -101,7 +101,7 @@ fn load_apu(
     };
 
     write_spc_ram(addresses::AUDIO_DRIVER_BINARY, audio_driver::AUDIO_DRIVER);
-    write_spc_ram(addresses::COMMON_DATA, common_audio_data.data());
+    write_spc_ram(addresses::COMMON_DATA, common_audio_data.audio_ram_data());
 
     write_spc_ram(song_addr, song_data);
 
@@ -167,13 +167,15 @@ pub fn load_song_to_apu(
 ) -> Result<(), LoadSongError> {
     let echo_buffer = &song.metadata().song_globals;
 
-    let min_song_end_addr = usize::from(common_audio_data.min_song_data_addr()) + song.data().len();
+    let song_data = song.audio_ram_data();
+
+    let min_song_end_addr = usize::from(common_audio_data.min_song_data_addr()) + song_data.len();
     let echo_buffer_size = echo_buffer.echo_buffer_size();
 
     if min_song_end_addr + echo_buffer_size > AUDIO_RAM_SIZE {
         return Err(LoadSongError::TooMuchData {
-            common: common_audio_data.data().len(),
-            song: song.data().len(),
+            common: common_audio_data.audio_ram_len(),
+            song: song_data.len(),
             echo: echo_buffer_size,
         });
     }
@@ -181,7 +183,7 @@ pub fn load_song_to_apu(
     load_apu(
         apu,
         common_audio_data,
-        song.data(),
+        song_data,
         song_addr,
         song.metadata().song_globals.esa_register(),
         song.metadata().song_globals.edl_register(),

@@ -196,7 +196,7 @@ fn compile_common_data(args: CompileCommonDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    write_data(output_arg, cad.data());
+    write_data(output_arg, &cad.snes_rom_data().to_vec());
 }
 
 //
@@ -308,7 +308,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
     };
     let song_data = compile_song(mml_file, song_name, &args.options, &pf, &pitch_table);
 
-    write_data(output_arg, song_data.data());
+    write_data(output_arg, &song_data.snes_rom_data().to_vec());
 }
 
 //
@@ -544,7 +544,7 @@ fn compile_and_check_song(
         Err(e) => return Err(e.multiline_display().to_string()),
     };
 
-    match validate_song_size(&song_data, common_data.data().len()) {
+    match validate_song_size(&song_data, common_data.audio_ram_len()) {
         Ok(()) => Ok(song_data),
         Err(e) => Err(format!(
             "Error compiling {}: {}",

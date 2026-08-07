@@ -63,7 +63,7 @@ TAD_DB_REGISTERS   = 0
     ; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
     ;
     ; MUST be between the `TAD_MIN_TRANSFERS_PER_PROCESS` and `TAD_MAX_TRANSFERS_PER_PROCESS`
-    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 256 / 2
+    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 100
 .endweak
 
 .cerror TAD_MEMORY_MAP != "LOROM" && TAD_MEMORY_MAP != "HIROM", "Unknown memory map, set TAD_MEMORY_MAP to the string LOROM or HIROM"
@@ -81,10 +81,10 @@ TAD_LOADER_ARAM_ADDR = $0200
 
 ; IO communication protocol version.
 ;
-; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
+; Used by `tad-compiler 64tass-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 22
+TAD_IO_VERSION = 23
 
 
 ; MUST match `audio-driver/src/io-commands.inc`
@@ -187,13 +187,17 @@ TadIO_Loader_Init .block
 
 ; MUST match `audio-driver/src/io-commands.inc`
 TadIO_Loader .block
-    DATA_PORT_L   = $2141 ; APUIO1
-    DATA_PORT_H   = $2142 ; APUIO2
+    DATA_PORT_0   = $2141 ; APUIO1
+    DATA_PORT_1   = $2142 ; APUIO2
+    DATA_PORT_2   = $2143 ; APUIO3
 
     SPINLOCK_PORT = $2140 ; APUIO0
 
     ; The spinlock value when the loader starts the transfer
     SPINLOCK_INIT_VALUE = 0
+
+    ; The spinlock value when sending number-of-transfers to loader
+    N_TRANSFERS_SPINLOCK_VALUE = $f
 
     ; Only the lower 4 bits of the spinlock should be set while sending data to the loader
     SPINLOCK_MASK = $0f
@@ -306,11 +310,6 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType .proc
         lda     #TadIO_Loader_Init.LOADER_READY_H
         sta     TadIO_Loader_Init.READY_PORT_H
 
-        ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
-    .databank TAD_DB_LOWRAM
-        .cerror !(TadIO_Loader.SPINLOCK_INIT_VALUE == 0)
-        stz     TadPrivate_dataToTransfer_prevSpinLock
-
         ; return true
         sec
         rts
@@ -321,25 +320,57 @@ _ReturnFalse:
 .endproc
 
 
-
+; REQUIRES: `TadPrivate_Loader_CheckReadyAndSendLoaderDataType` returned true.
+;
+; CAUTION: Uses the division registers
+;
 ; IN: A:X = far address
 ; IN: Y = size
 .as
 .xl
 .databank TAD_DB_REGISTERS
 TadPrivate_Loader_SetDataToTransfer .proc
-    .databank TAD_DB_LOWRAM
-    stx     TadPrivate_dataToTransfer_addr
+_WRDIV  = $4204
+_WRDIVB = $4206
+_RDDIV  = $4214
+
+.databank TAD_DB_LOWRAM
     sta     TadPrivate_dataToTransfer_bank
 
-    rep     #$30
-.al
-    tya
-    lsr     a
-    sta     TadPrivate_dataToTransfer_transfersRemaining
+.databank TAD_DB_REGISTERS
+    iny
+    iny
+    sty     _WRDIV
 
-    sep     #$20
-.as
+    lda     #3
+    sta     _WRDIVB
+
+    ; Must wait 16 cycles before reading `RDDIVL`
+
+.databank TAD_DB_LOWRAM
+    stx     TadPrivate_dataToTransfer_addr              ; 5 cycles
+
+    ; Wait for loader to acknowledge ready signal
+    .cerror !(TadIO_Loader.SPINLOCK_INIT_VALUE == 0)
+.databank TAD_DB_REGISTERS
+    -
+        lda     TadIO_Loader.SPINLOCK_PORT              ; 4 cycles
+        bne     -                                       ; 2 cycles
+
+    lda     #TadIO_Loader.N_TRANSFERS_SPINLOCK_VALUE    ; 2 cycles
+.databank TAD_DB_LOWRAM
+    sta     TadPrivate_dataToTransfer_prevSpinLock      ; 4 cycles
+
+.databank TAD_DB_REGISTERS
+    ldy     _RDDIV
+.databank TAD_DB_LOWRAM
+    sty     TadPrivate_dataToTransfer_transfersRemaining
+
+    ; Send number of transfers to loader
+    .cerror !(TadIO_Loader.DATA_PORT_0 & $ffff != $2140)
+.databank TAD_DB_REGISTERS
+    sty     TadIO_Loader.DATA_PORT_0
+    sta     TadIO_Loader.SPINLOCK_PORT
 
     rts
 .endproc
@@ -424,26 +455,31 @@ TadPrivate_Loader_TransferData .proc
         ; DP = $2100
 
         lda     0,b,y
-        sta     #(TadIO_Loader.DATA_PORT_L & $ff),d
+        sta     #(TadIO_Loader.DATA_PORT_0 & $ff),d
 
-        ; The bank overflow test must be done here as `TadPrivate_dataToTransfer_addr` might point to an odd memory address.
+        iny
+        beq     _BankOverflow_0
+    _BankOverflow_0_Resume:
+
+        lda     0,b,y
+        sta     #(TadIO_Loader.DATA_PORT_1 & $ff),d
+
         iny
         beq     _BankOverflow_1
     _BankOverflow_1_Resume:
 
         lda     0,b,y
-        sta     #(TadIO_Loader.DATA_PORT_H & $ff),d
+        sta     #(TadIO_Loader.DATA_PORT_2 & $ff),d
 
-        ; Increment this spinloack value
+        ; Send a new spinlock value to the loader.
         ;
-        ; The upper 4 bits of the spinlock must be clear'
-        ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
+        ; The upper 4 bits of the spinlock must be clear.
+        ; Cannot be `N_TRANSFERS_SPINLOCK_VALUE`.
 
-        .cerror !(($ffff & 7) + 1 < TadIO_Loader.SPINLOCK_MASK)
-        tya             ; y = address of data, it should always increment by 2
+        .cerror !(($ffff & 7) < TadIO_Loader.SPINLOCK_MASK)
+        .cerror !(($ffff & 7) != TadIO_Loader.N_TRANSFERS_SPINLOCK_VALUE)
+        tya
         and     #7
-        inc     a
         sta     #(TadIO_Loader.SPINLOCK_PORT & $ff),d
 
         iny
@@ -490,6 +526,11 @@ _ReturnFalse:
     clc
     rts
 
+
+.databank ?
+_BankOverflow_0:
+    jsr     TadPrivate_Loader_GotoNextBank__
+    bra     _BankOverflow_0_Resume
 
 .databank ?
 _BankOverflow_1:
@@ -613,11 +654,6 @@ Tad_Init .proc
     .cerror !((TAD_DEFAULT_TRANSFERS_PER_PROCESS) >= TAD_MIN_TRANSFERS_PER_PROCESS && (TAD_DEFAULT_TRANSFERS_PER_PROCESS) <= TAD_MAX_TRANSFERS_PER_PROCESS), "Invalid TAD_DEFAULT_TRANSFERS_PER_PROCESS"
     ldx     #TAD_DEFAULT_TRANSFERS_PER_PROCESS
     stx     TadPrivate_transfersPerProcess
-
-    lda     #`Tad_AudioDriver_Bin
-    ldx     #<>Tad_AudioDriver_Bin
-    ldy     #Tad_AudioDriver_SIZE
-    jsr     TadPrivate_Loader_SetDataToTransfer
 
     lda     #$ff
     sta     TadPrivate_nextCommand_id

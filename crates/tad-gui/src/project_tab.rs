@@ -151,7 +151,7 @@ impl TableCompilerOutput for SongMapping {
             None => (String::new(), String::new()),
             Some(Ok(song_data)) => {
                 let dur = song_duration_string(song_data.duration());
-                let ds = format!("{} bytes", song_data.data().len());
+                let ds = format!("{} bytes", song_data.audio_ram_len());
                 (dur, ds)
             }
             Some(Err(e)) => (String::new(), e.to_string()),

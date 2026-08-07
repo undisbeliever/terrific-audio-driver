@@ -137,10 +137,6 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
         lda.b   #!TadIO_Loader_Init_LOADER_READY_H
         sta.w   !TadIO_Loader_Init_READY_PORT_H
 
-        ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
-        assert !TadIO_Loader_SPINLOCK_INIT_VALUE == 0
-        stz.w   TadPrivate.dataToTransfer_prevSpinLock
-
         ; return true
         sec
         rts
@@ -152,7 +148,11 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
 
 
 
-; Set the data transfer queue
+; Set the data transfer queue and tell the loader how many transfers are required.
+;
+; REQUIRES: `TadPrivate_Loader_CheckReadyAndSendLoaderDataType` returned true.
+;
+; CAUTION: Uses the division registers
 ;
 ; IN: A:X = far address
 ; IN: Y = size
@@ -160,17 +160,35 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType: {
 ; I16
 ; DB access registers
 TadPrivate_Loader_SetDataToTransfer: {
-    stx.w   TadPrivate.dataToTransfer_addr
     sta.w   TadPrivate.dataToTransfer_bank
 
-    rep     #$30
-; A16
-    tya
-    lsr
-    sta.w   TadPrivate.dataToTransfer_transfersRemaining
+    iny
+    iny
+    sty.w   $4204 ; WRDIV
 
-    sep     #$20
-; A8
+    lda.b   #3
+    sta.w   $4206 ; WRDIVB
+
+    ; Must wait 16 cycles before reading `RDDIVL`
+
+    stx.w   TadPrivate.dataToTransfer_addr              ; 5 cycles
+
+    ; Wait for loader to acknowledge ready signal
+    assert !TadIO_Loader_SPINLOCK_INIT_VALUE == 0
+    -
+        lda.w   !TadIO_Loader_SPINLOCK_PORT             ; 4 cycles
+        bne     -                                       ; 2 cycles
+
+    lda.b   #!TadIO_Loader_N_TRANSFERS_SPINLOCK_VALUE   ; 2 cycles
+    sta.w   TadPrivate.dataToTransfer_prevSpinLock      ; 4 cycles
+
+    ldy.w   $4214 ; RDDIV
+    sty.w   TadPrivate.dataToTransfer_transfersRemaining
+
+    ; Send number of transfers to loader
+    assert !TadIO_Loader_DATA_PORT_0&$ffff != $2140
+    sty.w   !TadIO_Loader_DATA_PORT_0
+    sta.w   !TadIO_Loader_SPINLOCK_PORT
 
     rts
 }
@@ -248,26 +266,31 @@ TadPrivate_Loader_TransferData: {
         ; y = data address (using y to force addr,y addressing mode)
 
         lda.w   0,y
-        sta.b   !TadIO_Loader_DATA_PORT_L&$ff
+        sta.b   !TadIO_Loader_DATA_PORT_0&$ff
 
-        ; The bank overflow test must be done here as `TadPrivate.dataToTransfer_addr` might point to an odd memory address.
+        iny
+        beq     .BankOverflow_0
+    .BankOverflow_0_Resume:
+
+        lda.w   0,y
+        sta.b   !TadIO_Loader_DATA_PORT_1&$ff
+
         iny
         beq     .BankOverflow_1
     .BankOverflow_1_Resume:
 
         lda.w   0,y
-        sta.b   !TadIO_Loader_DATA_PORT_H&$ff
+        sta.b   !TadIO_Loader_DATA_PORT_2&$ff
 
-        ; Increment this spinloack value
+        ; Send a new spinlock value to the loader.
         ;
-        ; The upper 4 bits of the spinlock must be clear'
-        ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
+        ; The upper 4 bits of the spinlock must be clear.
+        ; Cannot be `N_TRANSFERS_SPINLOCK_VALUE`.
 
-        assert ($ffff&7)+1 < !TadIO_Loader_SPINLOCK_MASK
-        tya             ; y = address of data, it should always increment by 2
+        assert ($ffff&7) < !TadIO_Loader_SPINLOCK_MASK
+        assert ($ffff&7) != !TadIO_Loader_N_TRANSFERS_SPINLOCK_VALUE
+        tya
         and.b   #7
-        inc
         sta.b   !TadIO_Loader_SPINLOCK_PORT&$ff
 
         iny
@@ -314,6 +337,9 @@ TadPrivate_Loader_TransferData: {
     clc
     rts
 
+.BankOverflow_0:
+    jsr     TadPrivate_Loader_GotoNextBank
+    bra     .BankOverflow_0_Resume
 
 .BankOverflow_1:
     jsr     TadPrivate_Loader_GotoNextBank
@@ -458,11 +484,6 @@ Tad_Init: {
     stx.w   TadPrivate.transfersPerProcess
 
 
-    lda.b   #Tad_AudioDriver_Bin>>16
-    ldx.w   #Tad_AudioDriver_Bin&$ffff
-    ldy.w   #Tad_AudioDriver_SIZE
-    jsr     TadPrivate_Loader_SetDataToTransfer
-
     lda.b   #$ff
     sta.w   TadPrivate.nextCommand_id
     sta     TadSfxQueue.sfx
@@ -574,6 +595,8 @@ endmacro
 ;  * Send a play-sound effect command to the audio driver
 ;
 ; NOTE: The command and sound-effect queues will be reset after a new song is loaded into Audio-RAM.
+;
+; CAUTION: `Tad_Process` uses the MMIO division registers
 ;
 ; TIMING:
 ;  * MUST be called after `Init`.

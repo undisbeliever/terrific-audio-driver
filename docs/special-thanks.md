@@ -12,6 +12,8 @@ Terrific Audio Driver:
  * krom (Peter Lemon) - for writing [a few SPC700 demos](https://github.com/PeterLemon/SNES/tree/master/SPC700),
    which helped me to learn SPC700 assembly and provided a nice example for how to access the S-DSP registers.
  * Douglas Fraker - for [creating and releasing a lot of free BRR samples](https://nesdoug.com/2022/01/27/why-b21-cents/#free-samples)
+ * Laurent Courville (Myself086) - for the inspiration of the new 3 byte/transfer loader design
+ * NovaSquirrel - for reviewing the first version of my sample swapping design
  * The people on the SNES Development Discord who have helped and offered suggestions when I wanted feedback or got stuck.
  * Ian Karlsson - for creating [mmlgui](https://github.com/superctr/mmlgui), whose note tracking
    feature was the deciding factor for choosing MML over writing a custom tracker.

@@ -4,12 +4,16 @@ Terrific Audio Driver Changelog
 Version 0.5.0
 =============
 
-SNES API changes:
+Driver changes:
  * `audio-driver.bin` and `loader.bin` have been combined into a single `audio-driver.bin` binary.
+ * The loader can now transfer 3 bytes of interleaved data every transfer
+
+SNES API changes:
  * Removed `Tad_SetTransferSize` and `TAD_DEFAULT_TRANSFER_PER_FRAME`
  * Added `Tad_SetTransfersPerProcess` and `TAD_DEFAULT_TRANSFERS_PER_PROCESS`
-    * The value is number of number of transfers per `Tad_Process` call (bytes per frame / 2)
+    * The value is number of number of transfers per `Tad_Process` call (bytes per frame / 3)
  * Removed `Tad_FinishLoadingData`
+ * `Tad_Process` now uses the MMIO division registers.
 
 
 Version 0.4.2

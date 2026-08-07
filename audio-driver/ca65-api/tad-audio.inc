@@ -271,6 +271,8 @@ TAD_MIN_TICK_CLOCK = 64
 ;;
 ;; NOTE: The command and sound-effect queues will be reset after a new song is loaded into Audio-RAM.
 ;;
+;; CAUTION: `Tad_Process` uses the MMIO division registers
+;;
 ;; TIMING:
 ;;  * MUST be called after `Tad_Init`.
 ;;  * Should be called once per frame.
@@ -439,6 +441,8 @@ TAD_MIN_TICK_CLOCK = 64
 
 
 ;; Sets the number of loader transfers to Audio-RAM per `Tad_Process` call.
+;;
+;; Each transfer will load 3 bytes of data into Audio-RAM.
 ;;
 ;; The value will be clamped from `TAD_MIN_TRANSFERS_PER_PROCESS` to `TAD_MAX_TRANSFERS_PER_PROCESS`.
 ;;

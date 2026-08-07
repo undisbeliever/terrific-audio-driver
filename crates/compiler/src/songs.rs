@@ -14,11 +14,11 @@ use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::{ChannelCommands, MmlInstrument};
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, FIR_FILTER_SIZE,
-    MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_GLOBALS_SIZE,
-    SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO_EDL, SONG_HEADER_GLOBALS,
-    SONG_HEADER_MAIN_VOLUME, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
-    SONG_HEADER_TICK_TIMER_OFFSET,
+    addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, BYTES_PER_LOADER_TRANSFER, ECHO_BUFFER_MIN_SIZE,
+    FIR_FILTER_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK,
+    SONG_GLOBALS_SIZE, SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO_EDL,
+    SONG_HEADER_GLOBALS, SONG_HEADER_MAIN_VOLUME, SONG_HEADER_N_SUBROUTINES_OFFSET,
+    SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::echo::{self, EchoEdl, EchoFeedback, EchoVolume, FirCoefficient};
 use crate::envelope::{Envelope, Gain};
@@ -31,6 +31,7 @@ use crate::pitch_table::PitchTable;
 use crate::project::{self, single_item_unique_names_list, UniqueNamesList};
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
+use crate::tad_loader::InterlacedRomData;
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 use crate::value_newtypes::i8_with_hex_byte_value_newtype;
 use crate::{command_compiler, mml, UnsignedValueNewType};
@@ -170,9 +171,9 @@ impl GlobalSongSettings {
 #[derive(Clone)]
 pub struct SongData {
     name: String,
+    data: Vec<u8>,
 
     metadata: MetaData,
-    data: Vec<u8>,
     duration: Option<Duration>,
 
     sections: Vec<Section>,
@@ -195,12 +196,11 @@ impl SongData {
     pub fn name(&self) -> &str {
         &self.name
     }
+
     pub fn metadata(&self) -> &MetaData {
         &self.metadata
     }
-    pub fn data(&self) -> &[u8] {
-        &self.data
-    }
+
     pub fn duration(&self) -> Option<Duration> {
         self.duration
     }
@@ -238,9 +238,7 @@ impl SongData {
     }
 
     pub fn song_aram_size(&self) -> SongAramSize {
-        let data_size = self.data().len();
-        // Loader can only load a multiple of 2 bytes
-        let data_size = data_size + (data_size % 2);
+        let data_size = self.audio_ram_len();
 
         SongAramSize {
             data_size: data_size.try_into().unwrap_or(u16::MAX),
@@ -254,6 +252,22 @@ impl SongData {
 
     pub fn bc_tracking(&self) -> Option<&SongBcTracking> {
         self.tracking.as_ref()
+    }
+
+    /// The length of the data in Audio-RAM
+    pub fn audio_ram_len(&self) -> usize {
+        self.data.len().next_multiple_of(BYTES_PER_LOADER_TRANSFER)
+    }
+
+    /// Return the data to be loaded into Audio-RAM
+    //
+    // ::TODO change visibility to `pub(crate)`::
+    pub fn audio_ram_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn snes_rom_data(&self) -> InterlacedRomData<'_> {
+        InterlacedRomData::new(&self.data)
     }
 }
 
@@ -520,12 +534,11 @@ pub fn validate_song_size(
     song: &SongData,
     common_data_size: usize,
 ) -> Result<(), SongTooLargeError> {
-    let song_data_size = song.data().len();
+    let song_data_size = song.audio_ram_len();
     let echo_buffer_size = song.metadata().song_globals.echo_buffer_size();
 
-    // Loader can only transfer data that is a multiple of 2 bytes
-    let common_data_size = common_data_size + (common_data_size % 2);
-    let song_data_size = song_data_size + (song_data_size % 2);
+    // Add loader padding
+    let common_data_size = common_data_size.next_multiple_of(BYTES_PER_LOADER_TRANSFER);
 
     let total_size = common_data_size + song_data_size + echo_buffer_size;
 

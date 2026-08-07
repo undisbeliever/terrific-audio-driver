@@ -29,7 +29,7 @@ VERSION     = 0
 ROM_SIZE    = 2
 REGION      = REGION__Japan
 CART_TYPE   = CART_TYPE__RomOnly
-ROM_SPEED   = ROM_SPEED__Slow
+ROM_SPEED   = ROM_SPEED__Fast
 
 
 .include "text-buffer.inc"

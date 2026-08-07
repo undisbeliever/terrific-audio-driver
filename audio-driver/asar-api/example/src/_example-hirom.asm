@@ -36,7 +36,7 @@ optimize address mirrors
 ; Testing custom default values
 !TAD_DEFAULT_FLAGS                 = !TadFlags_PLAY_SONG_IMMEDIATELY|!TadFlags_RESET_GLOBAL_VOLUMES_ON_SONG_START
 !TAD_DEFAULT_AUDIO_MODE            = !TadAudioMode_SURROUND
-!TAD_DEFAULT_TRANSFERS_PER_PROCESS = (700/2)
+!TAD_DEFAULT_TRANSFERS_PER_PROCESS = (750/3)
 
 
 incsrc "registers.inc"

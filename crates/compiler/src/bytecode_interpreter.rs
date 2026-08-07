@@ -1612,7 +1612,7 @@ where
         // Prevent infinite loops by limiting the number of processed instructions
         let mut watchdog_counter: u32 = 2_000_000;
 
-        let song_data = self.song_data.data();
+        let song_data = self.song_data.audio_ram_data();
 
         let target_ticks = self.tick_counter + ticks;
 
@@ -1694,7 +1694,7 @@ where
             channels: std::array::from_fn(|i| match &self.channels[i] {
                 Some(c) => {
                     let pmon_source = match self.channels.get(i + 1) {
-                        Some(Some(c)) => c.is_pitch_mod(self.song_data.data()),
+                        Some(Some(c)) => c.is_pitch_mod(self.song_data.audio_ram_data()),
                         _ => false,
                     };
 

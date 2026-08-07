@@ -6,11 +6,11 @@
 
 use crate::bytecode::GOTO_RELATIVE_INSTRUCTION_SIZE;
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
-    COMMON_DATA_BYTES_PER_PITCH, COMMON_DATA_BYTES_PER_SFX_SUBROUTINE,
-    COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
-    MAX_BRR_SAMPLES, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES,
-    MAX_SOUND_EFFECTS,
+    addresses, AUDIO_RAM_SIZE, BYTES_PER_LOADER_TRANSFER, COMMON_DATA_BYTES_PER_DIR,
+    COMMON_DATA_BYTES_PER_INSTRUMENT, COMMON_DATA_BYTES_PER_PITCH,
+    COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT,
+    COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE, MAX_BRR_SAMPLES, MAX_COMMON_DATA_SIZE,
+    MAX_DIR_ITEMS, MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
 };
 use crate::envelope::Envelope;
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
@@ -20,6 +20,7 @@ use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::{
     tad_gui_sfx_buffer, CombinedSoundEffectsData, CompiledSfxSubroutines, CompiledSoundEffect,
 };
+use crate::tad_loader::InterlacedRomData;
 
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -54,8 +55,17 @@ impl std::fmt::Debug for CommonAudioData {
 impl CommonAudioData {
     const DIR_TABLE_ADDR: u16 = addresses::COMMON_DATA + COMMON_DATA_DIR_TABLE_OFFSET as u16;
 
-    pub fn data(&self) -> &[u8] {
+    /// The length of the data in Audio-RAM
+    pub fn audio_ram_len(&self) -> usize {
+        self.data.len().next_multiple_of(BYTES_PER_LOADER_TRANSFER)
+    }
+
+    pub(crate) fn audio_ram_data(&self) -> &[u8] {
         &self.data
+    }
+
+    pub fn snes_rom_data(&self) -> InterlacedRomData<'_> {
+        InterlacedRomData::new(&self.data)
     }
 
     pub fn dir_addr_range(&self) -> Range<u16> {

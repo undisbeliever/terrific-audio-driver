@@ -250,6 +250,8 @@ void tad_init(void);
  *
  * NOTE: The command and sound-effect queues will be reset after a new song is loaded into Audio-RAM.
  *
+ * CAUTION: `tad_process()` uses the MMIO division registers
+ *
  * TIMING:
  *  * MUST be called after tad_init().
  *  * Should be called once per frame.
@@ -564,6 +566,8 @@ void tad_globalVolumesPersist(void);
 
 /*!
  * Sets the number of loader transfers to Audio-RAM per `tad_process()` call.
+ *
+ * Each transfer will load 3 bytes of data into Audio-RAM.
  *
  * The value will be clamped from `TAD_MIN_TRANSFERS_PER_PROCESS` to `TAD_MAX_TRANSFERS_PER_PROCESS`.
  */

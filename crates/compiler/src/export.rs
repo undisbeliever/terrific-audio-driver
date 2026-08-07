@@ -20,6 +20,7 @@ use crate::driver_constants::MAX_N_SONGS;
 use crate::errors::{ExportError, ExportSegmentType};
 use crate::project::UniqueNamesProjectFile;
 use crate::songs::SongData;
+use crate::tad_loader::InterlacedRomData;
 
 use std::ops::Range;
 use std::path::Path;
@@ -102,8 +103,8 @@ fn export_bin_file(
 
     let bin_file_size = ExportedBinFile::DATA_TABLE_OFFSET
         + data_table_size
-        + common_audio_data.data().len()
-        + songs.iter().map(|s| s.data().len()).sum::<usize>();
+        + common_audio_data.snes_rom_data().len()
+        + songs.iter().map(|s| s.snes_rom_data().len()).sum::<usize>();
 
     if bin_file_size > MAX_BIN_FILE {
         return Err(ExportError::BinFileTooLarge(bin_file_size));
@@ -123,7 +124,7 @@ fn export_bin_file(
     bin_file.resize(data_table_range.end, 0);
 
     let mut data_table: Vec<u8> = Vec::with_capacity(data_table_size);
-    let mut add_data = |d: &[u8]| {
+    let mut add_data = |d: InterlacedRomData| {
         assert!(d.len() < u16::MAX.into());
 
         let offset_le_bytes = u32::try_from(bin_data_offset + bin_file.len())
@@ -132,13 +133,13 @@ fn export_bin_file(
         let u24_offset = &offset_le_bytes[..3];
 
         data_table.extend(u24_offset);
-        bin_file.extend(d);
+        bin_file.extend(d.iter());
     };
 
     // Populate with data
-    add_data(common_audio_data.data());
+    add_data(common_audio_data.snes_rom_data());
     for s in songs {
-        add_data(s.data());
+        add_data(s.snes_rom_data());
     }
 
     // Add data table footer (16 bit clipped value end of binary file)

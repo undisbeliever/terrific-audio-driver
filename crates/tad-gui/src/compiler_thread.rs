@@ -951,7 +951,7 @@ fn build_cad_no_sfx_and_song_dependencies(
             let sd = SongDependencies {
                 inst_map: instruments,
                 combined_samples,
-                common_data_no_sfx_size: cad.data().len(),
+                common_data_no_sfx_size: cad.audio_ram_len(),
                 sfx_data_size: calc_sfx_data_size(sfx_export_order, sfx_subroutines, sound_effects),
             };
             Ok((

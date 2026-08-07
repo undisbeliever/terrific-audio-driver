@@ -139,6 +139,8 @@ pub const SONG_GLOBALS_SIZE: usize =
 
 pub const TAD_IO_VERSION: u16 = _symbols::TAD_IO_VERSION;
 
+pub const BYTES_PER_LOADER_TRANSFER: usize = 3;
+
 pub const N_MUSIC_CHANNELS: usize = 8;
 pub const N_SFX_CHANNELS: usize = 2;
 pub const N_CHANNELS: usize = N_MUSIC_CHANNELS + N_SFX_CHANNELS;
@@ -202,7 +204,7 @@ pub struct LoaderDataType {
 
 impl LoaderDataType {
     pub fn driver_value(&self) -> u8 {
-        const _: () = assert!(TAD_IO_VERSION == 22);
+        const _: () = assert!(TAD_IO_VERSION == 23);
 
         // LoaderDataType.SONG_DATA_BIT
         let mut o = 1 << 7;
@@ -257,7 +259,7 @@ pub const STARTING_VOLUME: u8 = 96;
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
 
-const _: () = assert!(TAD_IO_VERSION == 22);
+const _: () = assert!(TAD_IO_VERSION == 23);
 
 // IO Commands
 pub mod io_commands {

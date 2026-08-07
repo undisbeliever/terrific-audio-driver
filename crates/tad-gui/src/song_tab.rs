@@ -724,7 +724,7 @@ impl State {
             Some(Ok(sd)) => {
                 let text = format!(
                     "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\nDuration: {}\n{}",
-                    sd.data().len(),
+                    sd.audio_ram_len(),
                     sd.metadata().song_globals.echo_buffer_size(),
                     song_duration_string(sd.duration()),
                     MmlTickCountTable(&sd),

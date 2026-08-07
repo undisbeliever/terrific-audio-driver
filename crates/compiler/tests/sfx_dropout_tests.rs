@@ -410,6 +410,9 @@ impl Emu {
         emu.load_cad_and_blank_song(common_audio_data, None, Self::AUDIO_MODE)
             .unwrap();
 
+        // This audio-driver delay is required to pass the tests
+        emu.emulate();
+
         let mut sfx_addrs = common_audio_data.sound_effect_addresses();
         sfx_addrs.push(common_audio_data.sfx_bytecode_addr_range().end);
 

@@ -303,6 +303,8 @@ Tad_GlobalVolumesPersist: {
 
 ; Sets the number of loader transfers to Audio-RAM per `Process` call.
 ;
+; Each transfer will load 3 bytes of data into Audio-RAM.
+;
 ; The value will be clamped from `!TAD_MIN_TRANSFERS_PER_PROCESS` to `!TAD_MAX_TRANSFERS_PER_PROCESS`.
 ;
 ; IN: X = number of transfers per `Process` call.

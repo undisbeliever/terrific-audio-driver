@@ -103,7 +103,7 @@
     ;; Default number of bytes to transfer to Audio-RAM per `tad_Process` call.
     ;;
     ;; MUST be between `TAD_MIN_TRANSFERS_PER_PROCESS` and `TAD_MAX_TRANSFERS_PER_PROCESS`
-    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 256 / 2
+    TAD_DEFAULT_TRANSFERS_PER_PROCESS = 100
 .endif
 
 
@@ -226,12 +226,16 @@ TAD_IO_Loader_Init__LOADER_READY_HL = %0100110001010010 ; "LD"
 
 
 ;; MUST match `audio-driver/src/io-commands.inc`
-TAD_IO_Loader__DATA_PORT_L   = $2141 ; APUIO1
-TAD_IO_Loader__DATA_PORT_H   = $2142 ; APUIO2
+TAD_IO_Loader__DATA_PORT_0   = $2141 ; APUIO1
+TAD_IO_Loader__DATA_PORT_1   = $2142 ; APUIO2
+TAD_IO_Loader__DATA_PORT_2   = $2143 ; APUIO3
 TAD_IO_Loader__SPINLOCK_PORT = $2140 ; APUIO0
 
 ;; The spinlock value when the loader starts the transfer
 TAD_IO_Loader__SPINLOCK_INIT_VALUE = 0
+
+;; The spinlock value when sending number-of-transfers to loader
+TAD_IO_Loader__N_TRANSFERS_SPINLOCK_VALUE = $f
 
 ;; Only the lower 4 bits of the spinlock should be set while sending data to the loader
 TAD_IO_Loader__SPINLOCK_MASK = $0f
@@ -251,12 +255,15 @@ TAD_IO_Loader__SPINLOCK_SWITCH_TO_LOADER = TAD_IO_ToDriver__SWITCH_TO_LOADER
 ;; Minimum value accepted by `tad_setTransfersPerProcess`
 ;;
 ;; MUST BE > 0
-TAD_MIN_TRANSFERS_PER_PROCESS = 32 / 2
+TAD_MIN_TRANSFERS_PER_PROCESS = 15
 
 ;; Maximum value accepted by `tad_setTransfersPerProcess`
 ;;
-;; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
-TAD_MAX_TRANSFERS_PER_PROCESS = 800 / 2
+;; The loader can transfer ~947 bytes per NTSC frame SlowROM or ~1048 bytes
+;; per NTSC frame FastROM (measured with the Mesen Profiler).
+;;
+;; Multiply this number by 3 to get bytes/Tad_Process.
+TAD_MAX_TRANSFERS_PER_PROCESS = 310
 
 
 ;; ------
@@ -734,10 +741,6 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
         lda     #TAD_IO_Loader_Init__LOADER_READY_H
         sta     TAD_IO_Loader_Init__READY_PORT_H
 
-        ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
-        .assert TAD_IO_Loader__SPINLOCK_INIT_VALUE == 0
-        stz     tadPrivate_dataToTransfer_prevSpinLock
-
         ; return true
         sec
         rts
@@ -748,7 +751,11 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
 
 
 
-;; Set the data transfer queue
+;; Set the data transfer queue and tell the loader how many transfers are required.
+;;
+;; REQUIRES: `TadPrivate_Loader_CheckReadyAndSendLoaderDataType` returned true.
+;;
+;; CAUTION: Uses the division registers
 ;;
 ;; IN: A:X = far address
 ;; IN: Y = size
@@ -756,17 +763,40 @@ tadPrivate_loader_checkReadyAndSendLoaderDataType:
 .index 16
 ;; DB = $80
 tadPrivate_loader_setDataToTransfer:
-    stx     tadPrivate_dataToTransfer_addr
+@WRDIV  = $4204
+@WRDIVB = $4206
+@RDDIV  = $4214
+
     sta     tadPrivate_dataToTransfer_bank
 
-    rep     #$30
-.accu 16
-    tya
-    lsr
-    sta     tadPrivate_dataToTransfer_transfersRemaining
+    iny
+    iny
+    sty     @WRDIV
 
-    sep     #$20
-.a8
+    lda     #3
+    sta     @WRDIVB
+
+    ; Must wait 16 cycles before reading `RDDIVL`
+
+    stx     tadPrivate_dataToTransfer_addr              ; 5 cycles
+
+    ; Wait for loader to acknowledge ready signal
+    .assert TAD_IO_Loader__SPINLOCK_INIT_VALUE == 0
+    -
+        lda     TAD_IO_Loader__SPINLOCK_PORT            ; 4 cycles
+        bne     -                                       ; 2 cycles
+
+    lda     #TAD_IO_Loader__N_TRANSFERS_SPINLOCK_VALUE  ; 2 cycles
+    sta     tadPrivate_dataToTransfer_prevSpinLock      ; 4 cycles
+
+    ldy     @RDDIV
+    sty     tadPrivate_dataToTransfer_transfersRemaining
+
+    ; Send number of transfers to loader
+    .assert TAD_IO_Loader__DATA_PORT_0 != $2140
+    sty     TAD_IO_Loader__DATA_PORT_0
+    sta     TAD_IO_Loader__SPINLOCK_PORT
+
     rts
 
 
@@ -784,8 +814,9 @@ tadPrivate_loader_setDataToTransfer:
 ;; DB = $80
 tadPrivate_loader_transferData:
     ; APUIO registers are accessed with direct-page addressing
-    @__dp__DATA_PORT_L      = TAD_IO_Loader__DATA_PORT_L & 0xff
-    @__dp__DATA_PORT_H      = TAD_IO_Loader__DATA_PORT_H & 0xff
+    @__dp__DATA_PORT_0      = TAD_IO_Loader__DATA_PORT_0 & 0xff
+    @__dp__DATA_PORT_1      = TAD_IO_Loader__DATA_PORT_1 & 0xff
+    @__dp__DATA_PORT_2      = TAD_IO_Loader__DATA_PORT_2 & 0xff
     @__dp__SPINLOCK_PORT    = TAD_IO_Loader__SPINLOCK_PORT & 0xff
 
     ; Early exit if the loader is not ready
@@ -847,26 +878,31 @@ tadPrivate_loader_transferData:
         ; y = data address (using y to force addr,y addressing mode)
 
         lda.w   0,y
-        sta.b   @__dp__DATA_PORT_L
+        sta.b   @__dp__DATA_PORT_0
 
-        ; The bank overflow test must be done here as `tad_dataToTransfer_addr` might point to an odd memory address.
+        iny
+        beq     @BankOverflow_0
+    @BankOverflow_0_Resume:
+
+        lda.w   0,y
+        sta.b   @__dp__DATA_PORT_1
+
         iny
         beq     @BankOverflow_1
     @BankOverflow_1_Resume:
 
         lda.w   0,y
-        sta.b   @__dp__DATA_PORT_H
+        sta.b   @__dp__DATA_PORT_2
 
-        ; Increment this spinloack value
+        ; Send a new spinlock value to the loader.
         ;
-        ; The upper 4 bits of the spinlock must be clear'
-        ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
+        ; The upper 4 bits of the spinlock must be clear.
+        ; Cannot be `N_TRANSFERS_SPINLOCK_VALUE`.
 
-        .assert ($ffff & 7) + 1 < TAD_IO_Loader__SPINLOCK_MASK
-        tya             ; y = address of data, it should always increment by 2
+        .assert ($ffff & 7) < TAD_IO_Loader__SPINLOCK_MASK
+        .assert ($ffff & 7) != TAD_IO_Loader__N_TRANSFERS_SPINLOCK_VALUE
+        tya
         and     #7
-        ina
         sta.b   @__dp__SPINLOCK_PORT
 
         iny
@@ -912,6 +948,11 @@ tadPrivate_loader_transferData:
 @ReturnFalse:
     clc
     rts
+
+
+@BankOverflow_0:
+    jsr     tadPrivate_loader_gotoNextBank
+    bra     @BankOverflow_0_Resume
 
 
 @BankOverflow_1:
@@ -1316,12 +1357,6 @@ tad_init:
 
     ldx     #TAD_DEFAULT_TRANSFERS_PER_PROCESS
     stx     tadPrivate_transfersPerProcess
-
-
-    lda     #:Tad_AudioDriver_Bin
-    ldx     #Tad_AudioDriver_Bin
-    ldy     #Tad_AudioDriver_SIZE
-    jsr     tadPrivate_loader_setDataToTransfer
 
     lda     #$ff
     sta     tadPrivate_nextCommand_id

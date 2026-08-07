@@ -773,8 +773,8 @@ void test_songStartPaused(void) {
 
 
 // The minimum and maximum values for tad_setTransfersPerProcess(u16)
-#define MIN_TRANSFER 32
-#define MAX_TRANSFER 800
+#define MIN_TRANSFER 45
+#define MAX_TRANSFER 930
 
 void test_setTransfersPerProcess(void) {
     ASSERT_EQ(DUMMY_SONG_DATA_SIZE, 2000);
@@ -782,10 +782,10 @@ void test_setTransfersPerProcess(void) {
     ASSERT_EQ(tad_isSongLoaded(), true);
 
     tad_setTransfersPerProcess(50);
-    ASSERT_EQ(countTransfers_song1(), 20);
+    ASSERT_EQ(countTransfers_song1(), 14);
 
     tad_setTransfersPerProcess(125);
-    ASSERT_EQ(countTransfers_song1(), 8);
+    ASSERT_EQ(countTransfers_song1(), 6);
 
     // Test `Tad_SetTransfersPerProcess` enforces minimum value
     tad_setTransfersPerProcess(10);

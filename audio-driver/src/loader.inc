@@ -46,6 +46,8 @@
 
 
 .proc start_loader
+_tmpPtr = zpTmpWord
+
     ; Setup stack
     mov X, #$ff
     mov SP, X
@@ -96,22 +98,45 @@
         movw YA, songPtr
     DtEndIf:
 
-    ; Write the high byte of the address to the two `mov !abs+Y, A` instructions.
-    mov STA_1 + 2, Y
-    mov STA_2 + 2, Y
-
-    mov Y, A
-
     ; Acknowledge LoaderDataType and clear ready signal
+    ; (S-CPU sends the number of transfer)
     .assert LoaderIO__READY_PORT_L == TadIO__LOADER_PORT
     mov TadIO__LOADER_PORT, #TadIO__LOADER_PORT__SPINLOCK_INIT_VALUE
 
-    mov X, #LoaderIO__LOADER_READY_L
 
-    ; Have to use a manual loop so the above code has access to the `STA_1` and `STA_2` labels.
+    NTransfersSpinloop:
+        .assert LoaderIO__READY_PORT_L == TadIO__LOADER_PORT
+        mov X, TadIO__LOADER_PORT
+        cmp X, #LoaderIO__LOADER_READY_L
+        beq NTransfersSpinloop
+
+    movw _tmpPtr, YA
+
+    mov STA_0 + 1, A
+    mov STA_0 + 2, Y
+
+    .assert LoaderIO__DATA_PORT_1 == LoaderIO__DATA_PORT_0 + 1
+    addw YA, LoaderIO__DATA_PORT_0
+    mov STA_1 + 1, A
+    mov STA_1 + 2, Y
+
+    addw YA, LoaderIO__DATA_PORT_0
+    mov STA_2 + 1, A
+    mov STA_2 + 2, Y
+
+    addw YA, LoaderIO__DATA_PORT_0
+    movw _tmpPtr, YA
+
+    ; Acknowledge number of transfers (S-CPU will start loading new data)
+    mov TadIO__LOADER_PORT, X
+
+    mov Y, #0
+
     Loop:
         ; Y = low byte of data address
-        ; X = last value written to IO port 3
+        ; X = last value written to LOADER_PORT
+        ;
+        ; Data is written 3 bytes at a time in an interleaved manner
 
         ; Wait until S-CPU has written the data to the IO ports
         SpinLoop:
@@ -126,29 +151,29 @@
 
 
         ; Read data from the IO ports and store to memory
-        mov A, LoaderIO__DATA_PORT_L
-    STA_1:
-        mov $ff00 + Y, A
+        mov A, LoaderIO__DATA_PORT_0
+    STA_0:
+        mov $1000 + Y, A
 
-        mov A, LoaderIO__DATA_PORT_H
+        mov A, LoaderIO__DATA_PORT_1
+    STA_1:
+        mov $2000 + Y, A
+
+        mov A, LoaderIO__DATA_PORT_2
 
         ; Acknowledge data (S-CPU will start loading new data)
         mov TadIO__LOADER_PORT, X
 
-        ; This code is executed while the S-CPU loads the next data into ports 0 & 1
-        inc Y
     STA_2:
-        mov $ff00 + Y, A
+        mov $3000 + Y, A
         inc Y
-
-        ; Increment high byte of stores when Y wraps
         bne Loop
+            ; ::TODO detect overflow::
+            inc STA_0 + 2
             inc STA_1 + 2
             inc STA_2 + 2
             bra  Loop
     EndLoop:
-
-    ; Y = low byte of data address
 
     ; Acknowledge end of data
     ; (x is negative)
@@ -165,8 +190,7 @@
     cmp X, #LoaderDataType__COMMON_DATA
     bne NotCommonData
         ; Save current data address in `songPtr`
-        mov A, Y
-        mov Y, STA_1 + 2
+        movw YA, _tmpPtr
         movw songPtr, YA
     NotCommonData:
 
@@ -174,10 +198,8 @@
     .assert LoaderDataType__SONG_DATA_BIT == 7
     ; X = loaderDataType
     mov A, X
-    bpl start_loader
+    bmi main
 
-
-    ; Fallthrough into `main` in `audio-driver.asm`
-    .assert PC == main
+    jmp start_loader
 .endproc
 

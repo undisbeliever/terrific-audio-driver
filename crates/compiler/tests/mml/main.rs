@@ -128,11 +128,11 @@ fn get_subroutine_and_bytecode<'a>(
 
     let bc_range = usize::from(s.bytecode_offset)..usize::from(s.bytecode_end_offset);
 
-    Some((s, &sd.data()[bc_range]))
+    Some((s, &sd.audio_ram_data()[bc_range]))
 }
 
 fn mml_bytecode(mml: &SongData) -> &[u8] {
-    let song_data = mml.data();
+    let song_data = mml.audio_ram_data();
 
     let start: usize = mml.channels()[0].as_ref().unwrap().bytecode_offset.into();
 
@@ -145,7 +145,7 @@ fn mml_bytecode(mml: &SongData) -> &[u8] {
 }
 
 fn mml_channel_b_bytecode(mml: &SongData) -> &[u8] {
-    let song_data = mml.data();
+    let song_data = mml.audio_ram_data();
 
     let start: usize = mml.channels()[1].as_ref().unwrap().bytecode_offset.into();
 
@@ -158,7 +158,7 @@ fn mml_channel_b_bytecode(mml: &SongData) -> &[u8] {
 }
 
 fn subroutine_bytecode(mml: &SongData, index: usize) -> &[u8] {
-    let song_data = mml.data();
+    let song_data = mml.audio_ram_data();
 
     let s = mml
         .subroutines()
