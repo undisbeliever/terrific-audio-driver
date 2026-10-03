@@ -22,7 +22,7 @@ use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
 use compiler::time::{TickCounter, ZenLen, DEFAULT_ZENLEN};
 use compiler::FilePosRange;
 use fltk::button::Button;
-use fltk::group::{Flex, Pack, PackType};
+use fltk::group::{Flex, Group};
 use fltk::input::Input;
 
 use std::cell::RefCell;
@@ -117,9 +117,9 @@ pub struct MmlEditorState {
 pub struct FindReplace {
     parent: Flex,
     editor: TextEditor,
-    find_group: Pack,
+    find_group: Group,
     find_widget: Input,
-    replace_group: Pack,
+    replace_group: Group,
     replace_widget: Input,
 }
 
@@ -127,16 +127,24 @@ impl FindReplace {
     fn new(parent: Flex, editor: TextEditor) -> Self {
         let mut parent = parent;
 
-        let mut find_group = Pack::default().with_type(PackType::Horizontal);
-        let h = input_height(&find_group);
-        let w = ch_units_to_width(&find_group, 1);
+        let h = input_height(&parent);
+        let w = ch_units_to_width(&parent, 1);
         let p = 3;
-        find_group.set_spacing(p);
 
-        let _spacer = Frame::new(0, 0, 10 * w, h, "");
-        let find_widget = Input::new(0, 0, 50 * w, h, "Find: ");
-        let mut find_next_button = Button::new(0, 0, 12 * w, h, "@2>  Next");
-        let mut find_prev_button = Button::new(0, 0, 12 * w, h, "@8>  Prev");
+        let input_w = 50 * w;
+        let button_w = 12 * w;
+        let x1 = 10 * w;
+        let x2 = x1 + input_w + p;
+        let x3 = x2 + button_w + p;
+        let x4 = x3 + button_w + p;
+
+        let mut find_group = Group::new(0, 0, x4, h, None);
+
+        let find_widget = Input::new(x1, 0, input_w, h, "Find: ");
+        let mut find_next_button = Button::new(x2, 0, button_w, h, "@2>  Next");
+        let mut find_prev_button = Button::new(x3, 0, button_w, h, "@8>  Prev");
+
+        find_group.resizable(&find_widget);
 
         find_group.end();
 
@@ -144,12 +152,13 @@ impl FindReplace {
         parent.fixed(&find_group, h);
         find_group.hide();
 
-        let mut replace_group = Pack::default().with_type(PackType::Horizontal);
-        replace_group.set_spacing(p);
-        let _spacer = Frame::new(0, 0, 10 * w, h, "");
-        let replace_widget = Input::new(0, 0, 50 * w, h, "Replace: ");
-        let mut replace_button = Button::new(0, 0, 12 * w, h, "Replace");
-        let mut replace_all_button = Button::new(0, 0, 12 * w, h, "Replace All");
+        let mut replace_group = Group::new(0, 0, x4, h, None);
+
+        let replace_widget = Input::new(x1, 0, input_w, h, "Replace: ");
+        let mut replace_button = Button::new(x2, 0, button_w, h, "Replace");
+        let mut replace_all_button = Button::new(x3, 0, button_w, h, "Replace All");
+
+        replace_group.resizable(&replace_widget);
 
         replace_group.end();
 
