@@ -32,9 +32,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 extern crate fltk;
-use fltk::enums::{Align, Color, Event, Font, FrameType, Key};
+use fltk::enums::{Align, Color, Event, Font, FrameType, Key, Shortcut};
 use fltk::frame::Frame;
-use fltk::prelude::{DisplayExt, GroupExt, InputExt, WidgetBase, WidgetExt};
+use fltk::prelude::{ButtonExt, DisplayExt, GroupExt, InputExt, WidgetBase, WidgetExt};
 use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode};
 
 pub enum TextErrorRef<'a> {
@@ -133,16 +133,23 @@ impl FindReplace {
 
         let input_w = 50 * w;
         let button_w = 12 * w;
+        let small_w = h;
+
         let x1 = 10 * w;
         let x2 = x1 + input_w + p;
         let x3 = x2 + button_w + p;
         let x4 = x3 + button_w + p;
+        let x5 = x4 + small_w + p;
 
-        let mut find_group = Group::new(0, 0, x4, h, None);
+        let mut find_group = Group::new(0, 0, x5, h, None);
 
         let find_widget = Input::new(x1, 0, input_w, h, "Find: ");
         let mut find_next_button = Button::new(x2, 0, button_w, h, "@2>  Next");
         let mut find_prev_button = Button::new(x3, 0, button_w, h, "@8>  Prev");
+        let mut close_button = Button::new(x4, 0, small_w, small_w, "X");
+
+        close_button.set_tooltip("Close find/replace (Esc)");
+        close_button.set_shortcut(Shortcut::from_key(Key::Escape));
 
         find_group.resizable(&find_widget);
 
@@ -152,7 +159,7 @@ impl FindReplace {
         parent.fixed(&find_group, h);
         find_group.hide();
 
-        let mut replace_group = Group::new(0, 0, x4, h, None);
+        let mut replace_group = Group::new(0, 0, x5, h, None);
 
         let replace_widget = Input::new(x1, 0, input_w, h, "Replace: ");
         let mut replace_button = Button::new(x2, 0, button_w, h, "Replace");
@@ -176,6 +183,13 @@ impl FindReplace {
         };
 
         {
+            close_button.set_callback({
+                let mut o = out.clone();
+                move |_| {
+                    o.hide();
+                }
+            });
+
             out.find_widget.handle({
                 // Cannot borrow state in this callback
                 let mut o = out.clone();
@@ -266,6 +280,13 @@ impl FindReplace {
             self.replace_group.hide();
         }
         self.parent.layout();
+    }
+
+    fn hide(&mut self) {
+        self.find_group.hide();
+        self.replace_group.hide();
+        self.parent.layout();
+        let _ = self.editor.take_focus();
     }
 
     fn find_next(&mut self) {

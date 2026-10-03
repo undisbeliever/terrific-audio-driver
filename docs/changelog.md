@@ -1,6 +1,14 @@
 Terrific Audio Driver Changelog
 ===============================
 
+
+Version 0.4.3
+=============
+
+tad-gui changes:
+ * The find/replace widget now can be closed with a "x" button or the escape key.
+
+
 Version 0.4.2
 =============
  * Fixed no sound in tad-gui on windows if the audio device's sample rate is not 48kHz.
